@@ -1,8 +1,10 @@
-./data/*
-./weights/*
+data/*
+weights/*
 .vscode/*
+wandb/*
 ./log/*
 *.npy
 *.pth
 *.log
 *.pyc
+*.json

@@ -16,10 +16,11 @@ class Config:
         
         
         # flow parameter
+        self.architecture = 'nsf'
         self.device = 'cuda'
         self.num_features = 7
         self.num_conditions = 3 + 4 + 1 # position + posture + noise = 3-dim + 4-dim + 1-dim 
-        self.num_transforms = 12
+        self.num_transforms = 14
         self.subnet_shape = [1024] * 4
         self.activation = LeakyReLU
         
@@ -28,11 +29,11 @@ class Config:
         
         
         # training
-        self.lr = 4e-5
-        self.lr_decay = 3e-2
-        self.batch_size = 128
+        self.lr = 4e-3
+        self.lr_decay = 3e-1
+        self.batch_size = 256
         self.noise_esp = 1e-3
-        self.num_epochs = 2
+        self.num_epochs = 10
         self.num_steps_save = 2000
         self.num_test_data = 60
         self.num_test_samples = 40
@@ -47,6 +48,8 @@ class Config:
         self.show_pose_pidxs_path = './data/show_pose/pidxs.npy'
         self.show_pose_errs_path = './data/show_pose/errs.npy'
         self.show_pose_log_probs_path = './data/show_pose/log_probs.npy'
+        self.traj_dir = './data/trajectory/'
+        
         
     
     def __repr__(self):

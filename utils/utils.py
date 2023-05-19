@@ -71,6 +71,5 @@ def test_l2_err(config, robot, loader, model, step=None):
             errs[step] = robot.dist_fk(q=q, ee_pos=ee_pos)
             log_probs[step] = lp     
             step += 1
-    print(f'step={step}')
     df = pd.DataFrame(np.column_stack((errs, log_probs)), columns=['l2_err', 'log_prob'])
     return df, errs.mean()

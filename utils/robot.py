@@ -194,7 +194,7 @@ class Robot:
         np.ndarray
             joint configuration
         '''
-        qt = rtb.tools.trajectory.jtraj(q, p, t=100)
+        qt = rtb.tools.trajectory.jtraj(q, p, t=t)
         return qt.q
 
     def x_dot_norm(self, q: np.ndarray, p: np.ndarray):

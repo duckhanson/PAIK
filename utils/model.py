@@ -38,8 +38,11 @@ def get_flow_model():
     # flow.load_state_dict(state_dict=torch.load(config.save_path))
 
     if path.exists(path=config.save_path):
-        flow.load_state_dict(state_dict=torch.load(config.save_path))
-        print(f'Model load successfully from {config.save_path}')
+        try:
+            flow.load_state_dict(state_dict=torch.load(config.save_path))
+            print(f'Model load successfully from {config.save_path}')
+        except:
+            print(f'Load err, assuming you use different architecture.')
 
     # Train to maximize the log-likelihood
     optimizer = AdamW(flow.parameters(), lr=config.lr, weight_decay=config.lr_decay)

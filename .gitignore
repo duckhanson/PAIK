@@ -1,0 +1,7 @@
+./data/*
+./weights/*
+./log/*
+*.npy
+*.pth
+*.log
+*.pyc

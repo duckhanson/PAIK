@@ -1,0 +1,7 @@
+matplotlib==3.6.3
+numpy==1.22.4
+pandas==1.5.3
+roboticstoolbox_python==1.0.3
+spatialmath_python==1.0.5
+torch==1.13.1
+tqdm==4.63.0

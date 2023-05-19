@@ -5,3 +5,5 @@ roboticstoolbox_python==1.0.3
 spatialmath_python==1.0.5
 torch==1.13.1
 tqdm==4.63.0
+zuko==0.2.0
+hnne==0.1.8

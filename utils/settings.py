@@ -1,87 +1,55 @@
-import torch
-
-device = 'cpu'
-if torch.cuda.is_available():
-    device = 'cuda'
-elif torch.backends.mps.is_available():
-    device = 'mps'
-
-param = {
-    'degree_interval': 60,
-    'device': device,
-
-    ## franka panda ##
-    'panda_dof': 7,
-    'panda_urdf': './src/panda_arm_hand_fixed.urdf',
-    'goal_length': 3,
-
-    ## Training VAE ##
-    'layer_length': 2048,
-    'latent_length': 4,
-    'lr': 9e-4,
-    'kl_ratio': 2e-4,
-    'weight_dir': './weights',
-    'image_dir': './images',
-    'batch_size': 256 * 8,
-    'epochs': 300,
-    'patience': 30,
+from torch.nn import LeakyReLU
 
 
-    ## Data csv ##
-    'data_dir': './data',
-    'tables': ['degree', 'psik', 'local', 'global', 'num_p', 'num_e', 'esik']
-}
+class Config:
+    def __init__(self):
+        # robot
+        self.dof = 7
+        
+        # data
+        self.x_data_path = './data/feature.npy' # joint configuration
+        self.y_data_path = './data/target.npy' # end-effector position
+        
+        # hnee parameter
+        self.reduced_dim = 4
+        self.num_neighbors = 1000
+        
+        
+        # flow parameter
+        self.device = 'cuda'
+        self.num_features = 7
+        self.num_conditions = 3 + 4 + 1 # position + posture + noise = 3-dim + 4-dim + 1-dim 
+        self.num_transforms = 12
+        self.subnet_shape = [1024] * 4
+        self.activation = LeakyReLU
+        
+        # nflow parameter
+        self.shrink_ratio = .30
+        
+        
+        # training
+        self.lr = 4e-5
+        self.lr_decay = 3e-2
+        self.batch_size = 128
+        self.noise_esp = 1e-3
+        self.num_epochs = 2
+        self.num_steps_save = 2000
+        self.num_test_data = 60
+        self.num_test_samples = 40
+        self.save_path = './weights/nsf.pth'
+        
+        # log
+        self.err_his_path = './log/err_his.npy'
+        self.train_loss_his_path = './log/train_loss_his.npy'
+        
+        # experiment
+        self.show_pose_features_path = './data/show_pose/features.npy'
+        self.show_pose_pidxs_path = './data/show_pose/pidxs.npy'
+        self.show_pose_errs_path = './data/show_pose/errs.npy'
+        self.show_pose_log_probs_path = './data/show_pose/log_probs.npy'
+        
+    
+    def __repr__(self):
+        return str(self.__dict__)
 
-degree_database = {
-    ## database ##
-    # database table name
-    'degree_table': f"degree{param['degree_interval']}",
-    # columns defined inside database table
-    # remove end_ori_.
-    'degree_cols': ['j1', 'j2', 'j3', 'j4', 'j5', 'j6', 'j7', 'ee_px', 'ee_py', 'ee_pz'],
-
-    'z_cols': ['z1', 'z2', 'z3', 'z4'],
-}
-
-psik_database = {
-    'psik_table': f"p_{degree_database['degree_table']}",
-    'psik_cols': degree_database['degree_cols'],
-}
-
-local_database = {
-    'local_table': f"local_{degree_database['degree_table']}",
-    'local_cols': degree_database['degree_cols'] + ['ml'],
-}
-
-global_database = {
-    'global_table': f"global_{degree_database['degree_table']}",
-    'global_cols': local_database['local_cols'] + ['mg'],
-}
-
-num_p_database = {
-    'num_p_table': f"num_p_{degree_database['degree_table']}",
-    'num_p_cols': degree_database['degree_cols'],
-}
-
-esik_database = {
-    'esik_table': f"e_{degree_database['degree_table']}",
-    'esik_cols': local_database['local_cols'],
-}
-
-num_e_database = {
-    'num_e_table': f"num_e_{degree_database['degree_table']}",
-    'num_e_cols': esik_database['esik_cols'],
-}
-
-ee_path = {
-    'ee_path_file': f"{param['data_dir']}/ee_path.p"
-}
-
-param.update(degree_database)
-param.update(psik_database)
-param.update(local_database)
-param.update(global_database)
-param.update(num_p_database)
-param.update(num_e_database)
-param.update(esik_database)
-param.update(ee_path)
+config = Config()

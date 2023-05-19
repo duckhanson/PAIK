@@ -97,11 +97,11 @@ class Robot:
 
         return q_samples
 
-    def path_generate_via_stable_joint_traj(self):
-        rand = np.random.rand(2, self.dof) * 0.4
+    def path_generate_via_stable_joint_traj(self, dist_ratio: float = 0.4, t: int = 10):
+        rand = np.random.rand(2, self.dof) * dist_ratio
         q_samples = (self.joint_max - self.joint_min) * rand + self.joint_min
 
-        qs = self.jtraj(q=q_samples[0], p=q_samples[1])
+        qs = self.jtraj(q=q_samples[0], p=q_samples[1], t=t)
 
         ee = np.zeros((len(qs), 3))
         step = 0

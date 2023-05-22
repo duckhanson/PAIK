@@ -10,18 +10,19 @@ class Config:
         self.x_data_path = './data/feature.npy' # joint configuration
         self.y_data_path = './data/target.npy' # end-effector position
         
-        # hnee parameter
+        # hnne parameter
         self.reduced_dim = 4
+        self.num_samples = 250_0000
         self.num_neighbors = 1000
-        
+        self.hnne_save_path = './weights/hnne.pickle'
         
         # flow parameter
         self.architecture = 'nsf'
         self.device = 'cuda'
         self.num_features = 7
-        self.num_conditions = 3 + 4 + 1 # position + posture + noise = 3-dim + 4-dim + 1-dim 
-        self.num_transforms = 14
-        self.subnet_shape = [1024] * 4
+        self.num_conditions = 3 + self.reduced_dim + 1 # position + posture + noise = 3-dim + 4-dim + 1-dim 
+        self.num_transforms = 7
+        self.subnet_shape = [1024] * 3
         self.activation = LeakyReLU
         
         # nflow parameter
@@ -29,12 +30,14 @@ class Config:
         
         
         # training
-        self.lr = 4e-3
-        self.lr_decay = 3e-1
-        self.batch_size = 256
+        self.lr = 5e-4
+        self.lr_weight_decay = 0.9
+        self.decay_gamma = 0.979
+        self.decay_step_size = 39000
+        self.batch_size = 128
         self.noise_esp = 1e-3
-        self.num_epochs = 10
-        self.num_steps_save = 2000
+        self.num_epochs = 15
+        self.num_steps_save = 1000
         self.num_test_data = 60
         self.num_test_samples = 40
         self.save_path = './weights/nsf.pth'

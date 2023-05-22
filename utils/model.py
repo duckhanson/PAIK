@@ -6,6 +6,7 @@ import pandas as pd
 import torch
 from torch import nn, Tensor
 from torch.optim import AdamW
+from torch.optim.lr_scheduler import StepLR
 from tqdm import tqdm, trange
 import zuko
 from zuko.flows import Distribution, NSF
@@ -45,9 +46,10 @@ def get_flow_model():
             print(f'Load err, assuming you use different architecture.')
 
     # Train to maximize the log-likelihood
-    optimizer = AdamW(flow.parameters(), lr=config.lr, weight_decay=config.lr_decay)
+    optimizer = AdamW(flow.parameters(), lr=config.lr, weight_decay=config.lr_weight_decay)
+    scheduler = StepLR(optimizer, step_size=config.decay_step_size, gamma=config.decay_gamma)
     
-    return flow, optimizer
+    return flow, optimizer, scheduler
 
 def get_nflow_model(flow: NSF):
     nflow = FlowModule(
@@ -63,7 +65,7 @@ def get_nflow_model(flow: NSF):
     
     return nflow
 
-def get_hnne_model(X: np.array, y: np.array, return_ds: bool = True):
+def get_hnne_model(X: np.array, y: np.array, return_ds: bool = True, save_path: str = config.hnne_save_path):
     """
     Return hnne model
 
@@ -77,8 +79,22 @@ def get_hnne_model(X: np.array, y: np.array, return_ds: bool = True):
     :rtype: tuple
     """
     # build dimension reduction model
-    hnne = HNNE(dim=config.reduced_dim, ann_threshold=config.num_neighbors)
-    X_transformed = hnne.fit_transform(X=X, dim=config.reduced_dim, verbose=True)
+    
+    suc_load = False
+    if path.exists(path=save_path):
+        try:
+            hnne = HNNE.load(path=save_path)
+            print(f'hnne load successfully from {save_path}')
+
+            X_transformed = hnne.transform(X=X, verbose=True)
+            suc_load = True
+        except:
+            print(f'hnne load err, assuming you use different architecture.')
+        
+    if not suc_load:
+        hnne = HNNE(dim=config.reduced_dim, ann_threshold=config.num_neighbors)
+        X_transformed = hnne.fit_transform(X=X, dim=config.reduced_dim, verbose=True)
+        hnne.save(path=save_path)
     
     if return_ds:
         y = np.column_stack((y, X_transformed))

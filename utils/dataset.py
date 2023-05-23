@@ -10,6 +10,22 @@ def create_dataset(verbose: bool = False,
                    targets: np.array = None,
                    enable_normalize: bool = False, 
                    device: str = config.device):
+    """
+    _summary_
+
+    :param verbose: _description_, defaults to False
+    :type verbose: bool, optional
+    :param features: _description_, defaults to None
+    :type features: np.array, optional
+    :param targets: _description_, defaults to None
+    :type targets: np.array, optional
+    :param enable_normalize: _description_, defaults to False
+    :type enable_normalize: bool, optional
+    :param device: _description_, defaults to config.device
+    :type device: str, optional
+    :return: _description_
+    :rtype: _type_
+    """
     
     return CustomDataset(features, targets, device=device, enable_normalize=enable_normalize)
     

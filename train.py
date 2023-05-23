@@ -21,6 +21,20 @@ from utils.robot import Robot
 from utils.dataset import create_dataset
 
 def train_step(model, batch, optimizer, scheduler):
+    """
+    _summary_
+
+    :param model: _description_
+    :type model: _type_
+    :param batch: _description_
+    :type batch: _type_
+    :param optimizer: _description_
+    :type optimizer: _type_
+    :param scheduler: _description_
+    :type scheduler: _type_
+    :return: _description_
+    :rtype: _type_
+    """
     x, y = add_small_noise_to_batch(batch)
         
     loss = -flow(y).log_prob(x)  # -log p(x | y)

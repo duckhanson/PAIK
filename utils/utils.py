@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import numpy as np
 import pandas as pd
 import torch
@@ -74,7 +75,7 @@ def test_l2_err(config, robot, loader, model, step=None):
     df = pd.DataFrame(np.column_stack((errs, log_probs)), columns=['l2_err', 'log_prob'])
     return df, errs.mean()
 
-def save_show_pose_data(config, num_data, num_samples, model):
+def save_show_pose_data(config, num_data, num_samples, model, robot):
     """
     _summary_
     example of use: save_show_pose_data(config, num_data=5, num_samples=10, model=nflow)
@@ -108,7 +109,7 @@ def save_show_pose_data(config, num_data, num_samples, model):
         ee_pos = target[:3]
         
         for q in x_hat:
-            err = panda.dist_fk(q=q, ee_pos=ee_pos)
+            err = robot.dist_fk(q=q, ee_pos=ee_pos)
             errs = np.concatenate((errs, [err]))
         x_hats = np.concatenate((x_hats, x_hat.reshape(-1)))
         pidx = target[3:-1]
@@ -117,7 +118,7 @@ def save_show_pose_data(config, num_data, num_samples, model):
         pidxs = np.concatenate((pidxs, pidx.reshape(-1)))
         log_probs = np.concatenate((log_probs, log_prob))
 
-    x_hats = x_hats.reshape((-1, panda.dof))
+    x_hats = x_hats.reshape((-1, robot.dof))
     pidxs = pidxs.reshape((len(x_hats), -1))
     
 
@@ -128,12 +129,12 @@ def save_show_pose_data(config, num_data, num_samples, model):
     
     print('Save pose successfully')
 
-def inside_same_pidx(panda: Robot):
+def inside_same_pidx(robot: Robot):
     """
     _summary_
     example of use: 
     save_show_pose_data(config, num_data=5, num_samples=10, model=nflow)
-    inside_same_pidx(panda)
+    inside_same_pidx(robot)
     :raises ValueError: _description_
     """
     x_hats = load_numpy(file_path=config.show_pose_features_path)
@@ -150,11 +151,11 @@ def inside_same_pidx(panda: Robot):
         else:
             break
         pre_pidx = pidx
-    qs = qs.reshape((-1, panda.dof))
+    qs = qs.reshape((-1, robot.dof))
     for q in qs:
-        panda.plot(q, q)
+        robot.plot(q, q)
 
-def sample_jtraj(path, pidx, model):
+def sample_jtraj(path, pidx, model, robot):
     """
     _summary_
     example of use: 
@@ -186,9 +187,58 @@ def sample_jtraj(path, pidx, model):
     log_prob = -log_prob.detach().cpu().numpy()[0]
 
     for q, lp, ee_pos in zip(x_hat, log_prob, path):
-        errs[step] = panda.dist_fk(q=q, ee_pos=ee_pos)
+        errs[step] = robot.dist_fk(q=q, ee_pos=ee_pos)
         log_probs[step] = lp     
         step += 1
     df = pd.DataFrame(np.column_stack((errs, log_probs)), columns=['l2_err', 'log_prob'])
     qs = x_hat
     return df, qs
+
+def sample_traj(hnne, model, robot, load_time: str = '', num_traj: int = 0):
+    
+    if load_time == '':
+        traj_dir = config.traj_dir + datetime.now().strftime('%m%d%H%M') + '/'
+    else:
+        traj_dir = config.traj_dir + load_time + '/'
+        
+    ee_traj_path = traj_dir + 'ee_traj.npy'
+    q_traj_path = traj_dir + 'q_traj.npy'
+
+    if load_time != '' and os.path.exists(path=q_traj_path):
+        traj_dir = config.traj_dir + datetime.now().strftime('%m%d%H%M') + '/'
+        ee_traj_path = traj_dir + 'ee_traj.npy'
+        q_traj_path = traj_dir + 'q_traj.npy'
+    
+        ee_traj = load_numpy(file_path=ee_traj_path)
+        q_traj = load_numpy(file_path=q_traj_path)
+    else:
+        ee_traj, q_traj = robot.path_generate_via_stable_joint_traj(dist_ratio=0.9, t=20)
+        save_numpy(file_path=ee_traj_path, arr=ee_traj)
+        save_numpy(file_path=q_traj_path, arr=q_traj)
+        
+    
+    if num_traj > 0:
+        rand = np.random.randint(low=0, high=len(q_traj), size=num_traj)
+        pidx = hnne.transform(X=q_traj[rand])
+        print(pidx)
+    
+        for i, px in enumerate(pidx):
+            df, qs = sample_jtraj(ee_traj, px, model, robot)
+            print(df.describe())
+            save_numpy(file_path=traj_dir + f'/exp_{i}.npy', arr=qs)
+        
+        ee_traj = load_numpy(file_path=ee_traj_path)
+        err = np.zeros((100,))
+
+        for i in range(3):
+            step = 0
+            qs = load_numpy(file_path=traj_dir + f'/exp_{i}.npy')
+            for i in range(len(qs)):
+                err[i] = robot.dist_fk(q=qs[i], ee_pos=ee_traj[i])
+            outliner = np.where(err > 0.05)
+            print(outliner)
+            print(err[outliner])
+            print(np.sum(err))
+            robot.plot_qs(qs)
+            
+        

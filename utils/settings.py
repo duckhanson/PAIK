@@ -17,6 +17,7 @@ class Config:
         self.hnne_save_path = './weights/hnne.pickle'
         
         # flow parameter
+        self.use_pretrained = False
         self.architecture = 'nsf'
         self.device = 'cuda'
         self.num_features = 7
@@ -25,15 +26,15 @@ class Config:
         self.subnet_shape = [1024] * 3
         self.activation = LeakyReLU
         
-        # nflow parameter
-        self.shrink_ratio = .30
+        # sflow parameter
+        self.shrink_ratio = .61
         
         
         # training
-        self.lr = 5e-4
-        self.lr_weight_decay = 0.9
-        self.decay_gamma = 0.979
-        self.decay_step_size = 39000
+        self.lr = 7e-4
+        self.lr_weight_decay = 7e-3
+        self.decay_gamma = 0.79
+        self.decay_step_size = 3_0000
         self.batch_size = 128
         self.noise_esp = 1e-3
         self.num_epochs = 15

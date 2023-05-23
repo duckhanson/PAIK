@@ -20,11 +20,11 @@ from utils.robot import Robot
 from utils.dataset import create_dataset
 
 
-def get_flow_model():
+def get_flow_model(load_model=True):
     """
     Return nsf model and optimizer
 
-    :return: (nsf, AdamW)
+    :return: (nsf, AdamW, StepLR)
     :rtype: tuple
     """
     # Build Generative model, NSF
@@ -35,15 +35,17 @@ def get_flow_model():
             randperm=True, 
             activation=config.activation, 
             hidden_features=config.subnet_shape).to(config.device)
+    
+    flow = get_sflow_model(flow)
 
-    # flow.load_state_dict(state_dict=torch.load(config.save_path))
-
-    if path.exists(path=config.save_path):
+    if load_model and path.exists(path=config.save_path):
         try:
             flow.load_state_dict(state_dict=torch.load(config.save_path))
             print(f'Model load successfully from {config.save_path}')
         except:
             print(f'Load err, assuming you use different architecture.')
+    else:
+        print('Create a new model and start training.')
 
     # Train to maximize the log-likelihood
     optimizer = AdamW(flow.parameters(), lr=config.lr, weight_decay=config.lr_weight_decay)
@@ -51,7 +53,37 @@ def get_flow_model():
     
     return flow, optimizer, scheduler
 
+def get_sflow_model(flow: NSF, shrink_ratio: float = config.shrink_ratio):
+    """
+    shrink normal distribution model
+
+    :param flow: _description_
+    :type flow: NSF
+    :return: _description_
+    :rtype: _type_
+    """
+    sflow = FlowModule(
+        transforms=flow.transforms, 
+        base= Unconditional(
+                DiagNormal,
+                torch.zeros((config.dof,)),
+                torch.ones((config.dof,))*config.shrink_ratio,
+                buffer=True,
+        ))
+    
+    sflow.to(config.device)
+    
+    return sflow
+
 def get_nflow_model(flow: NSF):
+    """
+    _summary_
+
+    :param flow: _description_
+    :type flow: NSF
+    :return: _description_
+    :rtype: _type_
+    """
     nflow = FlowModule(
         transforms=flow.transforms, 
         base= Unconditional(

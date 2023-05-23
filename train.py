@@ -41,7 +41,7 @@ if __name__ == '__main__':
     hnne, ds, loader = get_hnne_model(X, y)
     # Build Generative model, NSF
     # Neural spline flow (NSF) with 3 sample features and 5 context features
-    flow, optimizer, scheduler = get_flow_model()
+    flow, optimizer, scheduler = get_flow_model(load_model=config.use_pretrained)
     
     # start a new wandb run to track this script
     wandb.init(
@@ -74,8 +74,8 @@ if __name__ == '__main__':
                 log_info = {}
                 for l, v in zip(l2_label, l2_val):
                     log_info[l] = v
-                log_info['lr'] = scheduler.get_lr()
-                wandb.log(l2_info)
+                log_info['learning_rate'] = scheduler.get_last_lr()[0]
+                wandb.log(log_info)
     
     # [optional] finish the wandb run, necessary in notebooks
     wandb.finish()

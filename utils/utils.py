@@ -74,7 +74,7 @@ def test_l2_err(config, robot, loader, model, step=None):
     df = pd.DataFrame(np.column_stack((errs, log_probs)), columns=['l2_err', 'log_prob'])
     return df, errs.mean()
 
-def save_show_pose_data(config, num_data, num_samples, model=flow):
+def save_show_pose_data(config, num_data, num_samples, model):
     """
     _summary_
     example of use: save_show_pose_data(config, num_data=5, num_samples=10, model=nflow)
@@ -128,12 +128,12 @@ def save_show_pose_data(config, num_data, num_samples, model=flow):
     
     print('Save pose successfully')
 
-def inside_same_pidx():
+def inside_same_pidx(panda: Robot):
     """
     _summary_
     example of use: 
     save_show_pose_data(config, num_data=5, num_samples=10, model=nflow)
-    inside_same_pidx()
+    inside_same_pidx(panda)
     :raises ValueError: _description_
     """
     x_hats = load_numpy(file_path=config.show_pose_features_path)
@@ -153,3 +153,42 @@ def inside_same_pidx():
     qs = qs.reshape((-1, panda.dof))
     for q in qs:
         panda.plot(q, q)
+
+def sample_jtraj(path, pidx, model):
+    """
+    _summary_
+    example of use: 
+    df, qs = sample_jtraj(ee_traj, px, nflow)
+    :param path: _description_
+    :type path: _type_
+    :param pidx: _description_
+    :type pidx: _type_
+    :param model: _description_
+    :type model: _type_
+    :return: _description_
+    :rtype: _type_
+    """
+    path_len = len(path)
+    pidx = np.tile(pidx, (path_len,1))
+    cstd = np.zeros((path_len,))
+    
+    y = np.column_stack((path, pidx, cstd))
+    y = torch.tensor(data=y, device='cuda', dtype=torch.float32)
+    
+    errs = np.zeros((len(path),))
+    log_probs = np.zeros((len(path),))
+    
+    step = 0
+    x_hat = model(y).sample((1,))
+    log_prob = model(y).log_prob(x_hat)
+    
+    x_hat = x_hat.detach().cpu().numpy()[0]
+    log_prob = -log_prob.detach().cpu().numpy()[0]
+
+    for q, lp, ee_pos in zip(x_hat, log_prob, path):
+        errs[step] = panda.dist_fk(q=q, ee_pos=ee_pos)
+        log_probs[step] = lp     
+        step += 1
+    df = pd.DataFrame(np.column_stack((errs, log_probs)), columns=['l2_err', 'log_prob'])
+    qs = x_hat
+    return df, qs

@@ -69,7 +69,7 @@ def test_l2_err(config, robot, loader, model, step=None):
         ee_pos = ee_pos[:3]
         
         for q, lp in zip(x_hat, log_prob):
-            errs[step] = robot.dist_fk(q=q, ee_pos=ee_pos)
+            errs[step] = robot.l2_err_func(q=q, ee_pos=ee_pos)
             log_probs[step] = lp     
             step += 1
     df = pd.DataFrame(np.column_stack((errs, log_probs)), columns=['l2_err', 'log_prob'])
@@ -109,7 +109,7 @@ def save_show_pose_data(config, num_data, num_samples, model, robot):
         ee_pos = target[:3]
         
         for q in x_hat:
-            err = robot.dist_fk(q=q, ee_pos=ee_pos)
+            err = robot.l2_err_func(q=q, ee_pos=ee_pos)
             errs = np.concatenate((errs, [err]))
         x_hats = np.concatenate((x_hats, x_hat.reshape(-1)))
         pidx = target[3:-1]
@@ -153,7 +153,7 @@ def inside_same_pidx(robot: Robot):
         pre_pidx = pidx
     qs = qs.reshape((-1, robot.dof))
     for q in qs:
-        robot.plot(q, q)
+        robot.plot(q=q, p=q)
 
 def sample_jtraj(path, pidx, model, robot):
     """
@@ -187,7 +187,7 @@ def sample_jtraj(path, pidx, model, robot):
     log_prob = -log_prob.detach().cpu().numpy()[0]
 
     for q, lp, ee_pos in zip(x_hat, log_prob, path):
-        errs[step] = robot.dist_fk(q=q, ee_pos=ee_pos)
+        errs[step] = robot.l2_err_func(q=q, ee_pos=ee_pos)
         log_probs[step] = lp     
         step += 1
     df = pd.DataFrame(np.column_stack((errs, log_probs)), columns=['l2_err', 'log_prob'])
@@ -259,12 +259,12 @@ def generate_traj_via_model(robot: Robot, traj_dir: str, hnne=None, model=None, 
             err = np.zeros((100,))
             qs = load_numpy(file_path=exp_traj_path)
             for i in range(len(qs)):
-                err[i] = robot.dist_fk(q=qs[i], ee_pos=ee_traj[i])
+                err[i] = robot.l2_err_func(q=qs[i], ee_pos=ee_traj[i])
             outliner = np.where(err > outliner_thres)
             print(outliner)
             print(err[outliner])
             print(np.sum(err))
-            robot.plot_qs(qs)
+            robot.plot(qs=qs)
         else:
             print(f'{exp_traj_path} does not exist !')
     
@@ -291,4 +291,28 @@ def generate_traj_via_model(robot: Robot, traj_dir: str, hnne=None, model=None, 
     for i in range(num_traj):
         load_and_plot(exp_traj_path=exp_path(i), ee_path=ee_traj)
             
+
+def create_robot_dirs() -> None:
+    """
+    _summary_
+    """
+    for dp in config.dir_paths:
+        if not os.path.exists(path=dp):
+            os.makedirs(name=dp)
+            print(f"Create {dp}")
+
+
+def remove_empty_robot_dirs() -> None:
+    """
+    _summary_
+    """
+    for dp in config.dir_paths:
+        walk = list(os.walk(dp))
+        for p, _, _ in walk[::-1]:
+            if os.path.exists(p) and len(os.listdir(p)) == 0:
+                os.removedirs(p)
+                print(f"Delete {p}")
+                
+    
         
+    

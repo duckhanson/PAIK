@@ -4,17 +4,20 @@ from torch.nn import LeakyReLU
 class Config:
     def __init__(self):
         # robot
+        self.robot_name = 'panda'
         self.dof = 7
         
         # data
-        self.x_data_path = './data/feature.npy' # joint configuration
-        self.y_data_path = './data/target.npy' # end-effector position
+        self.data_dir = f'./data/{self.robot_name}/'
+        self.x_data_path = self.data_dir + 'feature.npy' # joint configuration
+        self.y_data_path = self.data_dir + 'target.npy' # end-effector position
         
         # hnne parameter
+        self.weight_dir = f'./weights/{self.robot_name}/'
         self.reduced_dim = 4
         self.num_samples = 250_0000
         self.num_neighbors = 1000
-        self.hnne_save_path = './weights/hnne.pickle'
+        self.hnne_save_path = self.weight_dir + 'hnne.pickle'
         
         # flow parameter
         self.use_pretrained = False
@@ -41,19 +44,22 @@ class Config:
         self.num_steps_save = 1000
         self.num_test_data = 60
         self.num_test_samples = 40
-        self.save_path = './weights/nsf.pth'
-        
-        # log
-        self.err_his_path = './log/err_his.npy'
-        self.train_loss_his_path = './log/train_loss_his.npy'
+        self.save_path = self.weight_dir + f'{self.architecture}.pth'
         
         # experiment
-        self.show_pose_features_path = './data/show_pose/features.npy'
-        self.show_pose_pidxs_path = './data/show_pose/pidxs.npy'
-        self.show_pose_errs_path = './data/show_pose/errs.npy'
-        self.show_pose_log_probs_path = './data/show_pose/log_probs.npy'
-        self.traj_dir = './data/trajectory/'
+        self.show_pose_dir = self.data_dir + 'show_pose/'
+        self.show_pose_features_path = self.show_pose_dir + 'features.npy'
+        self.show_pose_pidxs_path = self.show_pose_dir + 'pidxs.npy'
+        self.show_pose_errs_path = self.show_pose_dir + 'errs.npy'
+        self.show_pose_log_probs_path = self.show_pose_dir + 'log_probs.npy'
+        self.traj_dir = self.data_dir + 'trajectory/'
         
+        self.dir_paths = [
+            self.data_dir,
+            self.weight_dir, 
+            self.traj_dir,
+            self.show_pose_dir
+        ]
         
     
     def __repr__(self):

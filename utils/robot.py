@@ -1,4 +1,5 @@
 import numpy as np
+from utils.settings import config
 from numpy import linalg as LA
 from tqdm import tqdm
 import roboticstoolbox as rtb
@@ -6,12 +7,17 @@ from spatialmath import SE3
 
 
 class Robot:
-    def __init__(self, verbose, backend="swift"):
+    def __init__(self, verbose, robot_name: str=config.robot_name, backend: str="swift"):
         self.verbose = verbose
-        self.robot = rtb.models.DH.Panda()
+        robots = ["panda"]
+        if robot_name not in robots:
+            raise NotImplementedError()
+            
         backends = ["swift", "pyplot"]
         if backend not in backends:
             raise NotImplementedError()
+        
+        self.robot = rtb.models.DH.Panda()
         self.backend = backend
         if backend == "swift":
             self.robot = rtb.models.Panda()
@@ -57,10 +63,10 @@ class Robot:
         q : np.ndarray
             a joint configuartion solved from analytic inverse kinematics.
         '''
-        if len(ee_pos) == 3:
-            T = SE3(*ee_pos)
-        else:
+        if ee_pos.shape == (4, 4):
             T = ee_pos
+        else:
+            T = SE3(*ee_pos)
 
         # sol = self.robot.ikine_min(T, q0=q0)
         # ikine_XX
@@ -101,7 +107,8 @@ class Robot:
         rand = np.random.rand(2, self.dof) * dist_ratio
         q_samples = (self.joint_max - self.joint_min) * rand + self.joint_min
 
-        qs = self.jtraj(q=q_samples[0], p=q_samples[1], t=t)
+        qs = rtb.tools.trajectory.jtraj(q_samples[0], q_samples[1], t=t)
+        qs = qs.q
 
         ee = np.zeros((len(qs), 3))
         step = 0
@@ -112,7 +119,7 @@ class Robot:
 
         return ee, qs
 
-    def dist_fk(self, q: np.ndarray, ee_pos: np.ndarray):
+    def l2_err_func(self, q: np.ndarray, ee_pos: np.ndarray):
         '''
         Compute the Euclidean Distance between the value of forward_kinematics with joint_confg
         and ee_pos.
@@ -128,146 +135,31 @@ class Robot:
             print(f"Com_pos: {com_pos}, EE_pos: {ee_pos}, diff: {diff}")
         return diff
 
-    def jacobian(self, q: np.ndarray):
-        '''
-        Compute the jacobain based on joint configuration q.
-
-        Parameters
-        ----------
-        q : np.ndarray
-            joint configuration q.
-
-        Returns J
-        -------
-        The manipulator Jacobian in the end-effector frame
-
-        Return type
-            ndarray(6,n)
-        '''
-        return self.robot.jacobe(q)
-
-    def q_dot(self, q: np.ndarray, p: np.ndarray):
-        '''
-        Compute the q_dot (joint velocity) starts from q and ends to p.
-
-        Parameters
-        ----------
-        q : np.ndarray
-            start joint configuration
-        p : np.ndarray
-            end joint configuration
-
-        Returns q_dot
-        -------
-        the joint velocity of 10/200 timestamp in the given trajectory.
-
-        Return type
-            np.ndarray
-        '''
-        qt = rtb.tools.trajectory.jtraj(q, p, t=100)
-
-        return qt.qd[10]
-
-    def jtraj_batch(self, qs: np.ndarray, ps: np.ndarray, t: int = 100, p_ratio: float = 0.3):
-        q_batch = []
-        for q, p in zip(qs, ps):
-            q_m = self.jtraj(q, p, t, p_ratio)
-            q_batch.append(q_m)
-        return np.array(q_batch)
-
-    def jtraj(self, q: np.ndarray, p: np.ndarray, t: int = 100):
-        '''
-        Return joint configuration between real joint configuration q and generated joint
-        configuration p.
-
-        Parameters
-        ----------
-        q : np.ndarray
-            real joint configuration
-        p : np.ndarray
-            generated joint configuration
-        t : int, optional
-            total time slice, by default 100
-
-        Returns 
-        -------
-        np.ndarray
-            joint configuration
-        '''
-        qt = rtb.tools.trajectory.jtraj(q, p, t=t)
-        return qt.q
-
-    def x_dot_norm(self, q: np.ndarray, p: np.ndarray):
-        '''
-        Compute L1_norm(x_dot) where x_dot = jacobian(q) * diff(p, q).
-
-        Parameters
-        ----------
-        q : np.ndarray
-            joint configuration q as base configuration.
-        p : np.ndarray
-            joint configuration p as "to" configuration.
-
-        Returns Norm
-        -------
-        L1_norm(x_dot)
-
-        Return type
-            int
-        '''
-        x_dot = self.jacobian(q) * self.q_dot(q, p)
-        x_dot = x_dot[:3]
-        return LA.norm(x_dot, ord=1)
-
-    def traj_err(self, q: np.ndarray, p: np.ndarray, t: int, threshold: float):
-        '''
-        Compute the distance error of the joint trajectory from q to p.
-
-        Parameters
-        ----------
-        q : np.ndarray
-            joint configuration q as base configuration.
-        p : np.ndarray
-            joint configuration p as "to" configuration.
-        t : int
-            number of steps
-
-        Returns
-        -------
-        Total distance between fkine(q) and fkine(qi) where qi is the joint snapshots of 
-        the trajectory.
-
-        Return type
-            float
-        '''
-        qt = rtb.tools.trajectory.jtraj(q, p, t=t)
-
-        target = self.forward_kinematics(q)
-
-        for qi in qt.q:
-            if self.dist_fk(qi, target) > threshold:
-                return False
-
-        return True
-
-    def plot(self, q: np.ndarray, p: np.ndarray, movie='move.gif', t: int = 30, backend='swift'):
-        qt = rtb.tools.trajectory.jtraj(q, p, t=t)
-        if backend == 'swift':
-            self.robot.plot(qt.q, dt=1/t, backend=backend)
-        else:
-            self.robot.plot(qt.q, dt=1/t, backend=backend,
-                            movie=movie, jointaxes=False)
-
-    def plot_qs(self, qs, movie='move.gif', dt: float = 0.05, mean=None, var=None):
-        qs = np.array(qs)
-        if mean is not None and var is not None:
-            mean = np.array(mean)
-            var = np.array(var)
-
-            qs = qs * var + mean
-
-        if self.backend == 'swift':
-            self.robot.plot(qs, dt=dt, backend=self.backend)
-        else:
-            self.robot.plot(qs, dt=dt, backend=self.backend,
-                            movie=movie, jointaxes=False)
+    def plot(self, q: np.ndarray=None, p: np.ndarray=None, qs: np.ndarray=None, dt: float = 0.05):
+        """
+        _summary_
+        example of use
+        
+        Given init and final
+        robot.plot(q=q, p=p, dt=0.01)
+        
+        Given jtraj
+        robot.plot(qs=qs, dt=0.1)
+        
+        :param q: _description_, defaults to None
+        :type q: np.ndarray, optional
+        :param p: _description_, defaults to None
+        :type p: np.ndarray, optional
+        :param qs: _description_, defaults to None
+        :type qs: np.ndarray, optional
+        :param dt: _description_, defaults to 0.05
+        :type dt: float, optional
+        :raises ValueError: _description_
+        """
+        if qs is None:
+            if q is None or p is None:
+                raise ValueError("Input error: should give init and final or jtraj.")
+            
+            qt = rtb.tools.trajectory.jtraj(q, p, t=t)
+            qs = qt.q
+        self.robot.plot(qs, dt=dt)

@@ -5,7 +5,6 @@ import pandas as pd
 import torch
 from tqdm.auto import tqdm
 from utils.settings import config
-from utils.robot import Robot
 
 def load_data(robot, num_samples:int = config.num_samples, return_ee: bool = True, generate_new: bool = False):
     X = []
@@ -129,7 +128,7 @@ def save_show_pose_data(config, num_data, num_samples, model, robot):
     
     print('Save pose successfully')
 
-def inside_same_pidx(robot: Robot):
+def inside_same_pidx(robot):
     """
     _summary_
     example of use: 
@@ -230,7 +229,7 @@ def sample_ee_traj(robot, load_time: str = '') -> str:
         
     return traj_dir
 
-def generate_traj_via_model(robot: Robot, traj_dir: str, hnne=None, model=None, num_traj: int = 3, outliner_thres: float = 5e-2) -> None:
+def generate_traj_via_model(robot, traj_dir: str, hnne=None, model=None, num_traj: int = 3, outliner_thres: float = 5e-2) -> None:
     """
     _summary_
     example of use

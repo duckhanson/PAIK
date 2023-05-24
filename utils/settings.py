@@ -1,11 +1,25 @@
 from torch.nn import LeakyReLU
 
+ets_table = {
+    'panda': 7,
+    'al5d': 4,
+    'fetchcamera': 5, #
+    'frankie': 9, #
+    'frankieomni': 10, #
+    'lbr': 7,
+    'mico': 4,
+    'puma': 6,
+    'ur10': 6,
+    'valkyrie': 58, #
+    'yumi': 14, #
+    # means not suitable in our case.
+}
 
 class Config:
     def __init__(self):
         # robot
         self.robot_name = 'panda'
-        self.dof = 7
+        self.dof = ets_table[self.robot_name]
         
         # data
         self.data_dir = f'./data/{self.robot_name}/'
@@ -23,7 +37,7 @@ class Config:
         self.use_pretrained = False
         self.architecture = 'nsf'
         self.device = 'cuda'
-        self.num_features = 7
+        self.num_features = self.dof
         self.num_conditions = 3 + self.reduced_dim + 1 # position + posture + noise = 3-dim + 4-dim + 1-dim 
         self.num_transforms = 7
         self.subnet_shape = [1024] * 3

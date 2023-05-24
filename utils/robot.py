@@ -1,31 +1,54 @@
 import numpy as np
-from utils.settings import config
 from numpy import linalg as LA
 from tqdm import tqdm
 import roboticstoolbox as rtb
 from spatialmath import SE3
-
+from utils.settings import config, ets_table
+from utils.utils import create_robot_dirs
 
 class Robot:
-    def __init__(self, verbose, robot_name: str=config.robot_name, backend: str="swift"):
+    def __init__(self, verbose, robot_name: str=config.robot_name):
         self.verbose = verbose
-        robots = ["panda"]
-        if robot_name not in robots:
-            raise NotImplementedError()
-            
-        backends = ["swift", "pyplot"]
-        if backend not in backends:
+        support_robots = list(ets_table.keys())
+        if robot_name not in support_robots:
             raise NotImplementedError()
         
-        self.robot = rtb.models.DH.Panda()
-        self.backend = backend
-        if backend == "swift":
-            self.robot = rtb.models.Panda()
+        self.robot = self.__get_robot_module(robot_name)    
+
         self.joint_min, self.joint_max = self.robot.qlim
         self.dof = len(self.joint_min)
 
         if self.verbose:
             print(self.robot)
+        
+        create_robot_dirs()
+    
+    def __get_robot_module(self, robot_name):
+        if robot_name == 'panda':
+            robot = rtb.models.Panda()
+        elif robot_name == 'al5d':
+            robot = rtb.models.AL5D()
+        elif robot_name == 'fetchcamera':
+            robot = rtb.models.FetchCamera()
+        elif robot_name == 'frankie':
+            robot = rtb.models.Frankie()
+        elif robot_name == 'frankieomni':
+            robot = rtb.models.FrankieOmni()
+        elif robot_name == 'lbr':
+            robot = rtb.models.LBR()
+        elif robot_name == 'mico':
+            robot = rtb.models.Mico()
+        elif robot_name == 'puma':
+            robot = rtb.models.Puma560()
+        elif robot_name == 'ur10':
+            robot = rtb.models.UR10()
+        elif robot_name == 'valkyrie':
+            robot = rtb.models.Valkyrie()
+        elif robot_name == 'yumi':
+            robot = rtb.models.YuMi()
+        else:
+            raise NotImplementedError()
+        return robot
 
     def forward_kinematics(self, q: np.ndarray):
         '''
@@ -160,6 +183,7 @@ class Robot:
             if q is None or p is None:
                 raise ValueError("Input error: should give init and final or jtraj.")
             
+            t = int(1/dt)
             qt = rtb.tools.trajectory.jtraj(q, p, t=t)
             qs = qt.q
         self.robot.plot(qs, dt=dt)

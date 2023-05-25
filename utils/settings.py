@@ -25,6 +25,7 @@ class Config:
         self.data_dir = f'./data/{self.robot_name}/'
         self.x_data_path = self.data_dir + 'feature.npy' # joint configuration
         self.y_data_path = self.data_dir + 'target.npy' # end-effector position
+        self.x_trans_path = self.data_dir + 'feature_trans.npy' # hnne reduced feature vector
         
         # hnne parameter
         self.weight_dir = f'./weights/{self.robot_name}/'
@@ -57,7 +58,7 @@ class Config:
         self.num_epochs = 15
         self.num_steps_save = 1000
         self.num_test_data = 60
-        self.num_test_samples = 40
+        self.num_test_samples = 500
         self.save_path = self.weight_dir + f'{self.architecture}.pth'
         
         # experiment

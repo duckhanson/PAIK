@@ -83,7 +83,7 @@ if __name__ == '__main__':
             step += 1
             if step % config.num_steps_save == 0:
                 torch.save(flow.state_dict(), config.save_path)
-                df, err = test_l2_err(config, robot=panda, loader=loader, model=flow, step=step)
+                df, err = test_l2_err(config, robot=panda, loader=loader, model=flow)
                 l2_val = df.describe().values[1:, 0]
                 log_info = {}
                 for l, v in zip(l2_label, l2_val):

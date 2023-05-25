@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime
 import numpy as np
 import pandas as pd
@@ -46,33 +47,52 @@ def add_small_noise_to_batch(batch, esp: float = config.noise_esp, step: int = 0
         x = x + noise
     return x, y
     
-def test_l2_err(config, robot, loader, model, step=None):
-    num_data, num_samples = config.num_test_data, config.num_test_samples
+def test_l2_err(config, robot, loader, model, num_data = config.num_test_data, num_samples = config.num_test_samples, inference: bool=False):
+    errs = np.zeros(shape=(num_data))
+    log_probs = np.zeros(shape=(num_data))
+    time_diff = np.zeros(shape=(num_data))
+    
+    for i in range(num_data):
+        er, lp, dt = __test_one_l2_err(config, robot, loader, model, num_samples=num_samples, inference=inference)
+        errs[i] = er
+        log_probs[i] = lp
+        time_diff[i] = dt
+    
+    if inference:
+        df = pd.DataFrame(data=np.column_stack((errs, time_diff)), columns=['l2_err', f'time_diff(per {num_samples})'])
+    else:
+        df = pd.DataFrame(data=np.column_stack((errs, log_probs, time_diff)), columns=['l2_err', 'log_prob', f'time_diff(per {num_samples})'])
+        
+    return df, errs.mean()
+
+def __test_one_l2_err(config, robot, loader, model, num_samples: int, inference: bool):
     batch = next(iter(loader))
     x, y = add_small_noise_to_batch(batch, eval=True)
-    assert num_data < len(x)
 
-    errs = np.zeros((num_data*num_samples,))
-    log_probs = np.zeros((num_data*num_samples,))
-    rand = np.random.randint(low=0, high=len(x), size=num_data)
+    errs = np.zeros((num_samples,))
+    log_probs = np.zeros((num_samples,))
+    rand = np.random.randint(low=0, high=len(x), size=1)
+    
+    # assuming rand is a number
+    time_begin = time.time()
+    x_hat = model(y[rand]).sample((num_samples,))
+    time_diff = round(time.time() - time_begin, 2)
+        
+    qs = x_hat.detach().cpu().numpy()
+    ee_pos = y[rand].detach().cpu().numpy()
+    ee_pos = ee_pos[0, :3]
     
     step = 0
-    for nd in rand:
-        x_hat = model(y[nd]).sample((num_samples,))
-        log_prob = model(y[nd]).log_prob(x_hat)
-        
-        x_hat = x_hat.detach().cpu().numpy()
+    for q in qs:
+        errs[step] = robot.l2_err_func(q=q, ee_pos=ee_pos)
+        step += 1
+    
+    if not inference:
+        log_prob = model(y[rand]).log_prob(x_hat)
         log_prob = -log_prob.detach().cpu().numpy()
-        ee_pos = y[nd].detach().cpu().numpy()
-        # ee_pos = ee_pos * (ds.targets_max - ds.targets_min) + ds.targets_min
-        ee_pos = ee_pos[:3]
         
-        for q, lp in zip(x_hat, log_prob):
-            errs[step] = robot.l2_err_func(q=q, ee_pos=ee_pos)
-            log_probs[step] = lp     
-            step += 1
-    df = pd.DataFrame(np.column_stack((errs, log_probs)), columns=['l2_err', 'log_prob'])
-    return df, errs.mean()
+    return errs.mean(), log_probs.mean(), time_diff
+    
 
 def save_show_pose_data(config, num_data, num_samples, model, robot):
     """

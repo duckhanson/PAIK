@@ -53,6 +53,34 @@ def get_flow_model(load_model=True):
     
     return flow, optimizer, scheduler
 
+def get_iflow_model(flow: NSF, init_sample: torch.Tensor, shrink_ratio: float = 0.01) -> FlowModule:
+    """
+    sampling from initial samples as search space centers
+    seach shrink_ratio region
+
+    :param flow: _description_
+    :type flow: NSF
+    :param init_sample: _description_
+    :type init_sample: torch.Tensor
+    :param shrink_ratio: _description_, defaults to 0.01
+    :type shrink_ratio: float, optional
+    :return: _description_
+    :rtype: FlowModule
+    """
+    iflow = FlowModule(
+        transforms=flow.transforms, 
+        base= Unconditional(
+                DiagNormal,
+                torch.zeros((config.dof,)) + init_sample,
+                torch.ones((config.dof,)) * shrink_ratio,
+                buffer=True,
+        ))
+    
+    iflow.to(config.device)
+    
+    return iflow
+    
+
 def get_sflow_model(flow: NSF, shrink_ratio: float = config.shrink_ratio):
     """
     shrink normal distribution model
@@ -96,6 +124,8 @@ def get_nflow_model(flow: NSF):
     nflow.to(config.device)
     
     return nflow
+
+
 
 def get_hnne_model(X: np.array, y: np.array, return_ds: bool = True, save_path: str = config.hnne_save_path):
     """

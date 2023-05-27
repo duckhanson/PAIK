@@ -3,15 +3,15 @@ from torch.nn import LeakyReLU
 ets_table = {
     'panda': 7,
     'al5d': 4,
-    'fetchcamera': 5, #
-    'frankie': 9, #
-    'frankieomni': 10, #
+    # 'fetchcamera': 5, #
+    # 'frankie': 9, #
+    # 'frankieomni': 10, #
     'lbr': 7,
     'mico': 4,
     'puma': 6,
     'ur10': 6,
-    'valkyrie': 58, #
-    'yumi': 14, #
+    # 'valkyrie': 58, #
+    # 'yumi': 14, #
     # means not suitable in our case.
 }
 
@@ -29,7 +29,7 @@ class Config:
         
         # hnne parameter
         self.weight_dir = f'./weights/{self.robot_name}/'
-        self.reduced_dim = 4
+        self.reduced_dim = self.dof - 3
         self.num_samples = 250_0000
         self.num_neighbors = 1000
         self.hnne_save_path = self.weight_dir + 'hnne.pickle'
@@ -40,7 +40,7 @@ class Config:
         self.device = 'cuda'
         self.num_features = self.dof
         self.num_conditions = 3 + self.reduced_dim + 1 # position + posture + noise = 3-dim + 4-dim + 1-dim 
-        self.num_transforms = 7
+        self.num_transforms = 7 
         self.subnet_shape = [1024] * 3
         self.activation = LeakyReLU
         
@@ -55,9 +55,9 @@ class Config:
         self.decay_step_size = 3_0000
         self.batch_size = 128
         self.noise_esp = 1e-3
-        self.num_epochs = 15
+        self.num_epochs = 20
         self.num_steps_save = 1000
-        self.num_test_data = 60
+        self.num_test_data = 1
         self.num_test_samples = 500
         self.save_path = self.weight_dir + f'{self.architecture}.pth'
         

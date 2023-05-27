@@ -36,8 +36,8 @@ def train_step(model, batch, optimizer, scheduler):
     :rtype: _type_
     """
     x, y = add_small_noise_to_batch(batch)
-        
-    loss = -flow(y).log_prob(x)  # -log p(x | y)
+
+    loss = -model(y).log_prob(x)  # -log p(x | y)
     loss = loss.mean()
 
     optimizer.zero_grad()
@@ -69,6 +69,7 @@ if __name__ == '__main__':
     step = 0
     l2_label = ['mean', 'std', 'min', '25%', '50%', '75%', 'max']
 
+    flow.train()
     for ep in range(config.num_epochs):
         t = tqdm(loader)
         for batch in t:

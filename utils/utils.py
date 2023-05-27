@@ -75,6 +75,7 @@ def __test_one_l2_err(config, robot, loader, model, num_samples: int, inference:
     
     # assuming rand is a number
     time_begin = time.time()
+    model.eval()
     x_hat = model(y[rand]).sample((num_samples,))
     time_diff = round(time.time() - time_begin, 2)
         
@@ -198,18 +199,24 @@ def sample_jtraj(path, pidx, model, robot):
     errs = np.zeros((len(path),))
     log_probs = np.zeros((len(path),))
     
-    step = 0
+    model.eval()
     x_hat = model(y).sample((1,))
     log_prob = model(y).log_prob(x_hat)
     
     x_hat = x_hat.detach().cpu().numpy()[0]
     log_prob = -log_prob.detach().cpu().numpy()[0]
 
+    step = 0
+    ang_errs = np.zeros_like(errs)
     for q, lp, ee_pos in zip(x_hat, log_prob, path):
+        if step != 0:
+            ang_errs[step] = abs(np.sum(x_hat[step-1] - q))
         errs[step] = robot.l2_err_func(q=q, ee_pos=ee_pos)
         log_probs[step] = lp     
         step += 1
-    df = pd.DataFrame(np.column_stack((errs, log_probs)), columns=['l2_err', 'log_prob'])
+    ang_errs[0] = np.average(ang_errs[1:])
+    ang_errs = np.rad2deg(ang_errs)
+    df = pd.DataFrame(np.column_stack((errs, log_probs, ang_errs)), columns=['l2_err', 'log_prob', 'ang_errs(sum)'])
     qs = x_hat
     return df, qs
 
@@ -249,29 +256,29 @@ def sample_ee_traj(robot, load_time: str = '') -> str:
         
     return traj_dir
 
-def generate_traj_via_model(robot, traj_dir: str, hnne=None, model=None, num_traj: int = 3, outliner_thres: float = 5e-2) -> None:
+def generate_traj_via_model(robot, traj_dir: str, hnne=None, model=None, num_traj: int = 3, outliner_thres: float = 5e-2, enable_regenerate: bool = False) -> None:
     """
     _summary_
-    example of use
+        for generate
+        generate_traj_via_model(hnne=hnne, num_traj=3, model=nflow, robot=panda, traj_dir=traj_dir)
+        
+        only for demo
+        generate_traj_via_model(hnne=None, num_traj=3, model=None, robot=panda, traj_dir=traj_dir)
     
-    for generate
-    generate_traj_via_model(hnne=hnne, num_traj=3, model=nflow, robot=panda, traj_dir=traj_dir)
-    
-    only for demo
-    generate_traj_via_model(hnne=None, num_traj=3, model=None, robot=panda, traj_dir=traj_dir)
-    
-    :param hnne: _description_
-    :type hnne: _type_
-    :param model: _description_
-    :type model: NSF
     :param robot: _description_
-    :type robot: Robot
+    :type robot: _type_
     :param traj_dir: _description_
     :type traj_dir: str
+    :param hnne: _description_, defaults to None
+    :type hnne: _type_, optional
+    :param model: _description_, defaults to None
+    :type model: _type_, optional
     :param num_traj: _description_, defaults to 3
     :type num_traj: int, optional
-    :param outliner_thres: _description_, defaults to 5e-2
-    :type outliner_thres: float, optional
+    :param outliner_ccthres: _description_, defaults to 5e-2
+    :type outliner_ccthres: float, optional
+    :param enable_regenerate: _description_, defaults to False
+    :type enable_regenerate: bool, optional
     """
     def load_and_plot(exp_traj_path: str, ee_path: np.array):
         if os.path.exists(path=exp_traj_path):
@@ -297,7 +304,7 @@ def generate_traj_via_model(robot, traj_dir: str, hnne=None, model=None, num_tra
     ee_traj = load_numpy(file_path=traj_dir + 'ee_traj.npy')
     q_traj = load_numpy(file_path=traj_dir + 'q_traj.npy')
     
-    if not already_exists and hnne is not None and model is not None:
+    if enable_regenerate or not already_exists and hnne is not None and model is not None:
         rand = np.random.randint(low=0, high=len(q_traj), size=num_traj)
         pidx = hnne.transform(X=q_traj[rand])
         print(pidx)

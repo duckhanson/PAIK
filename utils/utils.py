@@ -6,20 +6,61 @@ import pandas as pd
 import torch
 from tqdm.auto import tqdm
 from utils.settings import config
+from utils.dataset import create_dataset
 
-def load_data(robot, num_samples:int = config.num_samples, return_ee: bool = True, generate_new: bool = False):
+
+def __get_load_data_path(len_data):
+    """
+    _summary_
+
+    :param len_data: _description_
+    :type len_data: _type_
+    :return: (x_path, y_path, x_trans_path)
+    :rtype: _type_
+    """
+    if len_data == config.num_train_size:
+        return config.x_train_path, config.y_train_path, config.x_trans_train_path
+    else:
+        return config.x_val_path, config.y_val_path, config.x_trans_val_path
+
+def load_data(robot, num_samples, generate_new: bool = False):
+    x_path, y_path, _ = __get_load_data_path(len_data=num_samples)
+    
     X = []
     if not generate_new:    
         # data generation
-        X = load_numpy(file_path=config.x_data_path)
-        y = load_numpy(file_path=config.y_data_path)
+        X = load_numpy(file_path=x_path)
+        y = load_numpy(file_path=y_path)
 
     if len(X) != num_samples:
         X, y = robot.random_sample_joint_config(num_samples=num_samples, return_ee=True)
-        save_numpy(file_path=config.x_data_path, arr=X)
-        save_numpy(file_path=config.y_data_path, arr=y)
+        save_numpy(file_path=x_path, arr=X)
+        save_numpy(file_path=y_path, arr=y)
 
     return X, y
+
+def get_loader(X: np.array, y: np.array, hnne):
+    _, _, trans_path = __get_load_data_path(len_data=len(y))
+    
+    X_trans = None
+    if os.path.exists(path=trans_path):
+        X_trans = load_numpy(file_path=trans_path)
+    
+    if X_trans is None or len(X_trans) != len(X):
+        X_trans = hnne.transform(X, verbose=True)
+        save_numpy(file_path=trans_path, arr=X_trans)
+                
+    y = np.column_stack((y, X_trans))
+    ds = create_dataset(features=X, targets=y, enable_normalize=False)
+    loader = ds.create_loader(shuffle=True, batch_size=config.batch_size)
+    return loader
+
+def get_val_loader(robot, hnne, num_samples=config.num_val_size, generate_new:bool = False):
+    X, y = load_data(robot=robot, num_samples=num_samples)
+    # get loader
+    val_loader = get_loader(X, y, hnne=hnne)
+    return val_loader
+    
 
 def load_numpy(file_path):
     if os.path.exists(path=file_path):
@@ -47,7 +88,7 @@ def add_small_noise_to_batch(batch, esp: float = config.noise_esp, step: int = 0
         x = x + noise
     return x, y
     
-def test_l2_err(config, robot, loader, model, num_data = config.num_test_data, num_samples = config.num_test_samples, inference: bool=False):
+def test_l2_err(config, robot, loader, model, num_data = config.num_eval_size, num_samples = config.num_eval_samples, inference: bool=False):
     errs = np.zeros(shape=(num_data))
     log_probs = np.zeros(shape=(num_data))
     time_diff = np.zeros(shape=(num_data))

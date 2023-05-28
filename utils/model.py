@@ -127,7 +127,7 @@ def get_nflow_model(flow: NSF):
 
 
 
-def get_hnne_model(X: np.array, y: np.array, return_ds: bool = True, save_path: str = config.hnne_save_path):
+def get_hnne_model(X: np.array, y: np.array, save_path: str = config.hnne_save_path):
     """
     Return hnne model
 
@@ -147,23 +147,16 @@ def get_hnne_model(X: np.array, y: np.array, return_ds: bool = True, save_path: 
         try:
             hnne = HNNE.load(path=save_path)
             print(f'hnne load successfully from {save_path}')
-            X_transformed = load_numpy(file_path=config.x_trans_path)
+            X_trans = load_numpy(file_path=config.x_trans_train_path)
             suc_load = True
         except:
             print(f'hnne load err, assuming you use different architecture.')
         
     if not suc_load:
         hnne = HNNE(dim=config.reduced_dim, ann_threshold=config.num_neighbors)
-        X_transformed = hnne.fit_transform(X=X, dim=config.reduced_dim, verbose=True)
+        X_trans = hnne.fit_transform(X=X, dim=config.reduced_dim, verbose=True)
         hnne.save(path=save_path)
-        save_numpy(file_path=config.x_trans_path, arr=X_transformed)
-    
-    if return_ds:
-        y = np.column_stack((y, X_transformed))
-        ds = create_dataset(features=X, targets=y, enable_normalize=False)
-        loader = ds.create_loader(shuffle=True, batch_size=config.batch_size)
-    
-        return hnne, ds, loader
+        save_numpy(file_path=config.x_trans_train_path, arr=X_trans)
     
     return hnne
     

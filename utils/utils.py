@@ -88,13 +88,13 @@ def add_small_noise_to_batch(batch, esp: float = config.noise_esp, step: int = 0
         x = x + noise
     return x, y
     
-def test_l2_err(config, robot, loader, model, num_data = config.num_eval_size, num_samples = config.num_eval_samples, inference: bool=False):
+def test_l2_err(robot, loader, model, num_data = config.num_eval_size, num_samples = config.num_eval_samples, inference: bool=False):
     errs = np.zeros(shape=(num_data))
     log_probs = np.zeros(shape=(num_data))
     time_diff = np.zeros(shape=(num_data))
     
     for i in range(num_data):
-        er, lp, dt = __test_one_l2_err(config, robot, loader, model, num_samples=num_samples, inference=inference)
+        er, lp, dt = __test_one_l2_err(robot, loader, model, num_samples=num_samples, inference=inference)
         errs[i] = er
         log_probs[i] = lp
         time_diff[i] = dt
@@ -106,7 +106,7 @@ def test_l2_err(config, robot, loader, model, num_data = config.num_eval_size, n
         
     return df, errs.mean()
 
-def __test_one_l2_err(config, robot, loader, model, num_samples: int, inference: bool):
+def __test_one_l2_err(robot, loader, model, num_samples: int, inference: bool):
     batch = next(iter(loader))
     x, y = add_small_noise_to_batch(batch, eval=True)
 

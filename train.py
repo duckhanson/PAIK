@@ -89,7 +89,7 @@ if __name__ == '__main__':
             step += 1
             
             if step % config.num_steps_eval == 0:
-                df, err = test_l2_err(config, robot=panda, loader=val_loader, model=flow, inference=True)
+                df, err = test_l2_err(robot=panda, loader=val_loader, model=flow, inference=True)
                 l2_val = df.describe().values[1:, 0]
                 log_info = {}
                 for l, v in zip(l2_label, l2_val):

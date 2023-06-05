@@ -39,18 +39,19 @@ def load_data(robot, num_samples, generate_new: bool = False):
 
     return X, y
 
-def get_loader(X: np.array, y: np.array, hnne):
+def get_loader(X: np.array, y: np.array, hnne=None):
     _, _, trans_path = __get_load_data_path(len_data=len(y))
     
     X_trans = None
     if os.path.exists(path=trans_path):
         X_trans = load_numpy(file_path=trans_path)
     
-    if X_trans is None or len(X_trans) != len(X):
-        X_trans = hnne.transform(X, verbose=True)
-        save_numpy(file_path=trans_path, arr=X_trans)
-                
-    y = np.column_stack((y, X_trans))
+    if hnne is not None:
+        if X_trans is None or len(X_trans) != len(X):
+            X_trans = hnne.transform(X, verbose=True)
+            save_numpy(file_path=trans_path, arr=X_trans)
+                    
+        y = np.column_stack((y, X_trans))
     ds = create_dataset(features=X, targets=y, enable_normalize=False)
     loader = ds.create_loader(shuffle=True, batch_size=config.batch_size)
     return loader
@@ -78,7 +79,7 @@ def save_numpy(file_path, arr):
     
 def add_small_noise_to_batch(batch, esp: float = config.noise_esp, step: int = 0, eval: bool = False):
     x, y = batch
-    if eval or step < 1_0000:
+    if eval or step < config.num_steps_add_noise:
         std = torch.zeros((x.shape[0], 1)).to(config.device)
         y = torch.column_stack((y, std))
     else:
@@ -116,21 +117,19 @@ def __test_one_l2_err(robot, loader, model, num_samples: int, inference: bool):
     
     # assuming rand is a number
     time_begin = time.time()
-    model.eval()
-    x_hat = model(y[rand]).sample((num_samples,))
+    with torch.inference_mode():
+        x_hat = model(y[rand]).sample((num_samples,))
     time_diff = round(time.time() - time_begin, 2)
         
     qs = x_hat.detach().cpu().numpy()
     ee_pos = y[rand].detach().cpu().numpy()
     ee_pos = ee_pos[0, :3]
     
-    step = 0
-    for q in qs:
-        errs[step] = robot.l2_err_func(q=q, ee_pos=ee_pos)
-        step += 1
+    errs = robot.l2_err_func_array(qs=qs, ee_pos=ee_pos)
     
     if not inference:
-        log_prob = model(y[rand]).log_prob(x_hat)
+        with torch.inference_mode():
+            log_prob = model(y[rand]).log_prob(x_hat)
         log_prob = -log_prob.detach().cpu().numpy()
         
     return errs.mean(), log_probs.mean(), time_diff
@@ -160,8 +159,9 @@ def save_show_pose_data(config, num_data, num_samples, model, robot):
     rand = np.random.randint(low=0, high=len(x), size=num_data)
     
     for nd in rand:
-        x_hat = model(y[nd]).sample((num_samples,))
-        log_prob = model(y[nd]).log_prob(x_hat)
+        with torch.inference_mode():
+            x_hat = model(y[nd]).sample((num_samples,))
+            log_prob = model(y[nd]).log_prob(x_hat)
         
         x_hat = x_hat.detach().cpu().numpy()
         log_prob = -log_prob.detach().cpu().numpy()
@@ -237,21 +237,22 @@ def sample_jtraj(path, pidx, model, robot):
     y = np.column_stack((path, pidx, cstd))
     y = torch.tensor(data=y, device='cuda', dtype=torch.float32)
     
-    errs = np.zeros((len(path),))
-    log_probs = np.zeros((len(path),))
     
-    model.eval()
-    x_hat = model(y).sample((1,))
-    log_prob = model(y).log_prob(x_hat)
+    
+    with torch.inference_mode():
+        x_hat = model(y).sample((1,))
+        log_prob = model(y).log_prob(x_hat)
     
     x_hat = x_hat.detach().cpu().numpy()[0]
     log_prob = -log_prob.detach().cpu().numpy()[0]
 
     step = 0
+    errs = np.zeros((len(path),))
     ang_errs = np.zeros_like(errs)
+    log_probs = np.zeros((len(path),))
     for q, lp, ee_pos in zip(x_hat, log_prob, path):
         if step != 0:
-            ang_errs[step] = abs(np.sum(x_hat[step-1] - q))
+            ang_errs[step] = np.sum(np.abs(x_hat[step-1] - q))
         errs[step] = robot.l2_err_func(q=q, ee_pos=ee_pos)
         log_probs[step] = lp     
         step += 1
@@ -357,7 +358,32 @@ def generate_traj_via_model(robot, traj_dir: str, hnne=None, model=None, num_tra
     
     for i in range(num_traj):
         load_and_plot(exp_traj_path=exp_path(i), ee_path=ee_traj)
-            
+
+def calc_ang_errs(qs):
+    """
+    calcuate the sum of difference for angles
+
+    :param qs: _description_
+    :type qs: _type_
+    :return: _description_
+    :rtype: _type_
+    """
+    ang_errs = np.zeros_like(qs)
+    ang_errs[1:] = np.abs(np.diff(qs, axis=0))
+    ang_errs[0] = ang_errs[1:].mean(axis=0)
+    ang_errs = ang_errs.sum(axis=1)
+    ang_errs = np.rad2deg(ang_errs)
+    return ang_errs
+
+def qtraj_evaluation(robot, qs, ee_path=None, l2_errs=None):
+    ang_errs = calc_ang_errs(qs=qs)
+    
+    if l2_errs is None:
+        l2_errs = robot.l2_err_func_array(qs=qs, ee_pos=ee_path)
+    
+    df = pd.DataFrame(np.column_stack((l2_errs, ang_errs)), columns=['l2_err', 'ang_errs(sum)'])
+    return df
+
 
 def create_robot_dirs() -> None:
     """
@@ -381,5 +407,5 @@ def remove_empty_robot_dirs() -> None:
                 print(f"Delete {p}")
                 
     
-        
+
     

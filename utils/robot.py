@@ -157,6 +157,24 @@ class Robot:
         if self.verbose:
             print(f"Com_pos: {com_pos}, EE_pos: {ee_pos}, diff: {diff}")
         return diff
+    
+    def l2_err_func_array(self, qs: np.ndarray, ee_pos: np.ndarray):
+        """
+        array version of l2_err_func
+
+        :param qs: _description_
+        :type qs: np.ndarray
+        :param ee_pos: _description_
+        :type ee_pos: np.ndarray
+        :return: _description_
+        :rtype: _type_
+        """
+        com_pos = np.zeros((len(qs), ee_pos.shape[-1]))
+        for i, q in enumerate(qs):
+            com_pos[i] = self.forward_kinematics(q)
+        
+        diff = np.linalg.norm(com_pos - ee_pos, axis=1)
+        return diff
 
     def plot(self, q: np.ndarray=None, p: np.ndarray=None, qs: np.ndarray=None, dt: float = 0.05):
         """

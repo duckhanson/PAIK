@@ -67,6 +67,9 @@ if __name__ == '__main__':
         # set the wandb project where this run will be logged
         project="ikpflow",
         
+        # entity
+        entity="luca_nthu",
+        
         # track hyperparameters and run metadata
         config=config
     )

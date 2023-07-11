@@ -4,6 +4,7 @@ from torch.nn import LeakyReLU
 ets_table = {
     'panda': 7,
     'al5d': 4,
+    'fetch': 10,
     # 'fetchcamera': 5, #
     # 'frankie': 9, #
     # 'frankieomni': 10, #

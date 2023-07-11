@@ -281,7 +281,7 @@ def sample_ee_traj(robot, load_time: str = '') -> str:
     :rtype: str
     """
     if load_time == '':
-        traj_dir = config.traj_dir + datetime.now().strftime('%m%d%H%M') + '/'
+        traj_dir = config.traj_dir + datetime.now().strftime('%m%d%H%M%S') + '/'
     else:
         traj_dir = config.traj_dir + load_time + '/'
         
@@ -329,9 +329,10 @@ def generate_traj_via_model(robot, traj_dir: str, hnne=None, model=None, num_tra
             for i in range(len(qs)):
                 err[i] = robot.l2_err_func(q=qs[i], ee_pos=ee_traj[i])
             outliner = np.where(err > outliner_thres)
-            print(outliner)
-            print(err[outliner])
-            print(np.sum(err))
+            # print(outliner)
+            # print(err[outliner])
+            # print(np.sum(err))
+            print(qs)
             robot.plot(qs=qs)
         else:
             print(f'{exp_traj_path} does not exist !')

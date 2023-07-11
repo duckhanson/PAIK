@@ -1,6 +1,7 @@
 import numpy as np
 from numpy import linalg as LA
 from tqdm import tqdm
+import swift
 import roboticstoolbox as rtb
 from spatialmath import SE3
 from utils.settings import config, ets_table
@@ -46,6 +47,8 @@ class Robot:
             robot = rtb.models.Valkyrie()
         elif robot_name == 'yumi':
             robot = rtb.models.YuMi()
+        elif robot_name == 'fetch':
+            robot = rtb.models.Fetch()
         else:
             raise NotImplementedError()
         return robot
@@ -135,8 +138,7 @@ class Robot:
 
         ee = np.zeros((len(qs), 3))
         step = 0
-        tq = tqdm(qs)
-        for q in tq:
+        for q in qs:
             ee[step] = self.forward_kinematics(q)
             step += 1
 
@@ -176,7 +178,7 @@ class Robot:
         diff = np.linalg.norm(com_pos - ee_pos, axis=1)
         return diff
 
-    def plot(self, q: np.ndarray=None, p: np.ndarray=None, qs: np.ndarray=None, dt: float = 0.05):
+    def plot(self, q: np.ndarray=None, p: np.ndarray=None, qs: np.ndarray=None, dt: float = 0.1):
         """
         _summary_
         example of use
@@ -204,4 +206,12 @@ class Robot:
             t = int(1/dt)
             qt = rtb.tools.trajectory.jtraj(q, p, t=t)
             qs = qt.q
-        self.robot.plot(qs, dt=dt)
+            
+        env = swift.Swift()
+        env.launch(realtime=True)
+        env.add(self.robot)
+        
+        for q in qs:
+            self.robot.q = q
+            env.step(dt)
+        # self.robot.plot(qs, dt=dt)

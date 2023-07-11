@@ -9,7 +9,7 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import StepLR
 from tqdm import tqdm, trange
 import zuko
-from zuko.flows import Distribution, NSF
+from zuko.flows import Distribution, NSF, CNF
 from zuko.distributions import DiagNormal, BoxUniform, Minimum
 from zuko.flows import DistributionModule, FlowModule, Unconditional
 from hnne import HNNE
@@ -29,12 +29,21 @@ def get_flow_model(load_model=True):
     """
     # Build Generative model, NSF
     # Neural spline flow (NSF) with inputs 7 features and 3 + 4 + 1 context
-    flow = NSF(features=config.num_features, 
-            context=config.num_conditions, 
-            transforms=config.num_transforms, 
-            randperm=True, 
-            activation=config.activation, 
-            hidden_features=config.subnet_shape).to(config.device)
+    if config.architecture == 'nsf':
+        flow = NSF(features=config.num_features, 
+                context=config.num_conditions, 
+                transforms=config.num_transforms, 
+                randperm=True, 
+                activation=config.activation, 
+                hidden_features=config.subnet_shape).to(config.device)
+    elif config.architecture == 'cnf':
+        flow = CNF(features=config.num_features, 
+                context=config.num_conditions, 
+                transforms=config.num_transforms, 
+                activation=config.activation, 
+                hidden_features=config.subnet_shape).to(config.device)
+    else:
+        raise NotImplementedError("Not support architecture.")
     
     flow = get_sflow_model(flow)
 

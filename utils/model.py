@@ -1,23 +1,29 @@
 # Import required packages
-from os import path
 import time
+from os import path
+
 import numpy as np
 import pandas as pd
 import torch
-from torch import nn, Tensor
+import zuko
+from hnne import HNNE
+from torch import Tensor, nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import StepLR
 from tqdm import tqdm, trange
-import zuko
-from zuko.flows import Distribution, NSF, CNF
-from zuko.distributions import DiagNormal, BoxUniform, Minimum
-from zuko.flows import DistributionModule, FlowModule, Unconditional
-from hnne import HNNE
-
+from utils.dataset import create_dataset
+from utils.robot import Robot
 from utils.settings import config
 from utils.utils import load_numpy, save_numpy
-from utils.robot import Robot
-from utils.dataset import create_dataset
+from zuko.distributions import BoxUniform, DiagNormal, Minimum
+from zuko.flows import (
+    CNF,
+    NSF,
+    Distribution,
+    DistributionModule,
+    FlowModule,
+    Unconditional,
+)
 
 
 def get_flow_model(load_model=True):
@@ -29,40 +35,51 @@ def get_flow_model(load_model=True):
     """
     # Build Generative model, NSF
     # Neural spline flow (NSF) with inputs 7 features and 3 + 4 + 1 context
-    if config.architecture == 'nsf':
-        flow = NSF(features=config.num_features, 
-                context=config.num_conditions, 
-                transforms=config.num_transforms, 
-                randperm=True, 
-                activation=config.activation, 
-                hidden_features=config.subnet_shape).to(config.device)
-    elif config.architecture == 'cnf':
-        flow = CNF(features=config.num_features, 
-                context=config.num_conditions, 
-                transforms=config.num_transforms, 
-                activation=config.activation, 
-                hidden_features=config.subnet_shape).to(config.device)
+    if config.architecture == "nsf":
+        flow = NSF(
+            features=config.num_features,
+            context=config.num_conditions,
+            transforms=config.num_transforms,
+            randperm=True,
+            activation=config.activation,
+            hidden_features=config.subnet_shape,
+        ).to(config.device)
+    elif config.architecture == "cnf":
+        flow = CNF(
+            features=config.num_features,
+            context=config.num_conditions,
+            transforms=config.num_transforms,
+            activation=config.activation,
+            hidden_features=config.subnet_shape,
+        ).to(config.device)
     else:
         raise NotImplementedError("Not support architecture.")
-    
+
     flow = get_sflow_model(flow)
 
     if load_model and path.exists(path=config.save_path):
         try:
             flow.load_state_dict(state_dict=torch.load(config.save_path))
-            print(f'Model load successfully from {config.save_path}')
+            print(f"Model load successfully from {config.save_path}")
         except:
-            print(f'Load err, assuming you use different architecture.')
+            print("Load err, assuming you use different architecture.")
     else:
-        print('Create a new model and start training.')
+        print("Create a new model and start training.")
 
     # Train to maximize the log-likelihood
-    optimizer = AdamW(flow.parameters(), lr=config.lr, weight_decay=config.lr_weight_decay)
-    scheduler = StepLR(optimizer, step_size=config.decay_step_size, gamma=config.decay_gamma)
-    
+    optimizer = AdamW(
+        flow.parameters(), lr=config.lr, weight_decay=config.lr_weight_decay
+    )
+    scheduler = StepLR(
+        optimizer, step_size=config.decay_step_size, gamma=config.decay_gamma
+    )
+
     return flow, optimizer, scheduler
 
-def get_iflow_model(flow: NSF, init_sample: torch.Tensor, shrink_ratio: float = 0.01) -> FlowModule:
+
+def get_iflow_model(
+    flow: NSF, init_sample: torch.Tensor, shrink_ratio: float = 0.01
+) -> FlowModule:
     """
     sampling from initial samples as search space centers
     seach shrink_ratio region
@@ -77,18 +94,19 @@ def get_iflow_model(flow: NSF, init_sample: torch.Tensor, shrink_ratio: float = 
     :rtype: FlowModule
     """
     iflow = FlowModule(
-        transforms=flow.transforms, 
-        base= Unconditional(
-                DiagNormal,
-                torch.zeros((config.dof,)) + init_sample,
-                torch.ones((config.dof,)) * shrink_ratio,
-                buffer=True,
-        ))
-    
+        transforms=flow.transforms,
+        base=Unconditional(
+            DiagNormal,
+            torch.zeros((config.dof,)) + init_sample,
+            torch.ones((config.dof,)) * shrink_ratio,
+            buffer=True,
+        ),
+    )
+
     iflow.to(config.device)
-    
+
     return iflow
-    
+
 
 def get_sflow_model(flow: NSF, shrink_ratio: float = config.shrink_ratio):
     """
@@ -100,17 +118,19 @@ def get_sflow_model(flow: NSF, shrink_ratio: float = config.shrink_ratio):
     :rtype: _type_
     """
     sflow = FlowModule(
-        transforms=flow.transforms, 
-        base= Unconditional(
-                DiagNormal,
-                torch.zeros((config.dof,)),
-                torch.ones((config.dof,))*config.shrink_ratio,
-                buffer=True,
-        ))
-    
+        transforms=flow.transforms,
+        base=Unconditional(
+            DiagNormal,
+            torch.zeros((config.dof,)),
+            torch.ones((config.dof,)) * config.shrink_ratio,
+            buffer=True,
+        ),
+    )
+
     sflow.to(config.device)
-    
+
     return sflow
+
 
 def get_nflow_model(flow: NSF):
     """
@@ -122,18 +142,18 @@ def get_nflow_model(flow: NSF):
     :rtype: _type_
     """
     nflow = FlowModule(
-        transforms=flow.transforms, 
-        base= Unconditional(
-                BoxUniform,
-                -torch.ones((config.dof,))*config.shrink_ratio,
-                torch.ones((config.dof,))*config.shrink_ratio,
-                buffer=True,
-        ))
-    
-    nflow.to(config.device)
-    
-    return nflow
+        transforms=flow.transforms,
+        base=Unconditional(
+            BoxUniform,
+            -torch.ones((config.dof,)) * config.shrink_ratio,
+            torch.ones((config.dof,)) * config.shrink_ratio,
+            buffer=True,
+        ),
+    )
 
+    nflow.to(config.device)
+
+    return nflow
 
 
 def get_hnne_model(X: np.array, y: np.array, save_path: str = config.hnne_save_path):
@@ -150,22 +170,21 @@ def get_hnne_model(X: np.array, y: np.array, save_path: str = config.hnne_save_p
     :rtype: tuple
     """
     # build dimension reduction model
-    
+
     suc_load = False
     if path.exists(path=save_path):
         try:
             hnne = HNNE.load(path=save_path)
-            print(f'hnne load successfully from {save_path}')
+            print(f"hnne load successfully from {save_path}")
             X_trans = load_numpy(file_path=config.x_trans_train_path)
             suc_load = True
         except:
-            print(f'hnne load err, assuming you use different architecture.')
-        
+            print(f"hnne load err, assuming you use different architecture.")
+
     if not suc_load:
         hnne = HNNE(dim=config.reduced_dim, ann_threshold=config.num_neighbors)
         X_trans = hnne.fit_transform(X=X, dim=config.reduced_dim, verbose=True)
         hnne.save(path=save_path)
         save_numpy(file_path=config.x_trans_train_path, arr=X_trans)
-    
+
     return hnne
-    

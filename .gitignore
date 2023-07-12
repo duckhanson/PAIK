@@ -8,3 +8,4 @@ wandb/*
 *.log
 *.pyc
 *.json
+*.yml

@@ -1,60 +1,61 @@
 import numpy as np
-from numpy import linalg as LA
-from tqdm import tqdm
-import swift
 import roboticstoolbox as rtb
+import swift
+from numpy import linalg as LA
 from spatialmath import SE3
+from tqdm import tqdm
 from utils.settings import config, ets_table
 from utils.utils import create_robot_dirs
 
+
 class Robot:
-    def __init__(self, verbose, robot_name: str=config.robot_name):
+    def __init__(self, verbose, robot_name: str = config.robot_name):
         self.verbose = verbose
         support_robots = list(ets_table.keys())
         if robot_name not in support_robots:
             raise NotImplementedError()
-        
-        self.robot = self.__get_robot_module(robot_name)    
+
+        self.robot = self.__get_robot_module(robot_name)
 
         self.joint_min, self.joint_max = self.robot.qlim
         self.dof = len(self.joint_min)
 
         if self.verbose:
             print(self.robot)
-        
+
         create_robot_dirs()
-    
+
     def __get_robot_module(self, robot_name):
-        if robot_name == 'panda':
+        if robot_name == "panda":
             robot = rtb.models.Panda()
-        elif robot_name == 'al5d':
+        elif robot_name == "al5d":
             robot = rtb.models.AL5D()
-        elif robot_name == 'fetchcamera':
+        elif robot_name == "fetchcamera":
             robot = rtb.models.FetchCamera()
-        elif robot_name == 'frankie':
+        elif robot_name == "frankie":
             robot = rtb.models.Frankie()
-        elif robot_name == 'frankieomni':
+        elif robot_name == "frankieomni":
             robot = rtb.models.FrankieOmni()
-        elif robot_name == 'lbr':
+        elif robot_name == "lbr":
             robot = rtb.models.LBR()
-        elif robot_name == 'mico':
+        elif robot_name == "mico":
             robot = rtb.models.Mico()
-        elif robot_name == 'puma':
+        elif robot_name == "puma":
             robot = rtb.models.Puma560()
-        elif robot_name == 'ur10':
+        elif robot_name == "ur10":
             robot = rtb.models.UR10()
-        elif robot_name == 'valkyrie':
+        elif robot_name == "valkyrie":
             robot = rtb.models.Valkyrie()
-        elif robot_name == 'yumi':
+        elif robot_name == "yumi":
             robot = rtb.models.YuMi()
-        elif robot_name == 'fetch':
+        elif robot_name == "fetch":
             robot = rtb.models.Fetch()
         else:
             raise NotImplementedError()
         return robot
 
     def forward_kinematics(self, q: np.ndarray):
-        '''
+        """
         Given a joint configuration q to get end effector position ee_pos.
         Parameters
         ----------
@@ -64,7 +65,7 @@ class Robot:
         -------
         ee_pos : np.ndarray
             end effector postion given a joint configuration
-        '''
+        """
         T = self.robot.fkine(q)  # forward kinematics
         # output is a SE3 matrix, use t to get position.
         ee_pos = T.t
@@ -73,8 +74,8 @@ class Robot:
         return np.array(ee_pos)
 
     def inverse_kinematics(self, ee_pos: np.ndarray, q0: np.ndarray = None):
-        '''
-        Given end effector position ee_pos to get a joint configuration q. Can use q0 to 
+        """
+        Given end effector position ee_pos to get a joint configuration q. Can use q0 to
         get a solid solution.
 
         Parameters
@@ -88,7 +89,7 @@ class Robot:
         -------
         q : np.ndarray
             a joint configuartion solved from analytic inverse kinematics.
-        '''
+        """
         if ee_pos.shape == (4, 4):
             T = ee_pos
         else:
@@ -109,12 +110,13 @@ class Robot:
             print(f"Given {ee_pos} and {q0}, via ik, get {q}.")
         return np.array(q), success
 
-    def random_sample_joint_config(self, num_samples: int, return_ee: bool = False) -> np.ndarray:
+    def random_sample_joint_config(
+        self, num_samples: int, return_ee: bool = False
+    ) -> np.ndarray:
         # samples = np.array([])
 
         rand = np.random.rand(num_samples, self.dof)
         q_samples = (self.joint_max - self.joint_min) * rand + self.joint_min
-        
 
         if return_ee:
             ee_samples = np.zeros((len(q_samples), 3))
@@ -145,7 +147,7 @@ class Robot:
         return ee, qs
 
     def l2_err_func(self, q: np.ndarray, ee_pos: np.ndarray):
-        '''
+        """
         Compute the Euclidean Distance between the value of forward_kinematics with joint_confg
         and ee_pos.
 
@@ -153,13 +155,13 @@ class Robot:
         -------
         Distance : np.float
             the distance between forward(q) and ee_pos.
-        '''
+        """
         com_pos = self.forward_kinematics(q)
         diff = np.linalg.norm(com_pos - ee_pos)
         if self.verbose:
             print(f"Com_pos: {com_pos}, EE_pos: {ee_pos}, diff: {diff}")
         return diff
-    
+
     def l2_err_func_array(self, qs: np.ndarray, ee_pos: np.ndarray):
         """
         array version of l2_err_func
@@ -174,21 +176,27 @@ class Robot:
         com_pos = np.zeros((len(qs), ee_pos.shape[-1]))
         for i, q in enumerate(qs):
             com_pos[i] = self.forward_kinematics(q)
-        
+
         diff = np.linalg.norm(com_pos - ee_pos, axis=1)
         return diff
 
-    def plot(self, q: np.ndarray=None, p: np.ndarray=None, qs: np.ndarray=None, dt: float = 0.1):
+    def plot(
+        self,
+        q: np.ndarray = None,
+        p: np.ndarray = None,
+        qs: np.ndarray = None,
+        dt: float = 0.1,
+    ):
         """
         _summary_
         example of use
-        
+
         Given init and final
         robot.plot(q=q, p=p, dt=0.01)
-        
+
         Given jtraj
         robot.plot(qs=qs, dt=0.1)
-        
+
         :param q: _description_, defaults to None
         :type q: np.ndarray, optional
         :param p: _description_, defaults to None
@@ -202,15 +210,15 @@ class Robot:
         if qs is None:
             if q is None or p is None:
                 raise ValueError("Input error: should give init and final or jtraj.")
-            
-            t = int(1/dt)
+
+            t = int(1 / dt)
             qt = rtb.tools.trajectory.jtraj(q, p, t=t)
             qs = qt.q
-            
+
         env = swift.Swift()
         env.launch(realtime=True)
         env.add(self.robot)
-        
+
         for q in qs:
             self.robot.q = q
             env.step(dt)

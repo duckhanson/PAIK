@@ -1,12 +1,13 @@
 import os
 import time
 from datetime import datetime
+
 import numpy as np
 import pandas as pd
 import torch
 from tqdm.auto import tqdm
-from utils.settings import config
 from utils.dataset import create_dataset
+from utils.settings import config
 
 
 def __get_load_data_path(len_data):
@@ -23,11 +24,12 @@ def __get_load_data_path(len_data):
     else:
         return config.x_val_path, config.y_val_path, config.x_trans_val_path
 
+
 def load_data(robot, num_samples, generate_new: bool = False):
     x_path, y_path, _ = __get_load_data_path(len_data=num_samples)
-    
+
     X = []
-    if not generate_new:    
+    if not generate_new:
         # data generation
         X = load_numpy(file_path=x_path)
         y = load_numpy(file_path=y_path)
@@ -39,45 +41,53 @@ def load_data(robot, num_samples, generate_new: bool = False):
 
     return X, y
 
+
 def get_loader(X: np.array, y: np.array, hnne=None):
     _, _, trans_path = __get_load_data_path(len_data=len(y))
-    
+
     X_trans = None
     if os.path.exists(path=trans_path):
         X_trans = load_numpy(file_path=trans_path)
-    
+
     if hnne is not None:
         if X_trans is None or len(X_trans) != len(X):
             X_trans = hnne.transform(X, verbose=True)
             save_numpy(file_path=trans_path, arr=X_trans)
-                    
+
         y = np.column_stack((y, X_trans))
     ds = create_dataset(features=X, targets=y, enable_normalize=False)
     loader = ds.create_loader(shuffle=True, batch_size=config.batch_size)
     return loader
 
-def get_val_loader(robot, hnne, num_samples=config.num_val_size, generate_new:bool = False):
+
+def get_val_loader(
+    robot, hnne, num_samples=config.num_val_size, generate_new: bool = False
+):
     X, y = load_data(robot=robot, num_samples=num_samples)
     # get loader
     val_loader = get_loader(X, y, hnne=hnne)
     return val_loader
-    
+
 
 def load_numpy(file_path):
     if os.path.exists(path=file_path):
         return np.load(file_path)
     else:
-        print(f'{file_path}: file not exist and return empty np array.')
+        print(f"{file_path}: file not exist and return empty np array.")
         return np.array([])
-    
+
+
 def save_numpy(file_path, arr):
     dir_path = os.path.dirname(p=file_path)
     if not os.path.exists(path=dir_path):
-        print(f'mkdir {dir_path}')
+        print(f"mkdir {dir_path}")
         os.mkdir(path=dir_path)
     np.save(file_path, arr)
-    
-def add_small_noise_to_batch(batch, esp: float = config.noise_esp, step: int = 0, eval: bool = False):
+
+
+def add_small_noise_to_batch(
+    batch, esp: float = config.noise_esp, step: int = 0, eval: bool = False
+):
     x, y = batch
     if eval or step < config.num_steps_add_noise:
         std = torch.zeros((x.shape[0], 1)).to(config.device)
@@ -85,27 +95,47 @@ def add_small_noise_to_batch(batch, esp: float = config.noise_esp, step: int = 0
     else:
         c = torch.rand((x.shape[0], 1)).to(config.device)
         y = torch.column_stack((y, c))
-        noise = torch.normal(mean=torch.zeros_like(input=x), std=esp*torch.repeat_interleave(input=c, repeats=x.shape[1], dim=1))
+        noise = torch.normal(
+            mean=torch.zeros_like(input=x),
+            std=esp * torch.repeat_interleave(input=c, repeats=x.shape[1], dim=1),
+        )
         x = x + noise
     return x, y
-    
-def test_l2_err(robot, loader, model, num_data = config.num_eval_size, num_samples = config.num_eval_samples, inference: bool=False):
+
+
+def test_l2_err(
+    robot,
+    loader,
+    model,
+    num_data=config.num_eval_size,
+    num_samples=config.num_eval_samples,
+    inference: bool = False,
+):
     errs = np.zeros(shape=(num_data))
     log_probs = np.zeros(shape=(num_data))
     time_diff = np.zeros(shape=(num_data))
-    
+
     for i in range(num_data):
-        er, lp, dt = __test_one_l2_err(robot, loader, model, num_samples=num_samples, inference=inference)
+        er, lp, dt = __test_one_l2_err(
+            robot, loader, model, num_samples=num_samples, inference=inference
+        )
         errs[i] = er
         log_probs[i] = lp
         time_diff[i] = dt
-    
+
     if inference:
-        df = pd.DataFrame(data=np.column_stack((errs, time_diff)), columns=['l2_err', f'time_diff(per {num_samples})'])
+        df = pd.DataFrame(
+            data=np.column_stack((errs, time_diff)),
+            columns=["l2_err", f"time_diff(per {num_samples})"],
+        )
     else:
-        df = pd.DataFrame(data=np.column_stack((errs, log_probs, time_diff)), columns=['l2_err', 'log_prob', f'time_diff(per {num_samples})'])
-        
+        df = pd.DataFrame(
+            data=np.column_stack((errs, log_probs, time_diff)),
+            columns=["l2_err", "log_prob", f"time_diff(per {num_samples})"],
+        )
+
     return df, errs.mean()
+
 
 def __test_one_l2_err(robot, loader, model, num_samples: int, inference: bool):
     batch = next(iter(loader))
@@ -114,26 +144,26 @@ def __test_one_l2_err(robot, loader, model, num_samples: int, inference: bool):
     errs = np.zeros((num_samples,))
     log_probs = np.zeros((num_samples,))
     rand = np.random.randint(low=0, high=len(x), size=1)
-    
+
     # assuming rand is a number
     time_begin = time.time()
     with torch.inference_mode():
         x_hat = model(y[rand]).sample((num_samples,))
     time_diff = round(time.time() - time_begin, 2)
-        
+
     qs = x_hat.detach().cpu().numpy()
     ee_pos = y[rand].detach().cpu().numpy()
     ee_pos = ee_pos[0, :3]
-    
+
     errs = robot.l2_err_func_array(qs=qs, ee_pos=ee_pos)
-    
+
     if not inference:
         with torch.inference_mode():
             log_prob = model(y[rand]).log_prob(x_hat)
         log_prob = -log_prob.detach().cpu().numpy()
-        
+
     return errs.mean(), log_probs.mean(), time_diff
-    
+
 
 def save_show_pose_data(config, num_data, num_samples, model, robot):
     """
@@ -151,24 +181,24 @@ def save_show_pose_data(config, num_data, num_samples, model, robot):
     batch = next(iter(loader))
     x, y = add_small_noise_to_batch(batch, eval=True)
     assert num_data < len(x)
-    
+
     x_hats = np.array([])
     pidxs = np.array([])
     errs = np.array([])
     log_probs = np.array([])
     rand = np.random.randint(low=0, high=len(x), size=num_data)
-    
+
     for nd in rand:
         with torch.inference_mode():
             x_hat = model(y[nd]).sample((num_samples,))
             log_prob = model(y[nd]).log_prob(x_hat)
-        
+
         x_hat = x_hat.detach().cpu().numpy()
         log_prob = -log_prob.detach().cpu().numpy()
         target = y[nd].detach().cpu().numpy()
         # ee_pos = ee_pos * (ds.targets_max - ds.targets_min) + ds.targets_min
         ee_pos = target[:3]
-        
+
         for q in x_hat:
             err = robot.l2_err_func(q=q, ee_pos=ee_pos)
             errs = np.concatenate((errs, [err]))
@@ -181,29 +211,29 @@ def save_show_pose_data(config, num_data, num_samples, model, robot):
 
     x_hats = x_hats.reshape((-1, robot.dof))
     pidxs = pidxs.reshape((len(x_hats), -1))
-    
 
     save_numpy(config.show_pose_features_path, x_hats)
     save_numpy(config.show_pose_pidxs_path, pidxs)
     save_numpy(config.show_pose_errs_path, errs)
     save_numpy(config.show_pose_log_probs_path, log_probs)
-    
-    print('Save pose successfully')
+
+    print("Save pose successfully")
+
 
 def inside_same_pidx(robot):
     """
     _summary_
-    example of use: 
+    example of use:
     save_show_pose_data(config, num_data=5, num_samples=10, model=nflow)
     inside_same_pidx(robot)
     :raises ValueError: _description_
     """
     x_hats = load_numpy(file_path=config.show_pose_features_path)
     pidxs = load_numpy(file_path=config.show_pose_pidxs_path)
-    
+
     if len(x_hats) == 0:
-        raise ValueError("lack show pose data") 
-    
+        raise ValueError("lack show pose data")
+
     pre_pidx = None
     qs = np.array([])
     for q, pidx in zip(x_hats, pidxs):
@@ -216,10 +246,11 @@ def inside_same_pidx(robot):
     for q in qs:
         robot.plot(q=q, p=q)
 
+
 def sample_jtraj(path, pidx, model, robot):
     """
     _summary_
-    example of use: 
+    example of use:
     df, qs = sample_jtraj(ee_traj, px, nflow)
     :param path: _description_
     :type path: _type_
@@ -231,18 +262,16 @@ def sample_jtraj(path, pidx, model, robot):
     :rtype: _type_
     """
     path_len = len(path)
-    pidx = np.tile(pidx, (path_len,1))
+    pidx = np.tile(pidx, (path_len, 1))
     cstd = np.zeros((path_len,))
-    
+
     y = np.column_stack((path, pidx, cstd))
-    y = torch.tensor(data=y, device='cuda', dtype=torch.float32)
-    
-    
-    
+    y = torch.tensor(data=y, device="cuda", dtype=torch.float32)
+
     with torch.inference_mode():
         x_hat = model(y).sample((1,))
         log_prob = model(y).log_prob(x_hat)
-    
+
     x_hat = x_hat.detach().cpu().numpy()[0]
     log_prob = -log_prob.detach().cpu().numpy()[0]
 
@@ -252,27 +281,31 @@ def sample_jtraj(path, pidx, model, robot):
     log_probs = np.zeros((len(path),))
     for q, lp, ee_pos in zip(x_hat, log_prob, path):
         if step != 0:
-            ang_errs[step] = np.sum(np.abs(x_hat[step-1] - q))
+            ang_errs[step] = np.sum(np.abs(x_hat[step - 1] - q))
         errs[step] = robot.l2_err_func(q=q, ee_pos=ee_pos)
-        log_probs[step] = lp     
+        log_probs[step] = lp
         step += 1
     ang_errs[0] = np.average(ang_errs[1:])
     ang_errs = np.rad2deg(ang_errs)
-    df = pd.DataFrame(np.column_stack((errs, log_probs, ang_errs)), columns=['l2_err', 'log_prob', 'ang_errs(sum)'])
+    df = pd.DataFrame(
+        np.column_stack((errs, log_probs, ang_errs)),
+        columns=["l2_err", "log_prob", "ang_errs(sum)"],
+    )
     qs = x_hat
     return df, qs
 
-def sample_ee_traj(robot, load_time: str = '') -> str:
+
+def sample_ee_traj(robot, load_time: str = "") -> str:
     """
     _summary_
-    example of use 
-    
+    example of use
+
     for generate
     traj_dir = sample_ee_traj(robot=panda, load_time=')
-    
+
     for demo
     traj_dir = sample_ee_traj(robot=panda, load_time='05232300')
-    
+
     :param robot: _description_
     :type robot: _type_
     :param load_time: _description_, defaults to ''
@@ -280,33 +313,44 @@ def sample_ee_traj(robot, load_time: str = '') -> str:
     :return: _description_
     :rtype: str
     """
-    if load_time == '':
-        traj_dir = config.traj_dir + datetime.now().strftime('%m%d%H%M%S') + '/'
+    if load_time == "":
+        traj_dir = config.traj_dir + datetime.now().strftime("%m%d%H%M%S") + "/"
     else:
-        traj_dir = config.traj_dir + load_time + '/'
-        
-    ee_traj_path = traj_dir + 'ee_traj.npy'
-    q_traj_path = traj_dir + 'q_traj.npy'
-    
-    if load_time == '' or not os.path.exists(path=q_traj_path):
-        ee_traj, q_traj = robot.path_generate_via_stable_joint_traj(dist_ratio=0.9, t=20)
+        traj_dir = config.traj_dir + load_time + "/"
+
+    ee_traj_path = traj_dir + "ee_traj.npy"
+    q_traj_path = traj_dir + "q_traj.npy"
+
+    if load_time == "" or not os.path.exists(path=q_traj_path):
+        ee_traj, q_traj = robot.path_generate_via_stable_joint_traj(
+            dist_ratio=0.9, t=20
+        )
         save_numpy(file_path=ee_traj_path, arr=ee_traj)
         save_numpy(file_path=q_traj_path, arr=q_traj)
-    
+
     if os.path.exists(path=traj_dir):
         print(f"{traj_dir} load successfully.")
-        
+
     return traj_dir
 
-def generate_traj_via_model(robot, traj_dir: str, hnne=None, model=None, num_traj: int = 3, outliner_thres: float = 5e-2, enable_regenerate: bool = False) -> None:
+
+def generate_traj_via_model(
+    robot,
+    traj_dir: str,
+    hnne=None,
+    model=None,
+    num_traj: int = 3,
+    outliner_thres: float = 5e-2,
+    enable_regenerate: bool = False,
+) -> None:
     """
     _summary_
         for generate
         generate_traj_via_model(hnne=hnne, num_traj=3, model=nflow, robot=panda, traj_dir=traj_dir)
-        
+
         only for demo
         generate_traj_via_model(hnne=None, num_traj=3, model=None, robot=panda, traj_dir=traj_dir)
-    
+
     :param robot: _description_
     :type robot: _type_
     :param traj_dir: _description_
@@ -322,6 +366,7 @@ def generate_traj_via_model(robot, traj_dir: str, hnne=None, model=None, num_tra
     :param enable_regenerate: _description_, defaults to False
     :type enable_regenerate: bool, optional
     """
+
     def load_and_plot(exp_traj_path: str, ee_path: np.array):
         if os.path.exists(path=exp_traj_path):
             err = np.zeros((100,))
@@ -335,30 +380,36 @@ def generate_traj_via_model(robot, traj_dir: str, hnne=None, model=None, num_tra
             print(qs)
             robot.plot(qs=qs)
         else:
-            print(f'{exp_traj_path} does not exist !')
-    
+            print(f"{exp_traj_path} does not exist !")
+
     already_exists = True
-    exp_path = lambda idx: traj_dir + f'exp_{i}.npy'
+    exp_path = lambda idx: traj_dir + f"exp_{i}.npy"
     for i in range(num_traj):
         if not os.path.exists(path=exp_path(i)):
             already_exists = False
             break
-        
-    ee_traj = load_numpy(file_path=traj_dir + 'ee_traj.npy')
-    q_traj = load_numpy(file_path=traj_dir + 'q_traj.npy')
-    
-    if enable_regenerate or not already_exists and hnne is not None and model is not None:
+
+    ee_traj = load_numpy(file_path=traj_dir + "ee_traj.npy")
+    q_traj = load_numpy(file_path=traj_dir + "q_traj.npy")
+
+    if (
+        enable_regenerate
+        or not already_exists
+        and hnne is not None
+        and model is not None
+    ):
         rand = np.random.randint(low=0, high=len(q_traj), size=num_traj)
         pidx = hnne.transform(X=q_traj[rand])
         print(pidx)
-    
+
         for i, px in enumerate(pidx):
             df, qs = sample_jtraj(ee_traj, px, model, robot)
             print(df.describe())
             save_numpy(file_path=exp_path(i), arr=qs)
-    
+
     for i in range(num_traj):
         load_and_plot(exp_traj_path=exp_path(i), ee_path=ee_traj)
+
 
 def calc_ang_errs(qs):
     """
@@ -376,13 +427,16 @@ def calc_ang_errs(qs):
     ang_errs = np.rad2deg(ang_errs)
     return ang_errs
 
+
 def qtraj_evaluation(robot, qs, ee_path=None, l2_errs=None):
     ang_errs = calc_ang_errs(qs=qs)
-    
+
     if l2_errs is None:
         l2_errs = robot.l2_err_func_array(qs=qs, ee_pos=ee_path)
-    
-    df = pd.DataFrame(np.column_stack((l2_errs, ang_errs)), columns=['l2_err', 'ang_errs(sum)'])
+
+    df = pd.DataFrame(
+        np.column_stack((l2_errs, ang_errs)), columns=["l2_err", "ang_errs(sum)"]
+    )
     return df
 
 
@@ -406,7 +460,3 @@ def remove_empty_robot_dirs() -> None:
             if os.path.exists(p) and len(os.listdir(p)) == 0:
                 os.removedirs(p)
                 print(f"Delete {p}")
-                
-    
-
-    

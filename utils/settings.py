@@ -1,6 +1,13 @@
 import os
 
+import torch
+import random
+import numpy as np
 from torch.nn import LeakyReLU
+
+np.random.seed(0)
+random.seed(0)
+torch.manual_seed(0)
 
 ets_table = {
     "panda": 7,
@@ -66,7 +73,7 @@ class Config:
         self.num_conditions = (
             3 + self.reduced_dim + 1
         )  # position + posture + noise = 3-dim + 4-dim + 1-dim
-        self.num_transforms = 14
+        self.num_transforms = 7
         self.subnet_shape = [1024] * 3
         self.activation = LeakyReLU
 
@@ -76,10 +83,10 @@ class Config:
         # training
         self.num_train_size = 250_0000
         self.num_val_size = 2_0000
-        self.lr = 7e-5
+        self.lr = 4.668e-7
         self.lr_weight_decay = 7e-3
         self.decay_gamma = 0.79
-        self.decay_step_size = 3000
+        self.decay_step_size = 30000
         self.batch_size = 128
         self.noise_esp = 1e-3
         self.num_epochs = 25
@@ -112,7 +119,8 @@ class Config:
 config = Config()
 
 if __name__ == "__main__":
-    current_folder_path, current_folder_name = os.path.split(os.path.realpath(__file__))
+    current_folder_path, current_folder_name = os.path.split(
+        os.path.realpath(__file__))
     current_workdir_path, current_folder_name = os.path.split(
         os.path.realpath(current_folder_path)
     )

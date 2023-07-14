@@ -1,8 +1,8 @@
 import os
-
-import torch
 import random
+
 import numpy as np
+import torch
 from torch.nn import LeakyReLU
 
 np.random.seed(0)
@@ -83,7 +83,7 @@ class Config:
         # training
         self.num_train_size = 250_0000
         self.num_val_size = 2_0000
-        self.lr = 4.668e-7
+        self.lr = 5e-7
         self.lr_weight_decay = 7e-3
         self.decay_gamma = 0.79
         self.decay_step_size = 30000
@@ -119,8 +119,7 @@ class Config:
 config = Config()
 
 if __name__ == "__main__":
-    current_folder_path, current_folder_name = os.path.split(
-        os.path.realpath(__file__))
+    current_folder_path, current_folder_name = os.path.split(os.path.realpath(__file__))
     current_workdir_path, current_folder_name = os.path.split(
         os.path.realpath(current_folder_path)
     )

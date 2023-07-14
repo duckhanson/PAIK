@@ -5,7 +5,8 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import torch
-from tqdm.auto import tqdm
+
+# from tqdm.auto import tqdm
 from utils.dataset import create_dataset
 from utils.settings import config
 

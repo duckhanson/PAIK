@@ -1,7 +1,8 @@
 import numpy as np
 import roboticstoolbox as rtb
 import swift
-from numpy import linalg as LA
+
+# from numpy import linalg as LA
 from spatialmath import SE3
 from tqdm import tqdm
 from utils.settings import config, ets_table

@@ -112,68 +112,51 @@ def test_l2_err(
     model,
     num_data=config.num_eval_size,
     num_samples=config.num_eval_samples,
-    eval: bool = False,
 ):
     errs = np.zeros(shape=(num_data, num_samples))
-    log_probs = np.zeros(shape=(num_data, num_samples))
     time_diff = np.zeros(shape=(num_data, num_samples))
 
     for i in range(num_data):
-        er, lp, dt = __test_one_l2_err(
-            robot, loader, model, num_samples=num_samples, eval=eval
+        er, dt = __test_one_l2_err(
+            robot, loader, model, num_samples=num_samples
         )
         errs[i] = er
-        log_probs[i] = lp
         time_diff[i] = dt
 
     errs = errs.reshape((-1))
-    log_probs = log_probs.reshape((-1))
     time_diff = time_diff.reshape((-1))
-    
-    
-    if eval:
-        df = pd.DataFrame(
-            data=np.column_stack((errs, time_diff)),
-            columns=[f"l2_err",
-                     f"time_diff"],
-        )
-    else:
-        df = pd.DataFrame(
-            data=np.column_stack((errs, log_probs, time_diff)),
-            columns=["l2_err", "log_prob", f"time_diff"],
-        )
+
+    df = pd.DataFrame(
+        data=np.column_stack((errs, time_diff)),
+        columns=[f"l2_err",
+                 f"time_diff"],
+    )
 
     return df, errs
 
 
-def __test_one_l2_err(robot, loader, model, num_samples: int, eval: bool):
+def __test_one_l2_err(robot, loader, model, num_samples: int):
     batch = next(iter(loader))
     x, y = add_small_noise_to_batch(batch, eval=True)
 
     errs = np.zeros((num_samples,))
-    log_probs = np.zeros((num_samples,))
     rand = np.random.randint(low=0, high=len(x), size=1)
 
     # assuming rand is a number
     time_begin = time.time()
     with torch.inference_mode():
         x_hat = model(y[rand]).sample((num_samples,))
-    time_diff = round(time.time() - time_begin, 2)
 
     qs = x_hat.detach().cpu().numpy()
     ee_pos = y[rand].detach().cpu().numpy()
     ee_pos = ee_pos[0, :3]
-    
 
     errs = robot.l2_err_func_array(qs=qs, ee_pos=ee_pos)
+
+    time_diff = round(time.time() - time_begin, 2)
     td = np.zeros_like(errs) + time_diff
 
-    if not eval:
-        with torch.inference_mode():
-            log_prob = model(y[rand]).log_prob(x_hat)
-        log_prob = -log_prob.detach().cpu().numpy()
-
-    return errs, log_probs, td
+    return errs, td
 
 
 def save_show_pose_data(config, num_data, num_samples, model, robot):

@@ -60,7 +60,8 @@ if __name__ == "__main__":
     val_loader = get_val_loader(robot=panda, hnne=hnne)
     # Build Generative model, NSF
     # Neural spline flow (NSF) with 3 sample features and 5 context features
-    flow, optimizer, scheduler = get_flow_model(load_model=config.use_pretrained)
+    flow, optimizer, scheduler = get_flow_model(
+        load_model=config.use_pretrained)
 
     # start a new wandb run to track this script
     wandb.init(
@@ -93,7 +94,9 @@ if __name__ == "__main__":
 
             if step % config.num_steps_eval == 0:
                 df, err = test_l2_err(
-                    robot=panda, loader=val_loader, model=flow, eval=True
+                    robot=panda,
+                    loader=val_loader,
+                    model=flow
                 )
                 l2_val = df.describe().values[1:, 0]
                 log_info = {}

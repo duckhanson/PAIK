@@ -93,7 +93,7 @@ if __name__ == "__main__":
 
             if step % config.num_steps_eval == 0:
                 df, err = test_l2_err(
-                    robot=panda, loader=val_loader, model=flow, inference=True
+                    robot=panda, loader=val_loader, model=flow, eval=True
                 )
                 l2_val = df.describe().values[1:, 0]
                 log_info = {}

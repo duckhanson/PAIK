@@ -1,6 +1,8 @@
 import os
+
 import time
 from datetime import datetime
+from hnne import HNNE
 
 import numpy as np
 import pandas as pd
@@ -21,54 +23,113 @@ def __get_load_data_path(len_data):
     :rtype: _type_
     """
     if len_data == config.num_train_size:
-        return config.x_train_path, config.y_train_path, config.x_trans_train_path
+        return config.x_train_path, config.y_train_path, config.path_F
     else:
         return config.x_val_path, config.y_val_path, config.x_trans_val_path
 
 
-def load_data(robot, num_samples, generate_new: bool = False):
-    x_path, y_path, _ = __get_load_data_path(len_data=num_samples)
+def data_collection(robot, N: int):
+    """
+    collect data using uniform sampling
 
-    X = []
-    if not generate_new:
-        # data generation
-        X = load_numpy(file_path=x_path)
-        y = load_numpy(file_path=y_path)
+    :param robot: the robot arm you pick up
+    :type robot: Robot
+    :param N: #data required
+    :type N: int
+    :return: J, P
+    :rtype: np.array, np.array
+    """
+    path_J, path_P, path_F = __get_load_data_path(len_data=N)
 
-    if len(X) != num_samples:
-        X, y = robot.random_sample_joint_config(
-            num_samples=num_samples, return_ee=True)
-        save_numpy(file_path=x_path, arr=X)
-        save_numpy(file_path=y_path, arr=y)
+    J = load_numpy(file_path=path_J)
+    P = load_numpy(file_path=path_P)
 
-    return X, y
+    if len(J) != N:
+        J, P = robot.random_sample_joint_config(
+            num_samples=N,
+            return_ee=True
+        )
+        save_numpy(file_path=path_J, arr=J)
+        save_numpy(file_path=path_P, arr=P)
+
+    return J, P
 
 
-def get_loader(X: np.array, y: np.array, hnne=None):
-    _, _, trans_path = __get_load_data_path(len_data=len(y))
+def posture_feature_extraction(J: np.array):
+    suc_load = False
+    path_hnne = config.path_hnne
+    if os.path.exists(path=path_hnne):
+        try:
+            hnne = HNNE.load(path=path_hnne)
+            print(f"hnne load successfully from {path_hnne}")
+            F = load_numpy(file_path=config.path_F)
+            suc_load = True
+        except:
+            print(f"hnne load err, assuming you use different architecture.")
 
-    X_trans = None
-    if os.path.exists(path=trans_path):
-        X_trans = load_numpy(file_path=trans_path)
+    if not suc_load:
+        hnne = HNNE(dim=config.reduced_dim, ann_threshold=config.num_neighbors)
+        X_trans = hnne.fit_transform(X=X, dim=config.reduced_dim, verbose=True)
+        hnne.save(path=path_hnne)
+        save_numpy(file_path=config.path_F, arr=F)
 
-    if hnne is not None:
-        if X_trans is None or len(X_trans) != len(X):
-            X_trans = hnne.transform(X, verbose=True)
-            save_numpy(file_path=trans_path, arr=X_trans)
+    return F
 
-        y = np.column_stack((y, X_trans))
-    ds = create_dataset(features=X, targets=y, enable_normalize=False)
-    loader = ds.create_loader(shuffle=True, batch_size=config.batch_size)
+
+def get_train_loader(J: np.array, P: np.array, F: np.array):
+    """
+    a training loader
+
+    :param J: joint configurations
+    :type J: np.array
+    :param P: end-effector positions
+    :type P: np.array
+    :param F: posture features
+    :type F: np.array
+    :return: torch dataloader
+    :rtype: dataloader
+    """
+    assert len(J) == len(P) and len(P) == len(F)
+
+    C = np.column_stack((P, F))
+
+    dataset = create_dataset(features=J, targets=C)
+    loader = dataset.create_loader(shuffle=True, batch_size=config.batch_size)
+
     return loader
 
 
-def get_val_loader(
-    robot, hnne, num_samples=config.num_val_size, generate_new: bool = False
-):
-    X, y = load_data(robot=robot, num_samples=num_samples)
-    # get loader
-    val_loader = get_loader(X, y, hnne=hnne)
-    return val_loader
+def get_test_loader(P: np.array, F: np.array):
+    """
+    a testing loader
+
+    :param J: joint configurations
+    :type J: np.array
+    :param P: end-effector positions
+    :type P: np.array
+    :param F: posture features
+    :type F: np.array
+    :return: torch dataloader
+    :rtype: dataloader
+    """
+    assert len(P) < len(F)  # P from testing dataset, F from training dataset
+    # Algo 1. random pick up f from F # 0.008 m
+    # rng = np.random.default_rng()
+    # rand = rng.integers(low=0, high=len(F), size=len(P))
+    # f_extended = F[rand]
+
+    # Algo 2. random number f # 0.01 m
+    # f_mean = np.repeat(np.atleast_2d(np.mean(F, axis=0)), [len(P)], axis=0)
+    # f_rand = np.random.rand(len(P), F.shape[-1]) # [0, 1)
+    # f_extended = f_mean + f_rand  * 0.03
+
+    # Algo 3. knn search nearest P (nP), pickup its F
+
+    C = np.column_stack((P, f_extended))
+    dataset = create_dataset(features=np.zeros_like(C), targets=C)
+    loader = dataset.create_loader(shuffle=True, batch_size=config.batch_size)
+
+    return loader
 
 
 def load_numpy(file_path):
@@ -212,33 +273,6 @@ def save_show_pose_data(config, num_data, num_samples, model, robot):
     save_numpy(config.show_pose_log_probs_path, log_probs)
 
     print("Save pose successfully")
-
-
-def inside_same_pidx(robot):
-    """
-    _summary_
-    example of use:
-    save_show_pose_data(config, num_data=5, num_samples=10, model=nflow)
-    inside_same_pidx(robot)
-    :raises ValueError: _description_
-    """
-    x_hats = load_numpy(file_path=config.show_pose_features_path)
-    pidxs = load_numpy(file_path=config.show_pose_pidxs_path)
-
-    if len(x_hats) == 0:
-        raise ValueError("lack show pose data")
-
-    pre_pidx = None
-    qs = np.array([])
-    for q, pidx in zip(x_hats, pidxs):
-        if pre_pidx is None or np.array_equal(pre_pidx, pidx):
-            qs = np.concatenate((qs, q))
-        else:
-            break
-        pre_pidx = pidx
-    qs = qs.reshape((-1, robot.dof))
-    for q in qs:
-        robot.plot(q=q, p=q)
 
 
 def sample_jtraj(path, pidx, model, robot):

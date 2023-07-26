@@ -152,36 +152,3 @@ def get_nflow_model(flow: NSF):
 
     return nflow
 
-
-def get_hnne_model(X: np.array, y: np.array, save_path: str = config.hnne_save_path):
-    """
-    Return hnne model
-
-    :param X: feature / joint config
-    :type X: np.array
-    :param y: target / position
-    :type y: np.array
-    :param return_ds: return dataset and loader, defaults to True
-    :type return_ds: bool, optional
-    :return: hnne model (builded), if return_ds, then return (hnne, ds, loader).
-    :rtype: tuple
-    """
-    # build dimension reduction model
-
-    suc_load = False
-    if path.exists(path=save_path):
-        try:
-            hnne = HNNE.load(path=save_path)
-            print(f"hnne load successfully from {save_path}")
-            X_trans = load_numpy(file_path=config.x_trans_train_path)
-            suc_load = True
-        except:
-            print(f"hnne load err, assuming you use different architecture.")
-
-    if not suc_load:
-        hnne = HNNE(dim=config.reduced_dim, ann_threshold=config.num_neighbors)
-        X_trans = hnne.fit_transform(X=X, dim=config.reduced_dim, verbose=True)
-        hnne.save(path=save_path)
-        save_numpy(file_path=config.x_trans_train_path, arr=X_trans)
-
-    return hnne

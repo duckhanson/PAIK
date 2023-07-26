@@ -51,13 +51,14 @@ def train_step(model, batch, optimizer, scheduler):
 if __name__ == "__main__":
     panda = Robot(verbose=False)
     # data generation
-    X, y = load_data(robot=panda, num_samples=config.num_train_size)
+    J, P = data_collection(robot=panda, N=config.num_train_size)
     # build dimension reduction model
-    hnne = get_hnne_model(X, y)
+    hnne = get_hnne_model(J, P)
     # get loader
-    train_loader = get_loader(X, y, hnne=hnne)
+    loader = get_loader(J, P, hnne=hnne)
     # get val loader
-    val_loader = get_val_loader(robot=panda, hnne=hnne)
+    J, P = data_collection(robot=panda, N=config.num_val_size)
+    val_loader = get_test_loader(J, P, F)
     # Build Generative model, NSF
     # Neural spline flow (NSF) with 3 sample features and 5 context features
     flow, optimizer, scheduler = get_flow_model(

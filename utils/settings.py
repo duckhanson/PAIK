@@ -47,7 +47,7 @@ class Config:
         self.train_dir = self.data_dir + "train/"
         self.x_train_path = self.train_dir + "feature.npy"  # joint configuration
         self.y_train_path = self.train_dir + "target.npy"  # end-effector position
-        self.x_trans_train_path = (
+        self.path_F = (
             self.train_dir + "feature_trans.npy"
         )  # hnne reduced feature vector
 
@@ -63,7 +63,7 @@ class Config:
         self.weight_dir = f"{self.workdir}/weights/{self.robot_name}/"
         self.reduced_dim = self.dof - 3
         self.num_neighbors = 1000
-        self.hnne_save_path = self.weight_dir + "hnne.pickle"
+        self.path_hnne = self.weight_dir + "hnne.pickle"
 
         # flow parameter
         self.use_pretrained = False

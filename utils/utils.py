@@ -114,9 +114,9 @@ def get_test_loader(P: np.array, F: np.array):
     """
     assert len(P) < len(F)  # P from testing dataset, F from training dataset
     # Algo 1. random pick up f from F # 0.008 m
-    # rng = np.random.default_rng()
-    # rand = rng.integers(low=0, high=len(F), size=len(P))
-    # f_extended = F[rand]
+    rng = np.random.default_rng()
+    rand = rng.integers(low=0, high=len(F), size=len(P))
+    f_extended = F[rand]
 
     # Algo 2. random number f # 0.01 m
     # f_mean = np.repeat(np.atleast_2d(np.mean(F, axis=0)), [len(P)], axis=0)
@@ -130,6 +130,15 @@ def get_test_loader(P: np.array, F: np.array):
     loader = dataset.create_loader(shuffle=True, batch_size=config.batch_size)
 
     return loader
+
+
+def knn_F(P: np.array, F: np.array):
+    # TODO
+    pass
+    # for store
+    # https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html#sklearn.neighbors.KDTree
+    # api should use
+    # https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.NearestNeighbors.html#sklearn.neighbors.NearestNeighbors
 
 
 def load_numpy(file_path):

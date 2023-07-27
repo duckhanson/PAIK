@@ -1,19 +1,20 @@
 import os
 
+# from tqdm.auto import tqdm
+import pickle
 import time
 from datetime import datetime
-from hnne import HNNE
 
 import numpy as np
 import pandas as pd
 import torch
-
-# from tqdm.auto import tqdm
+from hnne import HNNE
+from sklearn.neighbors import NearestNeighbors
 from utils.dataset import create_dataset
 from utils.settings import config
 
 
-def __get_load_data_path(len_data):
+def _get_data_path(len_data):
     """
     _summary_
 
@@ -22,10 +23,10 @@ def __get_load_data_path(len_data):
     :return: (x_path, y_path, x_trans_path)
     :rtype: _type_
     """
-    if len_data == config.num_train_size:
-        return config.x_train_path, config.y_train_path, config.path_F
+    if len_data == config.N_train:
+        return config.path_J_train, config.path_P_train, config.path_F
     else:
-        return config.x_val_path, config.y_val_path, config.x_trans_val_path
+        return config.path_J_test, config.path_J_test, config.path_F_test
 
 
 def data_collection(robot, N: int):
@@ -39,16 +40,13 @@ def data_collection(robot, N: int):
     :return: J, P
     :rtype: np.array, np.array
     """
-    path_J, path_P, path_F = __get_load_data_path(len_data=N)
+    path_J, path_P, path_F = _get_data_path(len_data=N)
 
     J = load_numpy(file_path=path_J)
     P = load_numpy(file_path=path_P)
 
     if len(J) != N:
-        J, P = robot.random_sample_joint_config(
-            num_samples=N,
-            return_ee=True
-        )
+        J, P = robot.uniform_sample_J(num_samples=N, return_ee=True)
         save_numpy(file_path=path_J, arr=J)
         save_numpy(file_path=path_P, arr=P)
 
@@ -56,6 +54,19 @@ def data_collection(robot, N: int):
 
 
 def posture_feature_extraction(J: np.array):
+    """
+    generate posture feature from J (training data)
+
+    Parameters
+    ----------
+    J : np.array
+        joint configurations
+
+    Returns
+    -------
+    F : np.array
+        posture features
+    """
     suc_load = False
     path_hnne = config.path_hnne
     if os.path.exists(path=path_hnne):
@@ -64,12 +75,12 @@ def posture_feature_extraction(J: np.array):
             print(f"hnne load successfully from {path_hnne}")
             F = load_numpy(file_path=config.path_F)
             suc_load = True
-        except:
-            print(f"hnne load err, assuming you use different architecture.")
+        except Exception:
+            print("hnne load err, assuming you use different architecture.")
 
     if not suc_load:
-        hnne = HNNE(dim=config.reduced_dim, ann_threshold=config.num_neighbors)
-        X_trans = hnne.fit_transform(X=X, dim=config.reduced_dim, verbose=True)
+        hnne = HNNE(dim=config.r, ann_threshold=config.num_neighbors)
+        F = hnne.fit_transform(X=J, dim=config.r, verbose=True)
         hnne.save(path=path_hnne)
         save_numpy(file_path=config.path_F, arr=F)
 
@@ -132,16 +143,114 @@ def get_test_loader(P: np.array, F: np.array):
     return loader
 
 
-def knn_F(P: np.array, F: np.array):
-    # TODO
-    pass
-    # for store
-    # https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html#sklearn.neighbors.KDTree
-    # api should use
-    # https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.NearestNeighbors.html#sklearn.neighbors.NearestNeighbors
+def get_inference_loader(P: np.array, F: np.array, knn=None):
+    """
+    an inference loader
+
+    Parameters
+    ----------
+    P : np.array
+        end-effector positions for inference
+    F : np.array
+        posture features from training data
+    knn : _type_, optional
+        knn model fit P_train, by default None
+
+    Returns
+    -------
+    inference_loader
+        a torch dataloader
+    """
+    assert len(P) < len(F)
+
+    # get knn
+    if knn is None:
+        knn = load_pickle(file_path=config.path_knn)
+
+    # get reference F
+    f_extended = nearest_neighbor_F(knn, P_ts=P, F=F)
+
+    # create loader
+    C = np.column_stack((P, f_extended))
+    dataset = create_dataset(features=np.zeros_like(C), targets=C)
+    loader = dataset.create_loader(shuffle=True, batch_size=config.batch_size)
+
+    return loader
 
 
-def load_numpy(file_path):
+def nearest_neighbor_F(neigh: NearestNeighbors, P_ts: np.array, F: np.array):
+    assert len(P_ts) < len(F)
+
+    neigh_idx = neigh.kneighbors(P_ts, n_neighbors=1, return_distance=False)
+    neigh_idx = neigh_idx.flatten()
+
+    return F[neigh_idx]
+
+
+def load_pickle(file_path: str):
+    """
+    load pickle file, e.g. hnne, knn model
+
+    Parameters
+    ----------
+    file_path : str
+        file_path = file_name.pickle
+
+    Returns
+    -------
+    object
+        loaded model
+
+    Raises
+    ------
+    FileNotFoundError
+        file_path not exists
+    """
+    if os.path.exists(path=file_path):
+        with open(file_path, "rb") as f:
+            # The protocol version used is detected automatically, so we do not
+            # have to specify it.
+            data = pickle.load(f)
+        return data
+    else:
+        raise FileNotFoundError(f"{file_path}: file not exist and return None.")
+
+
+def save_pickle(file_path: str, obj):
+    """
+    save object as a pickle file
+
+    Parameters
+    ----------
+    file_path : str
+        file_path = file_name.pickle
+    obj : Object
+        anytype of models
+    """
+    dir_path = os.path.dirname(p=file_path)
+    if not os.path.exists(path=dir_path):
+        print(f"mkdir {dir_path}")
+        os.mkdir(path=dir_path)
+
+    with open(file_path, "wb") as f:
+        # Pickle the 'data' dictionary using the highest protocol available.
+        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+
+def load_numpy(file_path: str):
+    """
+    load numpy file
+
+    Parameters
+    ----------
+    file_path : str
+        file_path = file_name.np
+
+    Returns
+    -------
+    np.array
+        loaded data
+    """
     if os.path.exists(path=file_path):
         return np.load(file_path)
     else:
@@ -149,7 +258,18 @@ def load_numpy(file_path):
         return np.array([])
 
 
-def save_numpy(file_path, arr):
+def save_numpy(file_path: str, arr: np.array):
+    """
+    save arr as a numpy file
+
+    Parameters
+    ----------
+    file_path : str
+        file_path = file_name.np
+    arr : np.array
+        data
+    """
+
     dir_path = os.path.dirname(p=file_path)
     if not os.path.exists(path=dir_path):
         print(f"mkdir {dir_path}")
@@ -157,191 +277,199 @@ def save_numpy(file_path, arr):
     np.save(file_path, arr)
 
 
-def add_small_noise_to_batch(
-    batch, esp: float = config.noise_esp, step: int = 0, eval: bool = False
-):
-    x, y = batch
+def add_noise(batch, esp: float = config.noise_esp, step: int = 0, eval: bool = False):
+    J, C = batch
     if eval or step < config.num_steps_add_noise:
-        std = torch.zeros((x.shape[0], 1)).to(config.device)
-        y = torch.column_stack((y, std))
+        std = torch.zeros((J.shape[0], 1)).to(config.device)
+        C = torch.column_stack((C, std))
     else:
-        c = torch.rand((x.shape[0], 1)).to(config.device)
-        y = torch.column_stack((y, c))
+        s = torch.rand((J.shape[0], 1)).to(config.device)
+        C = torch.column_stack((C, s))
         noise = torch.normal(
-            mean=torch.zeros_like(input=x),
-            std=esp *
-            torch.repeat_interleave(input=c, repeats=x.shape[1], dim=1),
+            mean=torch.zeros_like(input=J),
+            std=esp * torch.repeat_interleave(input=s, repeats=J.shape[1], dim=1),
         )
-        x = x + noise
-    return x, y
+        J = J + noise
+    return J, C
 
 
-def test_l2_err(
-    robot,
-    loader,
-    model,
-    num_data=config.num_eval_size,
-    num_samples=config.num_eval_samples,
+def data_preprocess_for_inference(P, F, knn):
+    # Data Preprocessing: Posture Feature Extraction
+    ref_F = nearest_neighbor_F(knn, np.atleast_2d(P), F)
+    C = np.column_stack((np.atleast_2d(P), ref_F))
+    C = C.astype(np.float32)
+
+    # Project to Tensor(device)
+    C = torch.from_numpy(C).to(config.device)
+    _, C = add_noise((torch.zeros_like(C), C), eval=True)
+
+    return C
+
+
+def inference(
+    robot, P_inf: np.array, F: np.array, solver, knn, K: int, print_report: bool = False
 ):
-    errs = np.zeros(shape=(num_data, num_samples))
-    time_diff = np.zeros(shape=(num_data, num_samples))
-
-    for i in range(num_data):
-        er, dt = __test_one_l2_err(
-            robot, loader, model, num_samples=num_samples
-        )
-        errs[i] = er
-        time_diff[i] = dt
-
-    errs = errs.reshape((-1))
-    time_diff = time_diff.reshape((-1))
-
-    df = pd.DataFrame(
-        data=np.column_stack((errs, time_diff)),
-        columns=[f"l2_err",
-                 f"time_diff"],
-    )
-
-    return df, errs
-
-
-def __test_one_l2_err(robot, loader, model, num_samples: int):
-    batch = next(iter(loader))
-    x, y = add_small_noise_to_batch(batch, eval=True)
-
-    errs = np.zeros((num_samples,))
-    rand = np.random.randint(low=0, high=len(x), size=1)
-
-    # assuming rand is a number
-    time_begin = time.time()
-    with torch.inference_mode():
-        x_hat = model(y[rand]).sample((num_samples,))
-
-    qs = x_hat.detach().cpu().numpy()
-    ee_pos = y[rand].detach().cpu().numpy()
-    ee_pos = ee_pos[0, :3]
-
-    errs = robot.l2_err_func_array(qs=qs, ee_pos=ee_pos)
-
-    time_diff = round(time.time() - time_begin, 2)
-    td = np.zeros_like(errs) + time_diff
-
-    return errs, td
-
-
-def save_show_pose_data(config, num_data, num_samples, model, robot):
     """
-    _summary_
-    example of use: save_show_pose_data(config, num_data=5, num_samples=10, model=nflow)
-    :param config: _description_
-    :type config: _type_
-    :param num_data: _description_
-    :type num_data: _type_
-    :param num_samples: _description_
-    :type num_samples: _type_
-    :param model: _description_, defaults to flow
-    :type model: _type_, optional
+    inference function, Note that: inference time include data preprocessing and postprocessing.
+
+    Parameters
+    ----------
+    robot : Robot
+        Robot arm
+    P_inf : np.array
+        end-effector positions for inference
+    F : np.array
+        posture features from training data
+    solver : Normalizing Flow model
+        a trained normalizing flow model
+    knn : NearestNeighbor
+        a fitted knn over P_train
+    K : int
+        #samples per a position (task point)
+    print_report: bool
+        print summary of position errors and inference time. Note that it will not return anything.
+
+    Returns
+    -------
+    J_hat : np.array
+        joint configurations
+    position_errors : np.array
+        position errors
+    inference_time : np.array
+        inference time of K samples for each P in P_inf
     """
-    batch = next(iter(loader))
-    x, y = add_small_noise_to_batch(batch, eval=True)
-    assert num_data < len(x)
+    assert len(P_inf) < 1000
 
-    x_hats = np.array([])
-    pidxs = np.array([])
-    errs = np.array([])
-    log_probs = np.array([])
-    rand = np.random.randint(low=0, high=len(x), size=num_data)
+    position_errors = np.zeros(shape=(len(P_inf), K))
+    inference_time = np.zeros(shape=(len(P_inf)))
 
-    for nd in rand:
+    for i, P in enumerate(P_inf):
+        time_begin = time.time()
+
+        # Data Preprocessing
+        C = data_preprocess_for_inference(P=P, F=F, knn=knn)
+
+        # Begin inference
         with torch.inference_mode():
-            x_hat = model(y[nd]).sample((num_samples,))
-            log_prob = model(y[nd]).log_prob(x_hat)
+            J_hat = solver(C).sample((K,))
+            J_hat = J_hat.detach().cpu().numpy()
 
-        x_hat = x_hat.detach().cpu().numpy()
-        log_prob = -log_prob.detach().cpu().numpy()
-        target = y[nd].detach().cpu().numpy()
-        # ee_pos = ee_pos * (ds.targets_max - ds.targets_min) + ds.targets_min
-        ee_pos = target[:3]
+        # Calculate Position Errors and Inference Time
+        position_errors[i] = robot.position_errors_Arr_Inputs(qs=J_hat, ee_pos=P)
+        inference_time[i] = round(time.time() - time_begin, 2)
+    position_errors = position_errors.flatten()
 
-        for q in x_hat:
-            err = robot.l2_err_func(q=q, ee_pos=ee_pos)
-            errs = np.concatenate((errs, [err]))
-        x_hats = np.concatenate((x_hats, x_hat.reshape(-1)))
-        pidx = target[3:-1]
-        pidx = np.tile(pidx, (num_samples, 1))
-
-        pidxs = np.concatenate((pidxs, pidx.reshape(-1)))
-        log_probs = np.concatenate((log_probs, log_prob))
-
-    x_hats = x_hats.reshape((-1, robot.dof))
-    pidxs = pidxs.reshape((len(x_hats), -1))
-
-    save_numpy(config.show_pose_features_path, x_hats)
-    save_numpy(config.show_pose_pidxs_path, pidxs)
-    save_numpy(config.show_pose_errs_path, errs)
-    save_numpy(config.show_pose_log_probs_path, log_probs)
-
-    print("Save pose successfully")
+    if print_report:
+        df = pd.DataFrame(position_errors, columns=["position errors (m)"])
+        print(df.describe())
+        df = pd.DataFrame(
+            inference_time, columns=[f"inference time (sec) of {K} samples"]
+        )
+        print(df.describe())
+    else:
+        return J_hat, position_errors, inference_time
 
 
-def sample_jtraj(path, pidx, model, robot):
+def test(
+    robot, P_ts: np.array, F: np.array, solver, knn, K: int, print_report: bool = True
+):
+    """
+    test function, Note that: inference time refers to solver inference time, not include data preprocessing or postprocessing.
+
+    Parameters
+    ----------
+    robot : Robot
+        Robot arm
+    P_ts : np.array
+        end-effector positions for testing
+    F : np.array
+        posture features from training data
+    solver : Normalizing Flow model
+        a trained normalizing flow model
+    knn : NearestNeighbor
+        a fitted knn over P_train
+    K : int
+        #samples per a position (task point)
+    print_report: bool
+        print summary of position errors and inference time. Note that it will not return anything.
+
+    Returns
+    -------
+    J_hat : np.array
+        joint configurations
+    position_errors : np.array
+        position errors
+    avg_inference_time : float
+        average inference time over #(len(P_ts)*K) samples
+    """
+    assert len(P_ts) < 1000
+
+    position_errors = np.zeros(shape=(len(P_ts), K))
+
+    # Data Preprocessing
+    C = data_preprocess_for_inference(P=P_ts, F=F, knn=knn)
+
+    time_begin = time.time()
+    # Begin inference
+    with torch.inference_mode():
+        J_hat = solver(C).sample((K,))
+        J_hat = J_hat.detach().cpu().numpy()
+
+    avg_inference_time = round((time.time() - time_begin) / len(P_ts), 2)
+
+    # Calculate Position Errors and Inference Time
+    for i, P in enumerate(P_ts):
+        position_errors[i] = robot.position_errors_Arr_Inputs(
+            qs=J_hat[:, i, :], ee_pos=P
+        )
+    position_errors = position_errors.flatten()
+
+    if print_report:
+        df = pd.DataFrame(position_errors, columns=["position errors (m)"])
+        print(df.describe())
+        print(f"average inference time (of {len(P_ts)} P): {avg_inference_time} sec.")
+        return df
+    else:
+        return J_hat, position_errors, avg_inference_time
+
+
+def sample_J_traj(P_path, ref_F, solver, robot):
     """
     _summary_
     example of use:
-    df, qs = sample_jtraj(ee_traj, px, nflow)
-    :param path: _description_
-    :type path: _type_
-    :param pidx: _description_
-    :type pidx: _type_
-    :param model: _description_
-    :type model: _type_
+    df, qs = sample_J_traj(ee_traj, ref_F, nflow)
+    :param P_path: _description_
+    :type P_path: _type_
+    :param ref_F: _description_
+    :type ref_F: _type_
+    :param solver: _description_
+    :type solver: _type_
     :return: _description_
     :rtype: _type_
     """
-    path_len = len(path)
-    pidx = np.tile(pidx, (path_len, 1))
-    cstd = np.zeros((path_len,))
+    ref_F = np.tile(ref_F, (len(P_path), 1))
 
-    y = np.column_stack((path, pidx, cstd))
-    y = torch.tensor(data=y, device="cuda", dtype=torch.float32)
+    C = np.column_stack((P_path, ref_F, np.zeros((len(P_path),))))
+    C = torch.tensor(data=C, device="cuda", dtype=torch.float32)
 
     with torch.inference_mode():
-        x_hat = model(y).sample((1,))
-        log_prob = model(y).log_prob(x_hat)
+        J_hat = solver(C).sample((1,))
 
-    x_hat = x_hat.detach().cpu().numpy()[0]
-    log_prob = -log_prob.detach().cpu().numpy()[0]
-
-    step = 0
-    errs = np.zeros((len(path),))
-    ang_errs = np.zeros_like(errs)
-    log_probs = np.zeros((len(path),))
-    for q, lp, ee_pos in zip(x_hat, log_prob, path):
-        if step != 0:
-            ang_errs[step] = np.sum(np.abs(x_hat[step - 1] - q))
-        errs[step] = robot.l2_err_func(q=q, ee_pos=ee_pos)
-        log_probs[step] = lp
-        step += 1
-    ang_errs[0] = np.average(ang_errs[1:])
-    ang_errs = np.rad2deg(ang_errs)
-    df = pd.DataFrame(
-        np.column_stack((errs, log_probs, ang_errs)),
-        columns=["l2_err", "log_prob", "ang_errs(sum)"],
-    )
-    qs = x_hat
-    return df, qs
+    J_hat = J_hat.detach().cpu().numpy()[0]
+    df = eval_J_traj(robot, J_hat, P_path=P_path, position_errors=None)
+    return df, J_hat
 
 
-def sample_ee_traj(robot, load_time: str = "") -> str:
+def sample_P_path(robot, load_time: str = "") -> str:
     """
     _summary_
     example of use
 
     for generate
-    traj_dir = sample_ee_traj(robot=panda, load_time=')
+    traj_dir = sample_P_path(robot=panda, load_time=')
 
     for demo
-    traj_dir = sample_ee_traj(robot=panda, load_time='05232300')
+    traj_dir = sample_P_path(robot=panda, load_time='05232300')
 
     :param robot: _description_
     :type robot: _type_
@@ -355,15 +483,13 @@ def sample_ee_traj(robot, load_time: str = "") -> str:
     else:
         traj_dir = config.traj_dir + load_time + "/"
 
-    ee_traj_path = traj_dir + "ee_traj.npy"
-    q_traj_path = traj_dir + "q_traj.npy"
+    P_path_file_path = traj_dir + "ee_traj.npy"
+    J_traj_file_path = traj_dir + "q_traj.npy"
 
-    if load_time == "" or not os.path.exists(path=q_traj_path):
-        ee_traj, q_traj = robot.path_generate_via_stable_joint_traj(
-            dist_ratio=0.9, t=20
-        )
-        save_numpy(file_path=ee_traj_path, arr=ee_traj)
-        save_numpy(file_path=q_traj_path, arr=q_traj)
+    if load_time == "" or not os.path.exists(path=J_traj_file_path):
+        P_path, J_traj = robot.path_generate_via_stable_joint_traj(dist_ratio=0.9, t=20)
+        save_numpy(file_path=P_path_file_path, arr=P_path)
+        save_numpy(file_path=J_traj_file_path, arr=J_traj)
 
     if os.path.exists(path=traj_dir):
         print(f"{traj_dir} load successfully.")
@@ -371,81 +497,80 @@ def sample_ee_traj(robot, load_time: str = "") -> str:
     return traj_dir
 
 
-def generate_traj_via_model(
+def path_following(
     robot,
     traj_dir: str,
     hnne=None,
     model=None,
     num_traj: int = 3,
-    outliner_thres: float = 5e-2,
     enable_regenerate: bool = False,
 ) -> None:
-    """
-    _summary_
-        for generate
-        generate_traj_via_model(hnne=hnne, num_traj=3, model=nflow, robot=panda, traj_dir=traj_dir)
+    # TODO
+    raise NotImplementedError("need to remove hnne and the following implemenation")
+    pass
+    # """
+    # _summary_
+    #     for generate
+    #     path_following(hnne=hnne, num_traj=3, model=nflow, robot=panda, traj_dir=traj_dir)
 
-        only for demo
-        generate_traj_via_model(hnne=None, num_traj=3, model=None, robot=panda, traj_dir=traj_dir)
+    #     only for demo
+    #     path_following(hnne=None, num_traj=3, model=None, robot=panda, traj_dir=traj_dir)
 
-    :param robot: _description_
-    :type robot: _type_
-    :param traj_dir: _description_
-    :type traj_dir: str
-    :param hnne: _description_, defaults to None
-    :type hnne: _type_, optional
-    :param model: _description_, defaults to None
-    :type model: _type_, optional
-    :param num_traj: _description_, defaults to 3
-    :type num_traj: int, optional
-    :param outliner_ccthres: _description_, defaults to 5e-2
-    :type outliner_ccthres: float, optional
-    :param enable_regenerate: _description_, defaults to False
-    :type enable_regenerate: bool, optional
-    """
+    # :param robot: _description_
+    # :type robot: _type_
+    # :param traj_dir: _description_
+    # :type traj_dir: str
+    # :param hnne: _description_, defaults to None
+    # :type hnne: _type_, optional
+    # :param model: _description_, defaults to None
+    # :type model: _type_, optional
+    # :param num_traj: _description_, defaults to 3
+    # :type num_traj: int, optional
+    # :param enable_regenerate: _description_, defaults to False
+    # :type enable_regenerate: bool, optional
+    # """
 
-    def load_and_plot(exp_traj_path: str, ee_path: np.array):
-        if os.path.exists(path=exp_traj_path):
-            err = np.zeros((100,))
-            qs = load_numpy(file_path=exp_traj_path)
-            for i in range(len(qs)):
-                err[i] = robot.l2_err_func(q=qs[i], ee_pos=ee_traj[i])
-            outliner = np.where(err > outliner_thres)
-            # print(outliner)
-            # print(err[outliner])
-            # print(np.sum(err))
-            print(qs)
-            robot.plot(qs=qs)
-        else:
-            print(f"{exp_traj_path} does not exist !")
+    # def load_and_plot(exp_traj_path: str, ee_path: np.array):
+    #     if os.path.exists(path=exp_traj_path):
+    #         err = np.zeros((100,))
+    #         qs = load_numpy(file_path=exp_traj_path)
+    #         for i in range(len(qs)):
+    #             err[i] = robot.position_errors_Single_Input(q=qs[i], ee_pos=ee_traj[i])
+    #         print(qs)
+    #         robot.plot(qs=qs)
+    #     else:
+    #         print(f"{exp_traj_path} does not exist !")
 
-    already_exists = True
-    def exp_path(idx): return traj_dir + f"exp_{i}.npy"
-    for i in range(num_traj):
-        if not os.path.exists(path=exp_path(i)):
-            already_exists = False
-            break
+    # already_exists = True
 
-    ee_traj = load_numpy(file_path=traj_dir + "ee_traj.npy")
-    q_traj = load_numpy(file_path=traj_dir + "q_traj.npy")
+    # def exp_path(idx):
+    #     return traj_dir + f"exp_{i}.npy"
 
-    if (
-        enable_regenerate
-        or not already_exists
-        and hnne is not None
-        and model is not None
-    ):
-        rand = np.random.randint(low=0, high=len(q_traj), size=num_traj)
-        pidx = hnne.transform(X=q_traj[rand])
-        print(pidx)
+    # for i in range(num_traj):
+    #     if not os.path.exists(path=exp_path(i)):
+    #         already_exists = False
+    #         break
 
-        for i, px in enumerate(pidx):
-            df, qs = sample_jtraj(ee_traj, px, model, robot)
-            print(df.describe())
-            save_numpy(file_path=exp_path(i), arr=qs)
+    # ee_traj = load_numpy(file_path=traj_dir + "ee_traj.npy")
+    # q_traj = load_numpy(file_path=traj_dir + "q_traj.npy")
 
-    for i in range(num_traj):
-        load_and_plot(exp_traj_path=exp_path(i), ee_path=ee_traj)
+    # if (
+    #     enable_regenerate
+    #     or not already_exists
+    #     and hnne is not None
+    #     and model is not None
+    # ):
+    #     rand = np.random.randint(low=0, high=len(q_traj), size=num_traj)
+    #     pidx = hnne.transform(X=q_traj[rand])
+    #     print(pidx)
+
+    #     for i, ref_F in enumerate(pidx):
+    #         df, qs = sample_J_traj(ee_traj, ref_F, model, robot)
+    #         print(df.describe())
+    #         save_numpy(file_path=exp_path(i), arr=qs)
+
+    # for i in range(num_traj):
+    #     load_and_plot(exp_traj_path=exp_path(i), ee_path=ee_traj)
 
 
 def calc_ang_errs(qs):
@@ -465,14 +590,38 @@ def calc_ang_errs(qs):
     return ang_errs
 
 
-def qtraj_evaluation(robot, qs, ee_path=None, l2_errs=None):
-    ang_errs = calc_ang_errs(qs=qs)
+def eval_J_traj(
+    robot, J_traj: np.array, P_path: np.array = None, position_errors: np.array = None
+):
+    """
+    evalution of J_traj for path-following tasks
 
-    if l2_errs is None:
-        l2_errs = robot.l2_err_func_array(qs=qs, ee_pos=ee_path)
+    Parameters
+    ----------
+    robot : Robot
+        robot arm
+    J_traj : np.array
+        a joint trajectory
+    P_path : np.array, optional
+        an end-effector position path, by default None
+    position_errors : np.array, optional
+        position errors for FK(J_traj)-P_path, by default None
+
+    Returns
+    -------
+    df : pd.DataFrame
+        position errors and ang_errs(sum)
+    """
+    assert not (P_path is None and position_errors is None)
+
+    ang_errs = calc_ang_errs(qs=J_traj)
+
+    if position_errors is None:
+        position_errors = robot.position_errors_Arr_Inputs(qs=J_traj, ee_pos=P_path)
 
     df = pd.DataFrame(
-        np.column_stack((l2_errs, ang_errs)), columns=["l2_err", "ang_errs(sum)"]
+        np.column_stack((position_errors, ang_errs)),
+        columns=["position_errors", "ang_errs(sum)"],
     )
     return df
 

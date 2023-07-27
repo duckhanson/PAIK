@@ -16,17 +16,16 @@ class Robot:
         if robot_name not in support_robots:
             raise NotImplementedError()
 
-        self.robot = self.__get_robot_module(robot_name)
+        self.robot = self._get_robot_module(robot_name)
 
         self.joint_min, self.joint_max = self.robot.qlim
-        self.dof = len(self.joint_min)
 
         if self.verbose:
             print(self.robot)
 
         create_robot_dirs()
 
-    def __get_robot_module(self, robot_name):
+    def _get_robot_module(self, robot_name):
         if robot_name == "panda":
             robot = rtb.models.Panda()
         elif robot_name == "al5d":
@@ -111,12 +110,10 @@ class Robot:
             print(f"Given {ee_pos} and {q0}, via ik, get {q}.")
         return np.array(q), success
 
-    def random_sample_joint_config(
-        self, num_samples: int, return_ee: bool = False
-    ) -> np.ndarray:
+    def uniform_sample_J(self, num_samples: int, return_ee: bool = False) -> np.ndarray:
         # samples = np.array([])
 
-        rand = np.random.rand(num_samples, self.dof)
+        rand = np.random.rand(num_samples, config.n)
         q_samples = (self.joint_max - self.joint_min) * rand + self.joint_min
 
         if return_ee:
@@ -133,7 +130,7 @@ class Robot:
         return q_samples
 
     def path_generate_via_stable_joint_traj(self, dist_ratio: float = 0.4, t: int = 10):
-        rand = np.random.rand(2, self.dof) * dist_ratio
+        rand = np.random.rand(2, config.n) * dist_ratio
         q_samples = (self.joint_max - self.joint_min) * rand + self.joint_min
 
         qs = rtb.tools.trajectory.jtraj(q_samples[0], q_samples[1], t=t)
@@ -147,7 +144,7 @@ class Robot:
 
         return ee, qs
 
-    def l2_err_func(self, q: np.ndarray, ee_pos: np.ndarray):
+    def position_errors_Single_Input(self, q: np.ndarray, ee_pos: np.ndarray):
         """
         Compute the Euclidean Distance between the value of forward_kinematics with joint_confg
         and ee_pos.
@@ -163,9 +160,9 @@ class Robot:
             print(f"Com_pos: {com_pos}, EE_pos: {ee_pos}, diff: {diff}")
         return diff
 
-    def l2_err_func_array(self, qs: np.ndarray, ee_pos: np.ndarray):
+    def position_errors_Arr_Inputs(self, qs: np.ndarray, ee_pos: np.ndarray):
         """
-        array version of l2_err_func
+        array version of position_errors_Single_Input
 
         :param qs: _description_
         :type qs: np.ndarray

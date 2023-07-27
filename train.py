@@ -35,7 +35,7 @@ def train_step(model, batch, optimizer, scheduler):
     Returns:
         _type_: _description_
     """
-    x, y = add_small_noise_to_batch(batch)
+    x, y = add_noise(batch)
 
     loss = -model(y).log_prob(x)  # -log p(x | y)
     loss = loss.mean()
@@ -48,66 +48,106 @@ def train_step(model, batch, optimizer, scheduler):
     return loss.item()
 
 
-if __name__ == "__main__":
-    panda = Robot(verbose=False)
+def mini_train(robot, num_epochs, sweep_config):
     # data generation
-    J, P = data_collection(robot=panda, N=config.num_train_size)
-    # build dimension reduction model
-    hnne = get_hnne_model(J, P)
-    # get loader
-    loader = get_loader(J, P, hnne=hnne)
-    # get val loader
-    J, P = data_collection(robot=panda, N=config.num_val_size)
-    val_loader = get_test_loader(J, P, F)
+    J_tr, P_tr = data_collection(robot=robot, N=config.N_train)
+    J_ts, P_ts = data_collection(robot=robot, N=config.N_test)
+    F = posture_feature_extraction(J_tr)
+    train_loader = get_train_loader(J=J_tr, P=P_tr, F=F)
     # Build Generative model, NSF
     # Neural spline flow (NSF) with 3 sample features and 5 context features
-    flow, optimizer, scheduler = get_flow_model(
-        load_model=config.use_pretrained)
+    solver, optimizer, scheduler = get_flow_model(load_model=config.use_pretrained)
+    knn = load_pickle(file_path=config.path_knn)
 
-    # start a new wandb run to track this script
-    wandb.init(
-        # set the wandb project where this run will be logged
-        project="ikpflow",
-        # entity
-        entity="luca_nthu",
-        # track hyperparameters and run metadata
-        config=config,
-    )
+    solver.train()
 
-    step = 0
-    l2_label = ["mean", "std", "min", "25%", "50%", "75%", "max"]
-
-    flow.train()
-    for ep in range(config.num_epochs):
+    for ep in range(num_epochs):
         t = tqdm(train_loader)
         for batch in t:
             loss = train_step(
-                model=flow, batch=batch, optimizer=optimizer, scheduler=scheduler
+                model=solver, batch=batch, optimizer=optimizer, scheduler=scheduler
             )
 
             bar = {"loss": f"{np.round(loss, 3)}"}
             t.set_postfix(bar, refresh=True)
 
-            # log metrics to wandb
-            wandb.log({"loss": np.round(loss, 3)})
-
             step += 1
 
             if step % config.num_steps_eval == 0:
-                df, err = test_l2_err(
+                test(
                     robot=panda,
-                    loader=val_loader,
-                    model=flow
+                    P_ts=P_ts[: config.num_eval_size],
+                    F=F,
+                    solver=solver,
+                    knn=knn,
+                    K=100,
+                    print_report=True,
                 )
-                l2_val = df.describe().values[1:, 0]
-                log_info = {}
-                for l, v in zip(l2_label, l2_val):
-                    log_info[l] = v
-                log_info["learning_rate"] = scheduler.get_last_lr()[0]
-                wandb.log(log_info)
 
             if step % config.num_steps_save == 0:
-                torch.save(flow.state_dict(), config.save_path)
+                torch.save(solver.state_dict(), config.path_solver)
 
-    # [optional] finish the wandb run, necessary in notebooks
-    wandb.finish()
+
+if __name__ == "__main__":
+    panda = Robot(verbose=False)
+
+    max_num_epoch = 100
+    # sweep_config = {
+    #     "l1": tune.randint(2, 9),   # log transformed with base 2
+    #     "l2": tune.randint(2, 9),   # log transformed with base 2
+    #     "lr": tune.loguniform(1e-4, 1e-1),
+    #     "num_epochs": tune.loguniform(1, max_num_epoch),
+    #     "batch_size": tune.randint(1, 5)    # log transformed with base 2
+    # }
+
+    # start a new wandb run to track this script
+    # wandb.init(
+    #     # set the wandb project where this run will be logged
+    #     project="ikpflow",
+    #     # entity
+    #     entity="luca_nthu",
+    #     # track hyperparameters and run metadata
+    #     config=config,
+    # )
+
+    # step = 0
+    # l2_label = ["mean", "std", "min", "25%", "50%", "75%", "max"]
+
+    # flow.train()
+    # for ep in range(config.num_epochs):
+    #     t = tqdm(train_loader)
+    #     for batch in t:
+    #         loss = train_step(
+    #             model=flow, batch=batch, optimizer=optimizer, scheduler=scheduler
+    #         )
+
+    #         bar = {"loss": f"{np.round(loss, 3)}"}
+    #         t.set_postfix(bar, refresh=True)
+
+    #         # log metrics to wandb
+    #         wandb.log({"loss": np.round(loss, 3)})
+
+    #         step += 1
+
+    #         if step % config.num_steps_eval == 0:
+    #             df = test(
+    #                 robot=panda,
+    #                 P_ts=P_ts[: config.num_eval_size],
+    #                 F=F,
+    #                 solver=solver,
+    #                 knn=knn,
+    #                 K=100,
+    #                 print_report=True,
+    #             )
+    #             l2_val = df.describe().values[1:, 0]
+    #             log_info = {}
+    #             for l, v in zip(l2_label, l2_val):
+    #                 log_info[l] = v
+    #             log_info["learning_rate"] = scheduler.get_last_lr()[0]
+    #             wandb.log(log_info)
+
+    #         if step % config.num_steps_save == 0:
+    #             torch.save(flow.state_dict(), config.path_solver)
+
+    # # [optional] finish the wandb run, necessary in notebooks
+    # wandb.finish()

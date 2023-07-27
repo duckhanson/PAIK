@@ -87,16 +87,16 @@ class Config:
         # training
         self.N_train = 250_0000
         self.N_test = 2_0000
-        self.K = 500
+        self.K = 100
 
-        self.lr = 5e-7
+        self.lr = 3e-7
         self.lr_weight_decay = 7e-3
         self.decay_gamma = 0.79
         self.decay_step_size = 30000
-        self.batch_size = 128
+        self.batch_size = 256
         self.noise_esp = 1e-3
         self.num_epochs = 25
-        self.num_steps_eval = 300
+        self.num_steps_eval = 1000
         self.num_steps_save = 3_0000
         self.num_eval_size = 100
         self.path_solver = self.weight_dir + f"{self.architecture}.pth"

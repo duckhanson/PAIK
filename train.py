@@ -2,20 +2,21 @@
 # import time
 # from os import path
 
+import flaml
 # import numpy as np
 # import pandas as pd
 import torch
-import wandb
-
+from ray import tune
 # import zuko
 # from hnne import HNNE
 # from torch import Tensor, nn
 from tqdm import tqdm
 
+import wandb
 # from utils.dataset import create_dataset
 from utils.model import *
 from utils.robot import Robot
-from utils.settings import config
+from utils.settings import config as cfg
 from utils.utils import *
 
 # from zuko.distributions import BoxUniform, DiagNormal, Minimum
@@ -50,19 +51,20 @@ def train_step(model, batch, optimizer, scheduler):
 
 def mini_train(robot, num_epochs, sweep_config):
     # data generation
-    J_tr, P_tr = data_collection(robot=robot, N=config.N_train)
-    J_ts, P_ts = data_collection(robot=robot, N=config.N_test)
+    J_tr, P_tr = data_collection(robot=robot, N=cfg.N_train)
+    J_ts, P_ts = data_collection(robot=robot, N=cfg.N_test)
     F = posture_feature_extraction(J_tr)
     train_loader = get_train_loader(J=J_tr, P=P_tr, F=F)
     # Build Generative model, NSF
     # Neural spline flow (NSF) with 3 sample features and 5 context features
-    solver, optimizer, scheduler = get_flow_model(load_model=config.use_pretrained)
-    knn = load_pickle(file_path=config.path_knn)
+    solver, optimizer, scheduler = get_flow_model(load_model=cfg.use_pretrained)
+    knn = load_pickle(file_path=cfg.path_knn)
 
     solver.train()
 
     for ep in range(num_epochs):
         t = tqdm(train_loader)
+        step = 0
         for batch in t:
             loss = train_step(
                 model=solver, batch=batch, optimizer=optimizer, scheduler=scheduler
@@ -73,33 +75,38 @@ def mini_train(robot, num_epochs, sweep_config):
 
             step += 1
 
-            if step % config.num_steps_eval == 0:
+            if step % cfg.num_steps_eval == 0:
+                rand = np.random.randint(low=0, high=len(P_ts), size=cfg.num_eval_size)
                 test(
                     robot=panda,
-                    P_ts=P_ts[: config.num_eval_size],
+                    P_ts=P_ts[rand],
                     F=F,
                     solver=solver,
                     knn=knn,
-                    K=100,
+                    K=cfg.K,
                     print_report=True,
                 )
 
-            if step % config.num_steps_save == 0:
-                torch.save(solver.state_dict(), config.path_solver)
+            if step % cfg.num_steps_save == 0:
+                torch.save(solver.state_dict(), cfg.path_solver)
 
 
 if __name__ == "__main__":
     panda = Robot(verbose=False)
 
     max_num_epoch = 100
-    # sweep_config = {
-    #     "l1": tune.randint(2, 9),   # log transformed with base 2
-    #     "l2": tune.randint(2, 9),   # log transformed with base 2
-    #     "lr": tune.loguniform(1e-4, 1e-1),
-    #     "num_epochs": tune.loguniform(1, max_num_epoch),
-    #     "batch_size": tune.randint(1, 5)    # log transformed with base 2
-    # }
+    
+    
+    sweep_config = {
+        "l1": tune.randint(2, 9),   # log transformed with base 2
+        "l2": tune.randint(2, 9),   # log transformed with base 2
+        "lr": tune.loguniform(1e-4, 1e-1),
+        "num_epochs": tune.loguniform(1, max_num_epoch),
+        "batch_size": tune.randint(1, 5)    # log transformed with base 2
+    }
 
+    mini_train(robot=panda, num_epochs=1, sweep_config=sweep_config)
+    
     # start a new wandb run to track this script
     # wandb.init(
     #     # set the wandb project where this run will be logged
@@ -107,14 +114,14 @@ if __name__ == "__main__":
     #     # entity
     #     entity="luca_nthu",
     #     # track hyperparameters and run metadata
-    #     config=config,
+    #     config=cfg,
     # )
 
     # step = 0
     # l2_label = ["mean", "std", "min", "25%", "50%", "75%", "max"]
 
     # flow.train()
-    # for ep in range(config.num_epochs):
+    # for ep in range(cfg.num_epochs):
     #     t = tqdm(train_loader)
     #     for batch in t:
     #         loss = train_step(
@@ -129,10 +136,10 @@ if __name__ == "__main__":
 
     #         step += 1
 
-    #         if step % config.num_steps_eval == 0:
+    #         if step % cfg.num_steps_eval == 0:
     #             df = test(
     #                 robot=panda,
-    #                 P_ts=P_ts[: config.num_eval_size],
+    #                 P_ts=P_ts[: cfg.num_eval_size],
     #                 F=F,
     #                 solver=solver,
     #                 knn=knn,
@@ -146,8 +153,8 @@ if __name__ == "__main__":
     #             log_info["learning_rate"] = scheduler.get_last_lr()[0]
     #             wandb.log(log_info)
 
-    #         if step % config.num_steps_save == 0:
-    #             torch.save(flow.state_dict(), config.path_solver)
+    #         if step % cfg.num_steps_save == 0:
+    #             torch.save(flow.state_dict(), cfg.path_solver)
 
     # # [optional] finish the wandb run, necessary in notebooks
     # wandb.finish()

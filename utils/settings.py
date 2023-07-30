@@ -95,7 +95,7 @@ class Config:
         self.decay_step_size = 30000
         self.batch_size = 256
         self.noise_esp = 1e-3
-        self.num_epochs = 25
+        self.num_epochs = 5
         self.num_steps_eval = 1000
         self.num_steps_save = 3_0000
         self.num_eval_size = 100

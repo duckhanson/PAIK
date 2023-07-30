@@ -87,7 +87,7 @@ def posture_feature_extraction(J: np.array):
     return F
 
 
-def get_train_loader(J: np.array, P: np.array, F: np.array):
+def get_train_loader(J: np.array, P: np.array, F: np.array, batch_size: int = config.batch_size, device: str = config.device):
     """
     a training loader
 
@@ -104,8 +104,8 @@ def get_train_loader(J: np.array, P: np.array, F: np.array):
 
     C = np.column_stack((P, F))
 
-    dataset = create_dataset(features=J, targets=C)
-    loader = dataset.create_loader(shuffle=True, batch_size=config.batch_size)
+    dataset = create_dataset(features=J, targets=C, device=device)
+    loader = dataset.create_loader(shuffle=True, batch_size=batch_size)
 
     return loader
 
@@ -280,10 +280,10 @@ def save_numpy(file_path: str, arr: np.array):
 def add_noise(batch, esp: float = config.noise_esp, step: int = 0, eval: bool = False):
     J, C = batch
     if eval or step < config.num_steps_add_noise:
-        std = torch.zeros((J.shape[0], 1)).to(config.device)
+        std = torch.zeros((C.shape[0], 1)).to(C.device)
         C = torch.column_stack((C, std))
     else:
-        s = torch.rand((J.shape[0], 1)).to(config.device)
+        s = torch.rand((C.shape[0], 1)).to(C.device)
         C = torch.column_stack((C, s))
         noise = torch.normal(
             mean=torch.zeros_like(input=J),

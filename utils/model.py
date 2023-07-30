@@ -31,6 +31,7 @@ def get_flow_model(
     lr_weight_decay=config.lr_weight_decay,
     decay_step_size=config.decay_step_size,
     gamma=config.decay_gamma,
+    device=config.device
 ):
     """
     Return nsf model and optimizer
@@ -48,7 +49,7 @@ def get_flow_model(
             randperm=True,
             activation=config.activation,
             hidden_features=[subnet_width] * subnet_num_layers,
-        ).to(config.device)
+        ).to(device)
     elif config.architecture == "cnf":
         flow = CNF(
             features=config.n,
@@ -56,11 +57,11 @@ def get_flow_model(
             transforms=num_transforms,
             activation=config.activation,
             hidden_features=[subnet_width] * subnet_num_layers,
-        ).to(config.device)
+        ).to(device)
     else:
         raise NotImplementedError("Not support architecture.")
 
-    flow = get_sflow_model(flow, shrink_ratio=shrink_ratio)
+    flow = get_sflow_model(flow, shrink_ratio=shrink_ratio, device=device)
 
     if load_model and path.exists(path=config.path_solver):
         try:
@@ -109,7 +110,7 @@ def get_iflow_model(
     return iflow
 
 
-def get_sflow_model(flow: NSF, shrink_ratio: float = config.shrink_ratio):
+def get_sflow_model(flow: NSF, shrink_ratio: float = config.shrink_ratio, device: str = config.device):
     """
     shrink normal distribution model
 
@@ -128,7 +129,7 @@ def get_sflow_model(flow: NSF, shrink_ratio: float = config.shrink_ratio):
         ),
     )
 
-    sflow.to(config.device)
+    sflow.to(device)
 
     return sflow
 

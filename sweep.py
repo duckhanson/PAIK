@@ -1,26 +1,71 @@
 # Import required packages
-import os
-import time
-
-import flaml
-# import numpy as np
-# import pandas as pd
-import torch
-from ray import tune
-# import zuko
-# from hnne import HNNE
-# from torch import Tensor, nn
 from tqdm import tqdm
 
 import wandb
-# from utils.dataset import create_dataset
 from utils.model import *
 from utils.robot import Robot
 from utils.settings import config as cfg
 from utils.utils import *
 
-# from zuko.distributions import BoxUniform, DiagNormal, Minimum
-# from zuko.flows import NSF, Distribution, DistributionModule, FlowModule, Unconditional
+early_stop_param = {
+    'train_loss': -1,
+    'position_error': 4e-2,
+}
+
+sweep_config = {
+    'name': 'sweep',
+    'method': 'random',
+    'metric': {
+        'name': 'position_errors',
+        'goal': 'minimize'
+    },
+    'early_terminate': {
+        'type': 'hyperband',
+        'max_iter': 16,  # test at [16/2/2/2, 16/2/2, 16/2]=[2, 4, 8]
+        's': 3,
+        'eta': 2,
+    },
+    'parameters': {
+        'subnet_width': {
+            'values': [1024, 1536, 2048]
+        },
+        'subnet_num_layers': {
+            'value': 3
+        },
+        'num_transforms': {
+            'values': [6, 7, 9, 11, 14]  # 6, 8, ..., 16
+        },
+        'lr': {
+            # a flat distribution between 0 and 0.1
+            'distribution': 'q_uniform',
+            'q': 1e-5,
+            'min': 2e-4,
+            'max': 9e-4,
+        },
+        'lr_weight_decay': {
+            # a flat distribution between 0 and 0.1
+            'distribution': 'q_uniform',
+            'q': 1e-3,
+            'min': 5e-3,
+            'max': 5e-2,
+        },
+        'decay_step_size': {
+            'values': [2e4, 3e4, 4e4],
+        },
+        'gamma': {
+            'distribution': 'q_uniform',
+            'q': 1e-2,
+            'min': 4e-1,
+            'max': 7e-1,
+        },
+        'batch_size': {
+            'value': 128
+        },
+        'num_epochs': {
+            'value': 16
+        }
+    },
+}
 
 
 def train_step(model, batch, optimizer, scheduler):
@@ -109,31 +154,34 @@ def mini_train(config=None,
             print_report=False,
         )
         wandb.log({
+            'epoch': ep,
             'position_errors': position_errors.mean(),
             'train_loss': batch_loss.mean(),
         })
 
-        if ep % 3 == 1:
-            torch.save(solver.state_dict(), cfg.path_solver)
+        if ep == 0 and position_errors.mean(
+        ) > early_stop_param['position_error']:
+            break
+
+    del train_loader
+    del scheduler
+    del optimizer
+    del solver
     print("Finished Training")
 
 
 def main() -> None:
-    # start a new wandb run to track this script
-    wandb.init(
-        # set the wandb project where this run will be logged
-        project="sdik_train",
-        # entity
-        entity="luca_nthu",
-        # track hyperparameters and run metadata
-        config=cfg,
-    )
     robot = Robot(verbose=False)
     J_tr, P_tr = data_collection(robot=robot, N=cfg.N_train)
     _, P_ts = data_collection(robot=robot, N=cfg.N_test)
     F = posture_feature_extraction(J_tr)
     knn = load_pickle(file_path=cfg.path_knn)
+    # note that we define values from `wandb.config`
+    # instead of defining hard values
+    run = wandb.init()
 
+    # note that we define values from `wandb.config`
+    # instead of defining hard values
     config = {
         'subnet_width': wandb.config.subnet_width,
         'subnet_num_layers': wandb.config.subnet_num_layers,
@@ -154,9 +202,10 @@ def main() -> None:
                F=F,
                knn=knn)
 
-    # [optional] finish the wandb run, necessary in notebooks
-    wandb.finish()
 
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    sweep_id = wandb.sweep(sweep=sweep_config,
+                           project='sdik_sweep',
+                           entity='luca_nthu')
+    # Start sweep job.
+    wandb.agent(sweep_id, function=main, count=50)

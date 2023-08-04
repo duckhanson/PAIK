@@ -1,5 +1,4 @@
 import os
-
 # from tqdm.auto import tqdm
 import pickle
 import time
@@ -10,6 +9,7 @@ import pandas as pd
 import torch
 from hnne import HNNE
 from sklearn.neighbors import NearestNeighbors
+
 from utils.dataset import create_dataset
 from utils.settings import config
 
@@ -51,6 +51,7 @@ def data_collection(robot, N: int):
         save_numpy(file_path=path_P, arr=P)
 
     return J, P
+
 
 
 def posture_feature_extraction(J: np.array):
@@ -178,13 +179,7 @@ def get_inference_loader(P: np.array, F: np.array, knn=None):
     return loader
 
 
-def nearest_neighbor_F(neigh: NearestNeighbors, P_ts: np.array, F: np.array):
-    assert len(P_ts) < len(F)
 
-    neigh_idx = neigh.kneighbors(P_ts, n_neighbors=1, return_distance=False)
-    neigh_idx = neigh_idx.flatten()
-
-    return F[neigh_idx]
 
 
 def load_pickle(file_path: str):
@@ -295,8 +290,11 @@ def add_noise(batch, esp: float = config.noise_esp, step: int = 0, eval: bool = 
 
 def data_preprocess_for_inference(P, F, knn):
     # Data Preprocessing: Posture Feature Extraction
-    ref_F = nearest_neighbor_F(knn, np.atleast_2d(P), F)
-    C = np.column_stack((np.atleast_2d(P), ref_F))
+    ref_F = nearest_neighbor_F(knn, np.atleast_2d(P), F) # knn
+    # ref_F = rand_F(P, F) # f_rand
+    # ref_F = pick_F(P, F) # f_pick
+    
+    C = np.column_stack((np.atleast_2d(P), np.atleast_2d(ref_F)))
     C = C.astype(np.float32)
 
     # Project to Tensor(device)
@@ -304,6 +302,21 @@ def data_preprocess_for_inference(P, F, knn):
     _, C = add_noise((torch.zeros_like(C), C), eval=True)
 
     return C
+
+def nearest_neighbor_F(neigh: NearestNeighbors, P_ts: np.array, F: np.array):
+    assert len(P_ts) < len(F)
+
+    neigh_idx = neigh.kneighbors(P_ts, n_neighbors=1, return_distance=False)
+    neigh_idx = neigh_idx.flatten()
+
+    return F[neigh_idx]
+
+def rand_F(P_ts: np.array, F: np.array):
+    return np.random.rand(len(np.atleast_2d(P_ts)), F.shape[-1])
+
+def pick_F(P_ts: np.array, F: np.array):
+    idx = np.random.randint(low=0, high=len(F), size=len(np.atleast_2d(P_ts)))
+    return F[idx]
 
 
 def inference(

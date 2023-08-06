@@ -1,4 +1,6 @@
 # Import required packages
+from datetime import datetime
+
 from tqdm import tqdm
 
 import wandb
@@ -27,20 +29,20 @@ sweep_config = {
     },
     'parameters': {
         'subnet_width': {
-            'values': [1024, 1536, 2048]
+            'values': [864, 1024, 1200]
         },
         'subnet_num_layers': {
             'value': 3
         },
         'num_transforms': {
-            'values': [6, 7, 9, 11, 14]  # 6, 8, ..., 16
+            'values': [7, 8, 9]  # 6, 8, ..., 16
         },
         'lr': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
             'q': 1e-5,
             'min': 2e-4,
-            'max': 9e-4,
+            'max': 6.5e-4,
         },
         'lr_weight_decay': {
             # a flat distribution between 0 and 0.1
@@ -162,7 +164,11 @@ def mini_train(config=None,
         if ep == 0 and position_errors.mean(
         ) > early_stop_param['position_error']:
             break
-
+    model_weights_path =  cfg.weight_dir + 'solver_' + datetime.now().strftime("%m%d%H%M%S") + '.pth'
+    torch.save({
+        'solver': solver.state_dict(),
+        'opt': optimizer.state_dict(),
+        }, model_weights_path)
     del train_loader
     del scheduler
     del optimizer
@@ -208,4 +214,4 @@ if __name__ == '__main__':
                            project='sdik_sweep',
                            entity='luca_nthu')
     # Start sweep job.
-    wandb.agent(sweep_id, function=main, count=50)
+    wandb.agent(sweep_id, function=main, count=10)

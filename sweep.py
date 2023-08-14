@@ -35,7 +35,7 @@ sweep_config = {
             'value': 3
         },
         'num_transforms': {
-            'values': [7, 8, 9]  # 6, 8, ..., 16
+            'values': [7, 8]  # 6, 8, ..., 16
         },
         'lr': {
             # a flat distribution between 0 and 0.1
@@ -52,7 +52,7 @@ sweep_config = {
             'max': 5e-2,
         },
         'decay_step_size': {
-            'values': [2e4, 3e4, 4e4],
+            'values': [3e4, 4e4],
         },
         'gamma': {
             'distribution': 'q_uniform',
@@ -64,7 +64,7 @@ sweep_config = {
             'value': 128
         },
         'num_epochs': {
-            'value': 16
+            'value': 20
         }
     },
 }

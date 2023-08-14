@@ -4,6 +4,7 @@ import swift
 
 # from numpy import linalg as LA
 from spatialmath import SE3
+from spatialmath.base import r2q
 from tqdm import tqdm
 from utils.settings import config, ets_table
 from utils.utils import create_robot_dirs
@@ -72,6 +73,28 @@ class Robot:
         if self.verbose:
             print(f"Given {q}, via fkine, get {ee_pos}")
         return np.array(ee_pos)
+    
+    def forward_kinematics_quaternion(self, q: np.ndarray):
+        """
+        _summary_
+
+        Given a joint configuration q to get end effector position and quaternion.
+        ----------
+        q : np.ndarray
+            joint configuration.
+
+        Returns
+        -------
+        (t, r) : np.ndarray(7)
+            position and quaternion (x, y, z, qw, qx, qy, qz)
+        """
+        T = self.robot.fkine(q)  # forward kinematics
+        # output is a SE3 matrix, use t to get position.
+        r = r2q(T.R)
+        t = T.t
+        if self.verbose:
+            print(f"Given {q}, via fkine, get {t}")
+        return np.concatenate((t, r))
 
     def inverse_kinematics(self, ee_pos: np.ndarray, q0: np.ndarray = None):
         """
@@ -140,6 +163,21 @@ class Robot:
         step = 0
         for q in qs:
             ee[step] = self.forward_kinematics(q)
+            step += 1
+
+        return ee, qs
+    
+    def path_generate_via_stable_joint_traj_quaternion(self, dist_ratio: float = 0.4, t: int = 10):
+        rand = np.random.rand(2, config.n) * dist_ratio
+        q_samples = (self.joint_max - self.joint_min) * rand + self.joint_min
+
+        qs = rtb.tools.trajectory.jtraj(q_samples[0], q_samples[1], t=t)
+        qs = qs.q
+
+        ee = np.zeros((len(qs), 7))
+        step = 0
+        for q in qs:
+            ee[step] = self.forward_kinematics_quaternion(q)
             step += 1
 
         return ee, qs

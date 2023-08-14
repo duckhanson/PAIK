@@ -500,7 +500,9 @@ def sample_P_path(robot, load_time: str = "") -> str:
     J_traj_file_path = traj_dir + "q_traj.npy"
 
     if load_time == "" or not os.path.exists(path=J_traj_file_path):
-        P_path, J_traj = robot.path_generate_via_stable_joint_traj(dist_ratio=0.9, t=20)
+        # P_path, J_traj = robot.path_generate_via_stable_joint_traj(dist_ratio=0.9, t=20)
+        P_path, J_traj = robot.path_generate_via_stable_joint_traj_quaternion(dist_ratio=0.9, t=20)
+        
         save_numpy(file_path=P_path_file_path, arr=P_path)
         save_numpy(file_path=J_traj_file_path, arr=J_traj)
 

@@ -40,7 +40,8 @@ class Config:
         self.robot_name = "panda"
         self.n = ets_table[self.robot_name]  # n = dof
         self.m = 3  # position(x, y, z)
-        self.r = self.n - self.m  # degrees of redundancy r = n - m
+        # self.r = self.n - self.m  # degrees of redundancy r = n - m
+        self.r = 1
 
         # data
         self.data_dir = f"{self.workdir}/data/{self.robot_name}/"
@@ -74,9 +75,9 @@ class Config:
         self.architecture = "nsf"
         self.device = "cuda"
         self.num_conditions = (
-            self.n + 1
+            self.m  + self.r + 1
         )  # position + posture + noise = 3-dim + 4-dim + 1-dim
-        self.num_transforms = 7
+        self.num_transforms = 5
         self.subnet_width = 1024
         self.subnet_num_layers = 3
         self.activation = LeakyReLU
@@ -93,9 +94,9 @@ class Config:
         self.lr_weight_decay = 7e-3
         self.decay_gamma = 0.79
         self.decay_step_size = 30000
-        self.batch_size = 256
+        self.batch_size = 128
         self.noise_esp = 1e-3
-        self.num_epochs = 5
+        self.num_epochs = 10
         self.num_steps_eval = 1000
         self.num_steps_save = 3_0000
         self.num_eval_size = 100

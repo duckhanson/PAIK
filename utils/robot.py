@@ -140,13 +140,13 @@ class Robot:
         q_samples = (self.joint_max - self.joint_min) * rand + self.joint_min
 
         if return_ee:
-            ee_samples = np.zeros((len(q_samples), 3))
+            ee_samples = np.zeros((len(q_samples), config.m))
             tq = tqdm(q_samples)
             step = 0
             for q in tq:
                 ee_samples[step] = self.forward_kinematics(q=q)
                 step += 1
-            ee_samples = ee_samples.reshape((-1, 3))
+            ee_samples = ee_samples.reshape((-1, config.m))
 
             return q_samples, ee_samples
 
@@ -159,7 +159,7 @@ class Robot:
         qs = rtb.tools.trajectory.jtraj(q_samples[0], q_samples[1], t=t)
         qs = qs.q
 
-        ee = np.zeros((len(qs), 3))
+        ee = np.zeros((len(qs), config.m))
         step = 0
         for q in qs:
             ee[step] = self.forward_kinematics(q)

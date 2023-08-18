@@ -11,3 +11,4 @@ wandb/*
 *.yml
 *checkpoint*
 logs/*
+mlruns/

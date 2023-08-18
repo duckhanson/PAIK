@@ -21,21 +21,21 @@ sweep_config = {
         'name': 'position_errors',
         'goal': 'minimize'
     },
-    'early_terminate': {
-        'type': 'hyperband',
-        'max_iter': 16,  # test at [16/2/2/2, 16/2/2, 16/2]=[2, 4, 8]
-        's': 3,
-        'eta': 2,
-    },
+    # 'early_terminate': {
+    #     'type': 'hyperband',
+    #     'max_iter': 16,  # test at [16/2/2/2, 16/2/2, 16/2]=[2, 4, 8]
+    #     's': 3,
+    #     'eta': 2,
+    # },
     'parameters': {
         'subnet_width': {
-            'values': [864, 1024, 1200]
+            'values': [512, 864, 1024, 1200]
         },
         'subnet_num_layers': {
             'value': 3
         },
         'num_transforms': {
-            'values': [7, 8]  # 6, 8, ..., 16
+            'values': [5, 6, 7, 8]  # 6, 8, ..., 16
         },
         'lr': {
             # a flat distribution between 0 and 0.1
@@ -64,7 +64,7 @@ sweep_config = {
             'value': 128
         },
         'num_epochs': {
-            'value': 20
+            'value': 10
         }
     },
 }
@@ -184,7 +184,8 @@ def main() -> None:
     knn = load_pickle(file_path=cfg.path_knn)
     # note that we define values from `wandb.config`
     # instead of defining hard values
-    run = wandb.init()
+    run = wandb.init(name=datetime.now().strftime("%m%d%H%M%S"),
+                     notes=f'r={cfg.r}')
 
     # note that we define values from `wandb.config`
     # instead of defining hard values
@@ -211,7 +212,7 @@ def main() -> None:
 
 if __name__ == '__main__':
     sweep_id = wandb.sweep(sweep=sweep_config,
-                           project='sdik_sweep',
+                           project='msik_sweep',
                            entity='luca_nthu')
     # Start sweep job.
     wandb.agent(sweep_id, function=main, count=10)

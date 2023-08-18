@@ -79,7 +79,7 @@ def posture_feature_extraction(J: np.array):
         except Exception:
             print("hnne load err, assuming you use different architecture.")
 
-    if not suc_load:
+    if not suc_load or F.shape[-1] != config.r:
         hnne = HNNE(dim=config.r, ann_threshold=config.num_neighbors)
         F = hnne.fit_transform(X=J, dim=config.r, verbose=True)
         hnne.save(path=path_hnne)
@@ -546,7 +546,7 @@ def path_following(
             print(f"{exp_traj_path} does not exist !")
 
     Path = load_numpy(file_path=Path_dir + "ee_traj.npy")
-    Path = Path[:, :3]
+    Path = Path[:, :config.m]
 
     ref_F = nearest_neighbor_F(knn, np.atleast_2d(Path), F) # knn
     

@@ -2,7 +2,6 @@
 import os
 import time
 
-import flaml
 # import numpy as np
 # import pandas as pd
 import torch
@@ -122,7 +121,7 @@ def main() -> None:
     # start a new wandb run to track this script
     wandb.init(
         # set the wandb project where this run will be logged
-        project="sdik_train",
+        project="msik_train",
         # entity
         entity="luca_nthu",
         # track hyperparameters and run metadata

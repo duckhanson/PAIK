@@ -1,14 +1,5 @@
 # Import required packages
-import os
-import time
-
-# import numpy as np
-# import pandas as pd
 import torch
-from ray import tune
-# import zuko
-# from hnne import HNNE
-# from torch import Tensor, nn
 from tqdm import tqdm
 
 import wandb
@@ -17,10 +8,6 @@ from utils.model import *
 from utils.robot import Robot
 from utils.settings import config as cfg
 from utils.utils import *
-
-# from zuko.distributions import BoxUniform, DiagNormal, Minimum
-# from zuko.flows import NSF, Distribution, DistributionModule, FlowModule, Unconditional
-
 
 def train_step(model, batch, optimizer, scheduler):
     """
@@ -126,23 +113,24 @@ def main() -> None:
         entity="luca_nthu",
         # track hyperparameters and run metadata
         config=cfg,
+        notes=f'r={cfg.r}',
     )
     robot = Robot(verbose=False)
     J_tr, P_tr = data_collection(robot=robot, N=cfg.N_train)
     _, P_ts = data_collection(robot=robot, N=cfg.N_test)
     F = posture_feature_extraction(J_tr)
-    knn = load_pickle(file_path=cfg.path_knn)
+    knn = get_knn(P_tr=P_tr)
 
     config = {
-        'subnet_width': wandb.config.subnet_width,
-        'subnet_num_layers': wandb.config.subnet_num_layers,
-        'num_transforms': wandb.config.num_transforms,
-        'lr': wandb.config.lr,
-        'lr_weight_decay': wandb.config.lr_weight_decay,
-        'decay_step_size': wandb.config.decay_step_size,
-        'gamma': wandb.config.gamma,
-        'batch_size': wandb.config.batch_size,
-        'num_epochs': wandb.config.num_epochs,
+        'subnet_width': cfg.subnet_width,
+        'subnet_num_layers': cfg.subnet_num_layers,
+        'num_transforms': cfg.num_transforms,
+        'lr': cfg.lr,
+        'lr_weight_decay': cfg.lr_weight_decay,
+        'decay_step_size': cfg.decay_step_size,
+        'gamma': cfg.decay_gamma,
+        'batch_size': cfg.batch_size,
+        'num_epochs': cfg.num_epochs,
     }
 
     mini_train(config=config,

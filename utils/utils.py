@@ -26,7 +26,7 @@ def _get_data_path(len_data):
     if len_data == config.N_train:
         return config.path_J_train, config.path_P_train, config.path_F
     else:
-        return config.path_J_test, config.path_J_test, config.path_F_test
+        return config.path_J_test, config.path_P_test, config.path_F_test
 
 
 def data_collection(robot, N: int):

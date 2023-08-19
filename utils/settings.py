@@ -41,34 +41,36 @@ class Config:
         self.n = ets_table[self.robot_name]  # n = dof
         self.m = 3  # position(x, y, z)
         # self.r = self.n - self.m  # degrees of redundancy r = n - m
-        self.r = 1
+        self.r = 4
+        # training
+        self.N_train = 250_0000
+        self.N_test = 2_0000
+        self.K = 100
 
         # data
         self.data_dir = f"{self.workdir}/data/{self.robot_name}/"
 
         # train
         self.train_dir = self.data_dir + "train/"
-        self.path_J_train = self.train_dir + "feature.npy"  # joint configuration
-        self.path_P_train = self.train_dir + "target.npy"  # end-effector position
+        self.path_J_train = self.train_dir + f"J-{self.N_train}-{self.n}.npy"  # joint configuration
+        self.path_P_train = self.train_dir + f"P-{self.N_train}-{self.m}.npy"  # end-effector position
         self.path_F = (
-            self.train_dir + "feature_trans.npy"
+            self.train_dir + f"F-{self.N_train}-{self.r}.npy"
         )  # hnne reduced feature vector
 
         # val
         self.val_dir = self.data_dir + "val/"
-        self.path_J_test = self.val_dir + "feature.npy"  # joint configuration
-        self.path_J_test = self.val_dir + "target.npy"  # end-effector position
-        self.path_F_test = (
-            self.val_dir + "feature_trans.npy"
-        )  # hnne reduced feature vector
+        self.path_J_test = self.val_dir + f"J-{self.N_test}-{self.n}.npy"  # joint configuration
+        self.path_P_test = self.val_dir + f"P-{self.N_test}-{self.m}.npy"  # end-effector position
+        self.path_F_test = None  # hnne reduced feature vector
 
         # hnne parameter
         self.weight_dir = f"{self.workdir}/weights/{self.robot_name}/"
         self.num_neighbors = 1000
-        self.path_hnne = self.weight_dir + "hnne.pickle"
+        self.path_hnne = self.weight_dir + f"hnne-{self.r}.pickle"
 
         # knn parameter
-        self.path_knn = self.weight_dir + "knn.pickle"
+        self.path_knn = self.weight_dir + f"knn-{self.m}.pickle"
 
         # flow parameter
         self.use_pretrained = False
@@ -77,18 +79,13 @@ class Config:
         self.num_conditions = (
             self.m  + self.r + 1
         )  # position + posture + noise = 3-dim + 4-dim + 1-dim
-        self.num_transforms = 5
+        self.num_transforms = 7
         self.subnet_width = 1024
         self.subnet_num_layers = 3
         self.activation = LeakyReLU
 
         # sflow parameter
         self.shrink_ratio = 0.61
-
-        # training
-        self.N_train = 250_0000
-        self.N_test = 2_0000
-        self.K = 100
 
         self.lr = 3e-7
         self.lr_weight_decay = 7e-3

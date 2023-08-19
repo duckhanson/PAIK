@@ -21,21 +21,16 @@ sweep_config = {
         'name': 'position_errors',
         'goal': 'minimize'
     },
-    # 'early_terminate': {
-    #     'type': 'hyperband',
-    #     'max_iter': 16,  # test at [16/2/2/2, 16/2/2, 16/2]=[2, 4, 8]
-    #     's': 3,
-    #     'eta': 2,
-    # },
     'parameters': {
         'subnet_width': {
-            'values': [512, 864, 1024, 1200]
+            # 'values': [512, 1024]
+            'value': 1024
         },
         'subnet_num_layers': {
             'value': 3
         },
         'num_transforms': {
-            'values': [5, 6, 7, 8]  # 6, 8, ..., 16
+            'values': [6, 7, 8]  # 6, 8, ..., 16
         },
         'lr': {
             # a flat distribution between 0 and 0.1
@@ -180,11 +175,11 @@ def main() -> None:
     robot = Robot(verbose=False)
     J_tr, P_tr = data_collection(robot=robot, N=cfg.N_train)
     _, P_ts = data_collection(robot=robot, N=cfg.N_test)
-    F = posture_feature_extraction(J_tr)
-    knn = load_pickle(file_path=cfg.path_knn)
+    F = posture_feature_extraction(J=J_tr)
+    knn = get_knn(P_tr=P_tr)
     # note that we define values from `wandb.config`
     # instead of defining hard values
-    run = wandb.init(name=datetime.now().strftime("%m%d%H%M%S"),
+    wandb.init(name=datetime.now().strftime("%m%d-%H%M%S"),
                      notes=f'r={cfg.r}')
 
     # note that we define values from `wandb.config`

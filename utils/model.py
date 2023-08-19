@@ -16,7 +16,7 @@ from utils.settings import config
 # from tqdm import tqdm, trange
 # from utils.dataset import create_dataset
 # from utils.robot import Robot
-from utils.utils import save_pickle
+from utils.utils import save_pickle, load_pickle
 
 # import zuko
 
@@ -171,9 +171,14 @@ def get_knn(P_tr: np.array):
     NearestNeighbors
         a knn model that fit end-effector positions of training data
     """
-    
-    knn = NearestNeighbors(radius=0.07)  
-    knn.fit(P_tr)  
-    save_pickle(file_path=config.path_knn, obj=knn)
+    try:
+        knn = load_pickle(file_path=config.path_knn)
+        print(f"knn load successfully from {config.path_knn}")
+    except FileNotFoundError as e:
+        print(e)
+        knn = NearestNeighbors(radius=0.07)  
+        knn.fit(P_tr)  
+        save_pickle(file_path=config.path_knn, obj=knn)
+        print(f"Create and save knn at {config.path_knn}.")
     
     return knn

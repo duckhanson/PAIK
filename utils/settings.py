@@ -39,9 +39,11 @@ class Config:
         # robot
         self.robot_name = "panda"
         self.n = ets_table[self.robot_name]  # n = dof
-        self.m = 3  # position(x, y, z)
+        self.m = 3 + 4 # position(x, y, z)
+        # self.m = 3 # position(x, y, z)
         # self.r = self.n - self.m  # degrees of redundancy r = n - m
-        self.r = 4
+        self.r = 1
+        # self.r = 4
         # training
         self.N_train = 250_0000
         self.N_test = 2_0000
@@ -52,25 +54,25 @@ class Config:
 
         # train
         self.train_dir = self.data_dir + "train/"
-        self.path_J_train = self.train_dir + f"J-{self.N_train}-{self.n}.npy"  # joint configuration
-        self.path_P_train = self.train_dir + f"P-{self.N_train}-{self.m}.npy"  # end-effector position
+        self.path_J_train = self.train_dir + f"J-{self.N_train}-{self.n}-{self.m}-{self.r}.npy"  # joint configuration
+        self.path_P_train = self.train_dir + f"P-{self.N_train}-{self.n}-{self.m}-{self.r}.npy"  # end-effector position
         self.path_F = (
-            self.train_dir + f"F-{self.N_train}-{self.r}.npy"
+            self.train_dir + f"F-{self.N_train}-{self.n}-{self.m}-{self.r}.npy"
         )  # hnne reduced feature vector
 
         # val
         self.val_dir = self.data_dir + "val/"
-        self.path_J_test = self.val_dir + f"J-{self.N_test}-{self.n}.npy"  # joint configuration
-        self.path_P_test = self.val_dir + f"P-{self.N_test}-{self.m}.npy"  # end-effector position
+        self.path_J_test = self.val_dir + f"J-{self.N_test}-{self.n}-{self.m}-{self.r}.npy"  # joint configuration
+        self.path_P_test = self.val_dir + f"P-{self.N_test}-{self.n}-{self.m}-{self.r}.npy"  # end-effector position
         self.path_F_test = None  # hnne reduced feature vector
 
         # hnne parameter
         self.weight_dir = f"{self.workdir}/weights/{self.robot_name}/"
         self.num_neighbors = 1000
-        self.path_hnne = self.weight_dir + f"hnne-{self.r}.pickle"
+        self.path_hnne = self.weight_dir + f"hnne-{self.N_train}-{self.n}-{self.m}-{self.r}.pickle"
 
         # knn parameter
-        self.path_knn = self.weight_dir + f"knn-{self.m}.pickle"
+        self.path_knn = self.weight_dir + f"knn-{self.N_train}-{self.n}-{self.m}-{self.r}.pickle"
 
         # flow parameter
         self.use_pretrained = False
@@ -87,10 +89,10 @@ class Config:
         # sflow parameter
         self.shrink_ratio = 0.61
 
-        self.lr = 3e-7
-        self.lr_weight_decay = 7e-3
-        self.decay_gamma = 0.79
-        self.decay_step_size = 30000
+        self.lr = 4.8e-4
+        self.lr_weight_decay = 5e-3
+        self.decay_gamma = 0.5
+        self.decay_step_size = 4e4
         self.batch_size = 128
         self.noise_esp = 1e-3
         self.num_epochs = 10

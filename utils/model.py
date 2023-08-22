@@ -68,7 +68,7 @@ def get_flow_model(
             flow.load_state_dict(state_dict=torch.load(config.path_solver))
             print(f"Model load successfully from {config.path_solver}")
         except Exception:
-            print("Load err, assuming you use different architecture.")
+            print(f"Load err from {config.path_solver}, assuming you use different architecture.")
     else:
         print("Create a new model and start training.")
 

@@ -11,7 +11,7 @@ from utils.utils import *
 
 early_stop_param = {
     'train_loss': -1,
-    'position_error': 4e-2,
+    'position_error': 4.8e-2,
 }
 
 sweep_config = {
@@ -23,20 +23,21 @@ sweep_config = {
     },
     'parameters': {
         'subnet_width': {
-            # 'values': [512, 1024]
-            'value': 1024
+            'values': [900, 1024, 1200, 1400]
+            # 'value': 1024
         },
         'subnet_num_layers': {
-            'value': 3
+            'values': [3, 4]
+            # 'value': 3
         },
         'num_transforms': {
-            'values': [6, 7, 8]  # 6, 8, ..., 16
+            'values': [7, 8, 11, 14, 16]  # 6, 8, ..., 16
         },
         'lr': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
             'q': 1e-5,
-            'min': 2e-4,
+            'min': 4e-4,
             'max': 6.5e-4,
         },
         'lr_weight_decay': {
@@ -47,7 +48,8 @@ sweep_config = {
             'max': 5e-2,
         },
         'decay_step_size': {
-            'values': [3e4, 4e4],
+            # 'values': [3e4, 4e4],
+            'value': 4e4
         },
         'gamma': {
             'distribution': 'q_uniform',
@@ -59,7 +61,7 @@ sweep_config = {
             'value': 128
         },
         'num_epochs': {
-            'value': 10
+            'value': 3
         }
     },
 }
@@ -97,7 +99,8 @@ def mini_train(config=None,
                P_tr=None,
                P_ts=None,
                F=None,
-               knn=None) -> None:
+               knn=None,
+               begin_time=None) -> None:
     # data generation
     if torch.cuda.is_available():
         device = 'cuda'
@@ -141,7 +144,7 @@ def mini_train(config=None,
             step += 1
 
         rand = np.random.randint(low=0, high=len(P_ts), size=cfg.num_eval_size)
-        _, position_errors, _ = test(
+        _, position_errors, orientation_errors, _ = test(
             robot=robot,
             P_ts=P_ts[rand],
             F=F,
@@ -153,13 +156,14 @@ def mini_train(config=None,
         wandb.log({
             'epoch': ep,
             'position_errors': position_errors.mean(),
+            'orientation_errors': orientation_errors.mean(),
             'train_loss': batch_loss.mean(),
         })
 
         if ep == 0 and position_errors.mean(
         ) > early_stop_param['position_error']:
             break
-    model_weights_path =  cfg.weight_dir + 'solver_' + datetime.now().strftime("%m%d%H%M%S") + '.pth'
+    model_weights_path =  cfg.weight_dir + begin_time + '.pth'
     torch.save({
         'solver': solver.state_dict(),
         'opt': optimizer.state_dict(),
@@ -177,10 +181,12 @@ def main() -> None:
     _, P_ts = data_collection(robot=robot, N=cfg.N_test)
     F = posture_feature_extraction(J=J_tr)
     knn = get_knn(P_tr=P_tr)
+    
+    begin_time = datetime.now().strftime("%m%d-%H%M")
     # note that we define values from `wandb.config`
     # instead of defining hard values
-    wandb.init(name=datetime.now().strftime("%m%d-%H%M%S"),
-                     notes=f'r={cfg.r}')
+    wandb.init(name=begin_time,
+                     notes=f'm={cfg.m}')
 
     # note that we define values from `wandb.config`
     # instead of defining hard values
@@ -202,7 +208,8 @@ def main() -> None:
                P_tr=P_tr,
                P_ts=P_ts,
                F=F,
-               knn=knn)
+               knn=knn,
+               begin_time=begin_time)
 
 
 if __name__ == '__main__':
@@ -210,4 +217,4 @@ if __name__ == '__main__':
                            project='msik_sweep',
                            entity='luca_nthu')
     # Start sweep job.
-    wandb.agent(sweep_id, function=main, count=10)
+    wandb.agent(sweep_id, function=main, count=30)

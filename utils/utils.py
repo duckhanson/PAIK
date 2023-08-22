@@ -7,6 +7,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import torch
+from scipy.spatial import distance # distance.cosine as cosine_distance
 from hnne import HNNE
 from sklearn.neighbors import NearestNeighbors
 
@@ -24,9 +25,9 @@ def _get_data_path(len_data):
     :rtype: _type_
     """
     if len_data == config.N_train:
-        return config.path_J_train, config.path_P_train, config.path_F
+        return config.path_J_train, config.path_P_train
     else:
-        return config.path_J_test, config.path_P_test, config.path_F_test
+        return config.path_J_test, config.path_P_test
 
 
 def data_collection(robot, N: int):
@@ -40,13 +41,18 @@ def data_collection(robot, N: int):
     :return: J, P
     :rtype: np.array, np.array
     """
-    path_J, path_P, path_F = _get_data_path(len_data=N)
+    assert config.m == 3 or config.m == 3 + 4
+    
+    path_J, path_P = _get_data_path(len_data=N)
 
     J = load_numpy(file_path=path_J)
     P = load_numpy(file_path=path_P)
 
-    if len(J) != N:
-        J, P = robot.uniform_sample_J(num_samples=N, return_ee=True)
+    if len(J) != N or len(P) != N:
+        if config.m == 3:
+            J, P = robot.uniform_sample_J(num_samples=N)
+        else:
+            J, P = robot.uniform_sample_J_quaternion(num_samples=N)
         save_numpy(file_path=path_J, arr=J)
         save_numpy(file_path=path_P, arr=P)
 
@@ -418,6 +424,8 @@ def test(
     assert len(P_ts) < 1000
 
     position_errors = np.zeros(shape=(len(P_ts), K))
+    orientation_errors = np.zeros(shape=(len(P_ts), K))
+    
 
     # Data Preprocessing
     C = data_preprocess_for_inference(P=P_ts, F=F, knn=knn)
@@ -430,20 +438,37 @@ def test(
 
     avg_inference_time = round((time.time() - time_begin) / len(P_ts), 2)
 
-    # Calculate Position Errors and Inference Time
-    for i, P in enumerate(P_ts):
-        position_errors[i] = robot.position_errors_Arr_Inputs(
-            qs=J_hat[:, i, :], ee_pos=P
-        )
-    position_errors = position_errors.flatten()
+    if config.m == 3:
+        # Calculate Position Errors and Inference Time
+        for i, P in enumerate(P_ts):
+            position_errors[i] = robot.position_errors_Arr_Inputs(
+                qs=J_hat[:, i, :], ee_pos=P
+            )
+        position_errors = position_errors.flatten()
 
-    if print_report:
-        df = pd.DataFrame(position_errors, columns=["position errors (m)"])
-        print(df.describe())
-        print(f"average inference time (of {len(P_ts)} P): {avg_inference_time} sec.")
-        return df
+        if print_report:
+            df = pd.DataFrame(position_errors, columns=["position errors (m)"])
+            print(df.describe())
+            print(f"average inference time (of {len(P_ts)} P): {avg_inference_time} sec.")
+            return df
+        else:
+            return J_hat, position_errors, avg_inference_time
     else:
-        return J_hat, position_errors, avg_inference_time
+        # Calculate Position Errors and Inference Time
+        for i, P in enumerate(P_ts):
+            position_errors[i], orientation_errors[i] = robot.position_orientation_errors_Arr_Inputs(
+                qs=J_hat[:, i, :], ee_pos=P
+            )
+        position_errors = position_errors.flatten()
+        orientation_errors = orientation_errors.flatten()
+        
+        if print_report:
+            df = pd.DataFrame([position_errors, orientation_errors], columns=["position errors (m)", "orientation_errors (rad)"])
+            print(df.describe())
+            print(f"average inference time (of {len(P_ts)} P): {avg_inference_time} sec.")
+            return df
+        else:
+            return J_hat, position_errors, orientation_errors, avg_inference_time
 
 
 def sample_J_traj(P_path, ref_F, solver, robot):

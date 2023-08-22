@@ -5,6 +5,7 @@ import swift
 # from numpy import linalg as LA
 from spatialmath import SE3
 from spatialmath.base import r2q
+from pyquaternion import Quaternion
 from tqdm import tqdm
 from utils.settings import config, ets_table
 from utils.utils import create_robot_dirs
@@ -133,24 +134,37 @@ class Robot:
             print(f"Given {ee_pos} and {q0}, via ik, get {q}.")
         return np.array(q), success
 
-    def uniform_sample_J(self, num_samples: int, return_ee: bool = False) -> np.ndarray:
-        # samples = np.array([])
-
+    def uniform_sample_J(self, num_samples: int) -> np.ndarray:
+        assert config.m == 3 # pos (3)
+        print(f"Start sample {num_samples} data.")
         rand = np.random.rand(num_samples, config.n)
         q_samples = (self.joint_max - self.joint_min) * rand + self.joint_min
 
-        if return_ee:
-            ee_samples = np.zeros((len(q_samples), config.m))
-            tq = tqdm(q_samples)
-            step = 0
-            for q in tq:
-                ee_samples[step] = self.forward_kinematics(q=q)
-                step += 1
-            ee_samples = ee_samples.reshape((-1, config.m))
-
-            return q_samples, ee_samples
+        ee_samples = np.zeros((len(q_samples), config.m))
+        tq = tqdm(q_samples)
+        step = 0
+        for q in tq:
+            ee_samples[step] = self.forward_kinematics(q=q)
+            step += 1
+        ee_samples = ee_samples.reshape((-1, config.m))
 
         return q_samples
+    
+    def uniform_sample_J_quaternion(self, num_samples: int):
+        assert config.m == 3 + 4 # pos (3) + qua (4)
+        print(f"Start sample {num_samples} data.")
+        rand = np.random.rand(num_samples, config.n)
+        q_samples = (self.joint_max - self.joint_min) * rand + self.joint_min
+        
+        ee_samples = np.zeros((len(q_samples), config.m))
+        tq = tqdm(q_samples)
+        step = 0
+        for q in tq:
+            ee_samples[step] = self.forward_kinematics_quaternion(q=q)
+            step += 1
+        ee_samples = ee_samples.reshape((-1, config.m))
+
+        return q_samples, ee_samples
 
     def path_generate_via_stable_joint_traj(self, dist_ratio: float = 0.4, t: int = 10):
         rand = np.random.rand(2, config.n) * dist_ratio
@@ -212,9 +226,59 @@ class Robot:
         com_pos = np.zeros((len(qs), ee_pos.shape[-1]))
         for i, q in enumerate(qs):
             com_pos[i] = self.forward_kinematics(q)
-
         diff = np.linalg.norm(com_pos - ee_pos, axis=1)
         return diff
+    
+    
+    def calculate_orientation_errors_Arr_Inputs(self, preds: np.ndarray, target: np.ndarray):
+        """
+        Handle array prediction inputs with the same task target (position + orientation)
+
+        Parameters
+        ----------
+        preds : np.ndarray
+            FK(preds)
+        target : np.ndarray
+            task point
+
+        Returns
+        -------
+        float32
+            mean of orientation errors
+        """
+        ori_err = np.zeros((len(preds)))
+        # position, orientation of target
+        ot = target[3:]
+        ot = Quaternion(array=ot)
+        
+        # position, orientation of preds
+        ops = preds[:, 3:]
+        # orientation error
+        for i, op in enumerate(ops):
+            op = Quaternion(array=op)
+            ori_err[i] = Quaternion.distance(op, ot)
+        
+        return ori_err.mean()        
+
+    def position_orientation_errors_Arr_Inputs(self, qs: np.ndarray, ee_pos: np.ndarray):
+        """
+        array version of position_errors_Single_Input
+
+        :param qs: _description_
+        :type qs: np.ndarray
+        :param ee_pos: _description_
+        :type ee_pos: np.ndarray
+        :return: _description_
+        :rtype: _type_
+        """
+        preds = np.zeros((len(qs), ee_pos.shape[-1]))
+
+        for i, q in enumerate(qs):
+            preds[i] = self.forward_kinematics_quaternion(q)
+        
+        pos_err = np.linalg.norm(preds[:, :3] - ee_pos[:3], axis=1)
+        ori_err = self.calculate_orientation_errors_Arr_Inputs(preds=preds, target=ee_pos)
+        return pos_err, ori_err
 
     def plot(
         self,

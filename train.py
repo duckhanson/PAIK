@@ -85,7 +85,7 @@ def mini_train(config=None,
             step += 1
 
         rand = np.random.randint(low=0, high=len(P_ts), size=cfg.num_eval_size)
-        _, position_errors, _ = test(
+        position_errors, orientation_errors, _ = test(
             robot=robot,
             P_ts=P_ts[rand],
             F=F,

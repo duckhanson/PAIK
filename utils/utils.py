@@ -58,6 +58,20 @@ def data_collection(robot, N: int):
 
     return J, P
 
+def load_all_data(robot):
+    J_tr, P_tr = data_collection(robot=robot, N=config.N_train)
+    _, P_ts = data_collection(robot=robot, N=config.N_test)
+    F = posture_feature_extraction(J=J_tr)
+    
+    if config.enable_normalize:
+        J_tr = normalize(J_tr, robot.joint_min, robot.joint_max)
+        P_ts = normalize(P_ts, P_tr.min(axis=0), P_tr.max(axis=0))
+        P_tr = normalize(P_tr, P_tr.min(axis=0), P_tr.max(axis=0))
+        F = normalize(F, F.min(axis=0), F.max(axis=0))
+        print("Load normalize data. [NOTICE] Please check out denormalize works !")
+    
+    return J_tr, P_tr, P_ts, F
+        
 
 
 def posture_feature_extraction(J: np.array):
@@ -74,22 +88,15 @@ def posture_feature_extraction(J: np.array):
     F : np.array
         posture features
     """
-    suc_load = False
-    path_hnne = config.path_hnne
-    if os.path.exists(path=path_hnne):
-        try:
-            hnne = HNNE.load(path=path_hnne)
-            print(f"hnne load successfully from {path_hnne}")
-            F = load_numpy(file_path=config.path_F)
-            suc_load = True
-        except Exception:
-            print("hnne load err, assuming you use different architecture.")
-
-    if not suc_load or F.shape[-1] != config.r:
+    F = None
+    if os.path.exists(path=config.path_F):
+        F = load_numpy(file_path=config.path_F)
+    
+    if F is None or F.shape[-1] != config.r:
         hnne = HNNE(dim=config.r, ann_threshold=config.num_neighbors)
         F = hnne.fit_transform(X=J, dim=config.r, verbose=True)
-        hnne.save(path=path_hnne)
         save_numpy(file_path=config.path_F, arr=F)
+    print(f"F load successfully from {config.path_F}")
 
     return F
 
@@ -144,6 +151,7 @@ def get_test_loader(P: np.array, F: np.array):
     # Algo 3. knn search nearest P (nP), pickup its F
 
     C = np.column_stack((P, f_extended))
+    
     dataset = create_dataset(features=np.zeros_like(C), targets=C)
     loader = dataset.create_loader(shuffle=True, batch_size=config.batch_size)
 
@@ -179,13 +187,11 @@ def get_inference_loader(P: np.array, F: np.array, knn=None):
 
     # create loader
     C = np.column_stack((P, f_extended))
+    
     dataset = create_dataset(features=np.zeros_like(C), targets=C)
     loader = dataset.create_loader(shuffle=True, batch_size=config.batch_size)
 
     return loader
-
-
-
 
 
 def load_pickle(file_path: str):
@@ -293,6 +299,40 @@ def add_noise(batch, esp: float = config.noise_esp, step: int = 0, eval: bool = 
         J = J + noise
     return J, C
 
+def normalize(arr: np.ndarray, arr_min: np.ndarray, arr_max: np.ndarray):
+    # norm = (val - min) / (max - min)
+    return (arr - arr_min) / (arr_max - arr_min)
+
+def denormalize(norm: np.ndarray, arr_min: np.ndarray, arr_max: np.ndarray):
+    # example of use (the only one neede denormalize):
+    # joint config = model_output * (joint_max - joint_min) + joint_min
+    # arr = norm * (arr_max - arr_min) + arr_min
+    return norm * (arr_max - arr_min) + arr_min
+
+def train_step(model, batch, optimizer, scheduler):
+    """
+    _summary_
+
+    Args:
+        model (_type_): _description_
+        batch (_type_): _description_
+        optimizer (_type_): _description_
+        scheduler (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    x, y = add_noise(batch)
+
+    loss = -model(y).log_prob(x)  # -log p(x | y)
+    loss = loss.mean()
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    scheduler.step()
+
+    return loss.item()
 
 def data_preprocess_for_inference(P, F, knn):
     # Data Preprocessing: Posture Feature Extraction
@@ -309,12 +349,13 @@ def data_preprocess_for_inference(P, F, knn):
 
     return C
 
+
 def nearest_neighbor_F(knn: NearestNeighbors, P_ts: np.array, F: np.array, n_neighbors: int=1):
+    P_ts = np.atleast_2d(P_ts)
     assert len(P_ts) < len(F)
-
-    neigh_idx = knn.kneighbors(P_ts, n_neighbors=n_neighbors, return_distance=False)
+    neigh_idx = knn.kneighbors(P_ts[:, :3], n_neighbors=n_neighbors, return_distance=False)
     neigh_idx = neigh_idx.flatten()
-
+    
     return F[neigh_idx]
 
 def rand_F(P_ts: np.array, F: np.array):
@@ -358,7 +399,7 @@ def inference(
         inference time of K samples for each P in P_inf
     """
     assert len(P_inf) < 1000
-
+    raise NotImplementedError("Not implement m=7 case")
     position_errors = np.zeros(shape=(len(P_inf), K))
     inference_time = np.zeros(shape=(len(P_inf)))
 
@@ -372,7 +413,6 @@ def inference(
         with torch.inference_mode():
             J_hat = solver(C).sample((K,))
             J_hat = J_hat.detach().cpu().numpy()
-
         # Calculate Position Errors and Inference Time
         position_errors[i] = robot.position_errors_Arr_Inputs(qs=J_hat, ee_pos=P)
         inference_time[i] = round(time.time() - time_begin, 2)
@@ -452,7 +492,7 @@ def test(
             print(f"average inference time (of {len(P_ts)} P): {avg_inference_time} sec.")
             return df
         else:
-            return J_hat, position_errors, avg_inference_time
+            return position_errors, avg_inference_time
     else:
         # Calculate Position Errors and Inference Time
         for i, P in enumerate(P_ts):
@@ -468,7 +508,7 @@ def test(
             print(f"average inference time (of {len(P_ts)} P): {avg_inference_time} sec.")
             return df
         else:
-            return J_hat, position_errors, orientation_errors, avg_inference_time
+            return position_errors, orientation_errors, avg_inference_time
 
 
 def sample_J_traj(P_path, ref_F, solver, robot):
@@ -563,7 +603,7 @@ def path_following(
     num_traj : int, optional
         the number of generated joint trajectory samples, by default 3
     """
-
+    raise NotImplementedError("Need to consider normalize :)")
     def load_and_plot(exp_traj_path: str, ee_path: np.array):
         if os.path.exists(path=exp_traj_path):
             robot.plot(qs=qs)

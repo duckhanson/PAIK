@@ -8,7 +8,7 @@ from spatialmath.base import r2q
 from pyquaternion import Quaternion
 from tqdm import tqdm
 from utils.settings import config, ets_table
-from utils.utils import create_robot_dirs
+from utils.utils import create_robot_dirs, data_collection, denormalize
 
 
 class Robot:
@@ -26,6 +26,10 @@ class Robot:
             print(self.robot)
 
         create_robot_dirs()
+        
+        _, P_tr = data_collection(robot=self, N=config.N_train)
+        self.pos_min, self.pos_max = P_tr.min(axis=0), P_tr.max(axis=0)
+        
 
     def _get_robot_module(self, robot_name):
         if robot_name == "panda":
@@ -223,10 +227,14 @@ class Robot:
         :return: _description_
         :rtype: _type_
         """
-        com_pos = np.zeros((len(qs), ee_pos.shape[-1]))
-        for i, q in enumerate(qs):
+        if config.enable_normalize:
+            J = denormalize(qs, self.joint_min, self.joint_max)
+            P = denormalize(ee_pos, self.pos_min, self.pos_max)
+        
+        com_pos = np.zeros((len(J), P.shape[-1]))
+        for i, q in enumerate(J):
             com_pos[i] = self.forward_kinematics(q)
-        diff = np.linalg.norm(com_pos - ee_pos, axis=1)
+        diff = np.linalg.norm(com_pos - P, axis=1)
         return diff
     
     
@@ -271,13 +279,17 @@ class Robot:
         :return: _description_
         :rtype: _type_
         """
-        preds = np.zeros((len(qs), ee_pos.shape[-1]))
+        if config.enable_normalize:
+            J = denormalize(qs, self.joint_min, self.joint_max)
+            P = denormalize(ee_pos, self.pos_min, self.pos_max)
+        
+        preds = np.zeros((len(J), P.shape[-1]))
 
-        for i, q in enumerate(qs):
+        for i, q in enumerate(J):
             preds[i] = self.forward_kinematics_quaternion(q)
         
-        pos_err = np.linalg.norm(preds[:, :3] - ee_pos[:3], axis=1)
-        ori_err = self.calculate_orientation_errors_Arr_Inputs(preds=preds, target=ee_pos)
+        pos_err = np.linalg.norm(preds[:, :3] - P[:3], axis=1)
+        ori_err = self.calculate_orientation_errors_Arr_Inputs(preds=preds, target=P)
         return pos_err, ori_err
 
     def plot(

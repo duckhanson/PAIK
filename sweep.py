@@ -9,11 +9,6 @@ from utils.robot import Robot
 from utils.settings import config as cfg
 from utils.utils import *
 
-early_stop_param = {
-    'train_loss': -1,
-    'position_error': 4.8e-2,
-}
-
 sweep_config = {
     'name': 'sweep',
     'method': 'random',
@@ -23,84 +18,70 @@ sweep_config = {
     },
     'parameters': {
         'subnet_width': {
-            'values': [900, 1024, 1200, 1400]
+            'values': [1200, 1400, 1600]
             # 'value': 1024
         },
         'subnet_num_layers': {
-            'values': [3, 4]
-            # 'value': 3
+            # 'values': [3, 4]
+            'value': 3
         },
         'num_transforms': {
-            'values': [7, 8, 11, 14, 16]  # 6, 8, ..., 16
+            'values': [10, 12, 13, 15]  # 6, 8, ..., 16
         },
         'lr': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
-            'q': 1e-5,
-            'min': 4e-4,
-            'max': 6.5e-4,
+            'q': 1e-6,
+            'min': 1e-5,
+            'max': 1e-4,
         },
         'lr_weight_decay': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
             'q': 1e-3,
-            'min': 5e-3,
+            'min': 1e-3,
             'max': 5e-2,
         },
         'decay_step_size': {
-            # 'values': [3e4, 4e4],
-            'value': 4e4
+            'values': [2e4, 4e4, 6e4],
+            # 'value': 4e4
         },
         'gamma': {
             'distribution': 'q_uniform',
             'q': 1e-2,
-            'min': 4e-1,
-            'max': 7e-1,
+            'min': 1e-1,
+            'max': 4.8e-1,
         },
         'batch_size': {
             'value': 128
         },
         'num_epochs': {
-            'value': 3
+            'value': 1
         }
     },
 }
 
-
-def train_step(model, batch, optimizer, scheduler):
-    """
-    _summary_
-
-    Args:
-        model (_type_): _description_
-        batch (_type_): _description_
-        optimizer (_type_): _description_
-        scheduler (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    x, y = add_noise(batch)
-
-    loss = -model(y).log_prob(x)  # -log p(x | y)
-    loss = loss.mean()
-
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    scheduler.step()
-
-    return loss.item()
-
+def early_stop(ep, train_loss, position_errors, max_epochs):
+    lim_loss = np.ones((max_epochs))
+    lim_pos_err = np.ones((max_epochs))
+    
+    # lim_loss[0] = -6.4
+    # lim_loss[1] = -9.5
+    # lim_loss[2] = -12.5
+    # lim_loss[3] = -13.2
+    
+    # if train_loss > lim_loss[ep]:
+    #     return True
+    return False
+    
 
 def mini_train(config=None,
-               robot=None,
-               J_tr=None,
-               P_tr=None,
-               P_ts=None,
-               F=None,
-               knn=None,
                begin_time=None) -> None:
+    
+    robot = Robot(verbose=False)
+    J_tr, P_tr, P_ts, F = load_all_data(robot)
+    knn = get_knn(P_tr=P_tr)
+    
     # data generation
     if torch.cuda.is_available():
         device = 'cuda'
@@ -144,7 +125,7 @@ def mini_train(config=None,
             step += 1
 
         rand = np.random.randint(low=0, high=len(P_ts), size=cfg.num_eval_size)
-        _, position_errors, orientation_errors, _ = test(
+        position_errors, orientation_errors, _ = test(
             robot=robot,
             P_ts=P_ts[rand],
             F=F,
@@ -160,14 +141,15 @@ def mini_train(config=None,
             'train_loss': batch_loss.mean(),
         })
 
-        if ep == 0 and position_errors.mean(
-        ) > early_stop_param['position_error']:
-            break
+        # if early_stop(ep, batch_loss.mean(), position_errors.mean(), config['num_epochs']):
+        #     break
     model_weights_path =  cfg.weight_dir + begin_time + '.pth'
-    torch.save({
-        'solver': solver.state_dict(),
-        'opt': optimizer.state_dict(),
-        }, model_weights_path)
+    
+    if position_errors.mean() < 6e-3:
+        torch.save({
+            'solver': solver.state_dict(),
+            'opt': optimizer.state_dict(),
+            }, model_weights_path)
     del train_loader
     del scheduler
     del optimizer
@@ -176,12 +158,6 @@ def mini_train(config=None,
 
 
 def main() -> None:
-    robot = Robot(verbose=False)
-    J_tr, P_tr = data_collection(robot=robot, N=cfg.N_train)
-    _, P_ts = data_collection(robot=robot, N=cfg.N_test)
-    F = posture_feature_extraction(J=J_tr)
-    knn = get_knn(P_tr=P_tr)
-    
     begin_time = datetime.now().strftime("%m%d-%H%M")
     # note that we define values from `wandb.config`
     # instead of defining hard values
@@ -203,18 +179,12 @@ def main() -> None:
     }
 
     mini_train(config=config,
-               robot=robot,
-               J_tr=J_tr,
-               P_tr=P_tr,
-               P_ts=P_ts,
-               F=F,
-               knn=knn,
                begin_time=begin_time)
 
 
 if __name__ == '__main__':
     sweep_id = wandb.sweep(sweep=sweep_config,
-                           project='msik_sweep',
+                           project='msik_sweep_r1',
                            entity='luca_nthu')
     # Start sweep job.
-    wandb.agent(sweep_id, function=main, count=30)
+    wandb.agent(sweep_id, function=main, count=3)

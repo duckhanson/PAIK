@@ -38,6 +38,7 @@ class Config:
         self.workdir = current_workdir_path
         # robot
         self.robot_name = "panda"
+        self.enable_normalize = True
         self.n = ets_table[self.robot_name]  # n = dof
         self.m = 3 + 4 # position(x, y, z)
         # self.m = 3 # position(x, y, z)
@@ -45,8 +46,8 @@ class Config:
         self.r = 1
         # self.r = 4
         # training
-        self.N_train = 250_0000
-        self.N_test = 2_0000
+        self.N_train = 250_0000 # 250_0000
+        self.N_test = 2_0000 # 2_0000
         self.K = 100
 
         # data
@@ -69,10 +70,9 @@ class Config:
         # hnne parameter
         self.weight_dir = f"{self.workdir}/weights/{self.robot_name}/"
         self.num_neighbors = 1000
-        self.path_hnne = self.weight_dir + f"hnne-{self.N_train}-{self.n}-{self.m}-{self.r}.pickle"
 
         # knn parameter
-        self.path_knn = self.weight_dir + f"knn-{self.N_train}-{self.n}-{self.m}-{self.r}.pickle"
+        self.path_knn = self.train_dir + f"knn-{self.N_train}-{self.n}-{self.m}-{self.r}-norm{self.enable_normalize}.pickle"
 
         # flow parameter
         self.use_pretrained = False

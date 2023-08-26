@@ -3,23 +3,15 @@
 from os import path
 
 import numpy as np
-# import pandas as pd
 import torch
 from sklearn.neighbors import NearestNeighbors
-# from torch import Tensor, nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import StepLR
 from zuko.distributions import BoxUniform, DiagNormal
 from zuko.flows import CNF, NSF, FlowModule, Unconditional
 
 from utils.settings import config
-# from tqdm import tqdm, trange
-# from utils.dataset import create_dataset
-# from utils.robot import Robot
 from utils.utils import save_pickle, load_pickle
-
-# import zuko
-
 
 def get_flow_model(
     load_model=True,
@@ -47,6 +39,7 @@ def get_flow_model(
             context=config.num_conditions,
             transforms=num_transforms,
             randperm=True,
+            bins=10,
             activation=config.activation,
             hidden_features=[subnet_width] * subnet_num_layers,
         ).to(device)
@@ -176,8 +169,9 @@ def get_knn(P_tr: np.array):
         print(f"knn load successfully from {config.path_knn}")
     except FileNotFoundError as e:
         print(e)
-        knn = NearestNeighbors(radius=0.07)  
-        knn.fit(P_tr)  
+        knn = NearestNeighbors(n_neighbors=1)  
+        P_tr = np.atleast_2d(P_tr)
+        knn.fit(P_tr[:, :3])  
         save_pickle(file_path=config.path_knn, obj=knn)
         print(f"Create and save knn at {config.path_knn}.")
     

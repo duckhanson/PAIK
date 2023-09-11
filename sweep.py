@@ -9,6 +9,8 @@ from utils.robot import Robot
 from utils.settings import config as cfg
 from utils.utils import *
 
+NUM_RECORD_STEPS = 2e4
+
 sweep_config = {
     'name': 'sweep',
     'method': 'random',
@@ -18,61 +20,48 @@ sweep_config = {
     },
     'parameters': {
         'subnet_width': {
-            'values': [1200, 1400, 1600]
-            # 'value': 1024
+            'values': [1024, 1250, 1450, 1700]
+            # 'value': 1600
         },
         'subnet_num_layers': {
             # 'values': [3, 4]
             'value': 3
         },
         'num_transforms': {
-            'values': [10, 12, 13, 15]  # 6, 8, ..., 16
+            'values': [8, 13, 15]  # 6, 8, ..., 16
         },
         'lr': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
-            'q': 1e-6,
-            'min': 1e-5,
-            'max': 1e-4,
+            'q': 1e-5,
+            'min': 3e-4,
+            'max': 4.5e-4,
         },
         'lr_weight_decay': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
             'q': 1e-3,
-            'min': 1e-3,
-            'max': 5e-2,
+            'min': 1.6e-2,
+            'max': 3.5e-2,
         },
         'decay_step_size': {
-            'values': [2e4, 4e4, 6e4],
+            'values': [5e4, 6e4, 8e4, 1e5],
             # 'value': 4e4
         },
         'gamma': {
             'distribution': 'q_uniform',
             'q': 1e-2,
-            'min': 1e-1,
-            'max': 4.8e-1,
+            'min': 5e-2,
+            'max': 3e-1,
         },
         'batch_size': {
             'value': 128
         },
         'num_epochs': {
-            'value': 1
+            'value': 2
         }
     },
 }
-
-def early_stop(ep, train_loss, position_errors, max_epochs):
-    lim_loss = np.ones((max_epochs))
-    lim_pos_err = np.ones((max_epochs))
-    
-    # lim_loss[0] = -6.4
-    # lim_loss[1] = -9.5
-    # lim_loss[2] = -12.5
-    # lim_loss[3] = -13.2
-    
-    # if train_loss > lim_loss[ep]:
-    #     return True
-    return False
     
 
 def mini_train(config=None,
@@ -81,7 +70,7 @@ def mini_train(config=None,
     robot = Robot(verbose=False)
     J_tr, P_tr, P_ts, F = load_all_data(robot)
     knn = get_knn(P_tr=P_tr)
-    
+    early_stopping = EarlyStopping(patience=3, verbose=True, delta=1e-4)
     # data generation
     if torch.cuda.is_available():
         device = 'cuda'
@@ -123,26 +112,35 @@ def mini_train(config=None,
             t.set_postfix(bar, refresh=True)
 
             step += 1
+            
+            if step % NUM_RECORD_STEPS == NUM_RECORD_STEPS-1:
+                rand = np.random.randint(low=0, high=len(P_ts), size=cfg.num_eval_size)
+                position_errors, orientation_errors, _ = test(
+                    robot=robot,
+                    P_ts=P_ts[rand],
+                    F=F,
+                    solver=solver,
+                    knn=knn,
+                    K=cfg.K,
+                    print_report=False,
+                )
+                wandb.log({
+                    'step': step,
+                    'position_errors': position_errors.mean(),
+                    'orientation_errors': orientation_errors.mean(),
+                    'train_loss': batch_loss[:step].mean(),
+                })
 
-        rand = np.random.randint(low=0, high=len(P_ts), size=cfg.num_eval_size)
-        position_errors, orientation_errors, _ = test(
-            robot=robot,
-            P_ts=P_ts[rand],
-            F=F,
-            solver=solver,
-            knn=knn,
-            K=cfg.K,
-            print_report=False,
-        )
-        wandb.log({
-            'epoch': ep,
-            'position_errors': position_errors.mean(),
-            'orientation_errors': orientation_errors.mean(),
-            'train_loss': batch_loss.mean(),
-        })
-
-        # if early_stop(ep, batch_loss.mean(), position_errors.mean(), config['num_epochs']):
-        #     break
+                # early_stopping needs the validation loss to check if it has decresed, 
+                # and if it has, it will make a checkpoint of the current model
+                early_stopping(position_errors.mean(), solver)
+                
+                if early_stopping.early_stop:
+                    break
+        if early_stopping.early_stop:
+                print("Early stopping")
+                break   
+                
     model_weights_path =  cfg.weight_dir + begin_time + '.pth'
     
     if position_errors.mean() < 6e-3:
@@ -150,6 +148,12 @@ def mini_train(config=None,
             'solver': solver.state_dict(),
             'opt': optimizer.state_dict(),
             }, model_weights_path)
+    del robot
+    del J_tr
+    del P_tr
+    del P_ts
+    del F
+    del knn
     del train_loader
     del scheduler
     del optimizer
@@ -162,7 +166,7 @@ def main() -> None:
     # note that we define values from `wandb.config`
     # instead of defining hard values
     wandb.init(name=begin_time,
-                     notes=f'm={cfg.m}')
+                     notes=f'25M')
 
     # note that we define values from `wandb.config`
     # instead of defining hard values
@@ -184,7 +188,7 @@ def main() -> None:
 
 if __name__ == '__main__':
     sweep_id = wandb.sweep(sweep=sweep_config,
-                           project='msik_sweep_r1',
+                           project='msik_sweep_25M_r4',
                            entity='luca_nthu')
     # Start sweep job.
-    wandb.agent(sweep_id, function=main, count=3)
+    wandb.agent(sweep_id, function=main, count=10)

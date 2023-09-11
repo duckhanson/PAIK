@@ -94,7 +94,17 @@ def posture_feature_extraction(J: np.array):
     
     if F is None or F.shape[-1] != config.r:
         hnne = HNNE(dim=config.r, ann_threshold=config.num_neighbors)
-        F = hnne.fit_transform(X=J, dim=config.r, verbose=True)
+        # maximum number of data for hnne (11M), we use max_num_data_hnne to test
+        num_data = min(config.max_num_data_hnne, len(J))
+        F = hnne.fit_transform(X=J[:num_data], dim=config.r, verbose=True)
+        # query nearest neighbors for the rest of J
+        if len(F) != len(J):
+            knn = NearestNeighbors(n_neighbors=1)
+            knn.fit(J[:num_data])
+            neigh_idx = knn.kneighbors(J[num_data:], n_neighbors=1, return_distance=False)
+            neigh_idx = neigh_idx.flatten()
+            F = np.row_stack((F, F[neigh_idx]))
+
         save_numpy(file_path=config.path_F, arr=F)
     print(f"F load successfully from {config.path_F}")
 
@@ -701,3 +711,59 @@ def remove_empty_robot_dirs() -> None:
             if os.path.exists(p) and len(os.listdir(p)) == 0:
                 os.removedirs(p)
                 print(f"Delete {p}")
+
+class EarlyStopping:
+    # https://github.com/Bjarten/early-stopping-pytorch/blob/master/pytorchtools.py
+    """Early stops the training if validation loss doesn't improve after a given patience."""
+    def __init__(self, patience=7, verbose=False, delta=0, enable_save=False, path='checkpoint.pt', trace_func=print):
+        """
+        Args:
+            patience (int): How long to wait after last time validation loss improved.
+                            Default: 7
+            verbose (bool): If True, prints a message for each validation loss improvement. 
+                            Default: False
+            delta (float): Minimum change in the monitored quantity to qualify as an improvement.
+                            Default: 0
+            path (str): Path for the checkpoint to be saved to.
+                            Default: 'checkpoint.pt'
+            trace_func (function): trace print function.
+                            Default: print            
+        """
+        self.patience = patience
+        self.verbose = verbose
+        self.counter = 0
+        self.best_score = None
+        self.early_stop = False
+        self.val_loss_min = np.Inf
+        self.delta = delta
+        self.enable_save = enable_save
+        self.path = path
+        self.trace_func = trace_func
+        
+    def __call__(self, val_loss, model):
+
+        score = -val_loss
+
+        if self.best_score is None:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model)
+        elif score < self.best_score + self.delta:
+            self.counter += 1
+            self.trace_func(f'EarlyStopping counter: {self.counter} out of {self.patience}, score: {score}, best: {self.best_score}')
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model)
+            self.counter = 0
+
+    def save_checkpoint(self, val_loss, model):
+        '''Saves model when validation loss decrease.'''
+        if self.enable_save:
+            if self.verbose:
+                self.trace_func(f'Validation loss decreased ({self.val_loss_min:.4f} --> {val_loss:.4f}).  Saving model ...')
+            torch.save(model.state_dict(), self.path)
+        else:
+            if self.verbose:
+                self.trace_func(f'Validation loss decreased ({self.val_loss_min:.4f} --> {val_loss:.4f}).')
+        self.val_loss_min = val_loss

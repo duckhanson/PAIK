@@ -43,10 +43,10 @@ class Config:
         self.m = 3 + 4 # position(x, y, z)
         # self.m = 3 # position(x, y, z)
         # self.r = self.n - self.m  # degrees of redundancy r = n - m
-        self.r = 1
-        # self.r = 4
+        # self.r = 1
+        self.r = 4
         # training
-        self.N_train = 250_0000 # 250_0000
+        self.N_train = 2500_0000 # 2500_0000
         self.N_test = 2_0000 # 2_0000
         self.K = 100
 
@@ -69,7 +69,8 @@ class Config:
 
         # hnne parameter
         self.weight_dir = f"{self.workdir}/weights/{self.robot_name}/"
-        self.num_neighbors = 1000
+        self.num_neighbors = 10000
+        self.max_num_data_hnne = 300_0000
 
         # knn parameter
         self.path_knn = self.train_dir + f"knn-{self.N_train}-{self.n}-{self.m}-{self.r}-norm{self.enable_normalize}.pickle"

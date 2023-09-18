@@ -695,7 +695,11 @@ def eval_J_traj(
     ang_errs = calc_ang_errs(qs=J_traj)
 
     if position_errors is None:
-        position_errors = robot.position_errors_Arr_Inputs(qs=J_traj, ee_pos=P_path)
+        if config.m == 3:
+            position_errors = robot.position_errors_Arr_Inputs(qs=J_traj, ee_pos=P_path)
+        elif config.m == 7:
+            position_errors, orientation_errors = robot.position_orientation_errors_Arr_Inputs(qs=J_traj, ee_pos=P_path)
+            
 
     df = pd.DataFrame(
         np.column_stack((position_errors, ang_errs)),

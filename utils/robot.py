@@ -237,8 +237,7 @@ class Robot:
             com_pos[i] = self.forward_kinematics(q)
         diff = np.linalg.norm(com_pos - P, axis=1)
         return diff
-    
-    
+
     def calculate_orientation_errors_Arr_Inputs(self, preds: np.ndarray, target: np.ndarray):
         """
         Handle array prediction inputs with the same task target (position + orientation)
@@ -257,17 +256,20 @@ class Robot:
         """
         ori_err = np.zeros((len(preds)))
         # position, orientation of target
-        ot = target[3:]
-        ot = Quaternion(array=ot)
+        
+        ots = np.atleast_2d(target)[:, 3:]
         
         # position, orientation of preds
         ops = preds[:, 3:]
         # orientation error
-        for i, op in enumerate(ops):
+        i = 0
+        for op, ot in zip(ops, ots):
+            ot = Quaternion(array=ot)
             op = Quaternion(array=op)
             ori_err[i] = Quaternion.distance(op, ot)
+            i += 1
         
-        return ori_err.mean()        
+        return ori_err.mean()     
 
     def position_orientation_errors_Arr_Inputs(self, qs: np.ndarray, ee_pos: np.ndarray):
         """
@@ -281,16 +283,18 @@ class Robot:
         :rtype: _type_
         """
         J, P = qs, ee_pos
+    
+        
         if config.enable_normalize:
             J = denormalize(qs, self.joint_min, self.joint_max)
             P = denormalize(ee_pos, self.pos_min, self.pos_max)
         
-        preds = np.zeros((len(J), P.shape[-1]))
+        preds = np.zeros_like(P)
 
         for i, q in enumerate(J):
             preds[i] = self.forward_kinematics_quaternion(q)
         
-        pos_err = np.linalg.norm(preds[:, :3] - P[:3], axis=1)
+        pos_err = np.linalg.norm(preds[:, :3] - np.atleast_2d(P)[:, :3], axis=1)
         ori_err = self.calculate_orientation_errors_Arr_Inputs(preds=preds, target=P)
         return pos_err, ori_err
 

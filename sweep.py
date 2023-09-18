@@ -1,15 +1,18 @@
 # Import required packages
 from datetime import datetime
+import torch 
+import numpy as np
 
 from tqdm import tqdm
-
 import wandb
-from utils.model import *
+from utils.model import get_knn, get_flow_model
 from utils.robot import Robot
 from utils.settings import config as cfg
-from utils.utils import *
+from utils.utils import load_all_data, EarlyStopping, get_train_loader, train_step, test
 
-NUM_RECORD_STEPS = 2e4
+
+# NUM_RECORD_STEPS = 14e3
+PATIENCE = 3
 
 sweep_config = {
     'name': 'sweep',
@@ -20,7 +23,7 @@ sweep_config = {
     },
     'parameters': {
         'subnet_width': {
-            'values': [1024, 1250, 1450, 1700]
+            'values': [1200, 1400, 1500]
             # 'value': 1600
         },
         'subnet_num_layers': {
@@ -28,37 +31,37 @@ sweep_config = {
             'value': 3
         },
         'num_transforms': {
-            'values': [8, 13, 15]  # 6, 8, ..., 16
+            'values': [9, 10, 11]  # 6, 8, ..., 16
         },
         'lr': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
             'q': 1e-5,
-            'min': 3e-4,
-            'max': 4.5e-4,
+            'min': 2e-4,
+            'max': 6.5e-4,
         },
         'lr_weight_decay': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
             'q': 1e-3,
-            'min': 1.6e-2,
-            'max': 3.5e-2,
+            'min': 1e-2,
+            'max': 15e-2,
         },
         'decay_step_size': {
-            'values': [5e4, 6e4, 8e4, 1e5],
+            'values': [2e4, 4e4],
             # 'value': 4e4
         },
         'gamma': {
             'distribution': 'q_uniform',
             'q': 1e-2,
             'min': 5e-2,
-            'max': 3e-1,
+            'max': 15e-2,
         },
         'batch_size': {
             'value': 128
         },
         'num_epochs': {
-            'value': 2
+            'value': 10
         }
     },
 }
@@ -70,7 +73,7 @@ def mini_train(config=None,
     robot = Robot(verbose=False)
     J_tr, P_tr, P_ts, F = load_all_data(robot)
     knn = get_knn(P_tr=P_tr)
-    early_stopping = EarlyStopping(patience=3, verbose=True, delta=1e-4)
+    early_stopping = EarlyStopping(patience=PATIENCE, verbose=True, delta=1e-4)
     # data generation
     if torch.cuda.is_available():
         device = 'cuda'
@@ -97,11 +100,10 @@ def mini_train(config=None,
         device=device)
 
     solver.train()
-
     for ep in range(config['num_epochs']):
         t = tqdm(train_loader)
-        step = 0
         batch_loss = np.zeros((len(train_loader)))
+        step = 0
         for batch in t:
             loss = train_step(model=solver,
                               batch=batch,
@@ -113,37 +115,35 @@ def mini_train(config=None,
 
             step += 1
             
-            if step % NUM_RECORD_STEPS == NUM_RECORD_STEPS-1:
-                rand = np.random.randint(low=0, high=len(P_ts), size=cfg.num_eval_size)
-                position_errors, orientation_errors, _ = test(
-                    robot=robot,
-                    P_ts=P_ts[rand],
-                    F=F,
-                    solver=solver,
-                    knn=knn,
-                    K=cfg.K,
-                    print_report=False,
-                )
-                wandb.log({
-                    'step': step,
-                    'position_errors': position_errors.mean(),
-                    'orientation_errors': orientation_errors.mean(),
-                    'train_loss': batch_loss[:step].mean(),
-                })
-
-                # early_stopping needs the validation loss to check if it has decresed, 
-                # and if it has, it will make a checkpoint of the current model
-                early_stopping(position_errors.mean(), solver)
+        rand = np.random.randint(low=0, high=len(P_ts), size=cfg.num_eval_size)
+        avg_position_error, avg_orientation_error, _ = test(
+            robot=robot,
+            P_ts=P_ts[rand],
+            F=F,
+            solver=solver,
+            knn=knn,
+            K=cfg.K,
+            print_report=False,
+        )
                 
-                if early_stopping.early_stop:
-                    break
+        wandb.log({
+            'ep': ep,
+            'position_errors': avg_position_error,
+            'orientation_errors': avg_orientation_error,
+            'train_loss': batch_loss.mean(),
+        })
+
+        # early_stopping needs the validation loss to check if it has decresed, 
+        # and if it has, it will make a checkpoint of the current model
+        early_stopping(avg_position_error, solver)
+                
         if early_stopping.early_stop:
-                print("Early stopping")
-                break   
+            print("Early stopping")
+            break   
                 
     model_weights_path =  cfg.weight_dir + begin_time + '.pth'
     
-    if position_errors.mean() < 6e-3:
+    if avg_position_error < 6e-3:
         torch.save({
             'solver': solver.state_dict(),
             'opt': optimizer.state_dict(),
@@ -188,7 +188,9 @@ def main() -> None:
 
 if __name__ == '__main__':
     sweep_id = wandb.sweep(sweep=sweep_config,
-                           project='msik_sweep_25M_r4',
+                           project=f'msik_sweep_2.5M_m{cfg.m}_r{cfg.r}',
                            entity='luca_nthu')
     # Start sweep job.
-    wandb.agent(sweep_id, function=main, count=10)
+    wandb.agent(sweep_id, function=main, count=20)
+    wandb.finish()
+    

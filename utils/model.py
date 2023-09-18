@@ -14,7 +14,7 @@ from utils.settings import config
 from utils.utils import save_pickle, load_pickle
 
 def get_flow_model(
-    load_model=True,
+    enable_load_model=True,
     num_transforms=config.num_transforms,
     subnet_width=config.subnet_width,
     subnet_num_layers=config.subnet_num_layers,
@@ -55,10 +55,15 @@ def get_flow_model(
         raise NotImplementedError("Not support architecture.")
 
     flow = get_sflow_model(flow, shrink_ratio=shrink_ratio, device=device)
+    optimizer = AdamW(flow.parameters(), lr=lr, weight_decay=lr_weight_decay)
 
-    if load_model and path.exists(path=config.path_solver):
+    if enable_load_model and path.exists(path=config.path_solver):
         try:
-            flow.load_state_dict(state_dict=torch.load(config.path_solver))
+            state = torch.load(config.path_solver)
+            flow.load_state_dict(state_dict=state['solver'])
+            optimizer = AdamW(flow.parameters(), lr=lr, weight_decay=lr_weight_decay)
+            optimizer.load_state_dict(state_dict=state['opt'])
+            
             print(f"Model load successfully from {config.path_solver}")
         except Exception:
             print(f"Load err from {config.path_solver}, assuming you use different architecture.")
@@ -66,7 +71,6 @@ def get_flow_model(
         print("Create a new model and start training.")
 
     # Train to maximize the log-likelihood
-    optimizer = AdamW(flow.parameters(), lr=lr, weight_decay=lr_weight_decay)
     scheduler = StepLR(optimizer, step_size=decay_step_size, gamma=gamma)
 
     return flow, optimizer, scheduler

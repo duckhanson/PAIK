@@ -1,47 +1,28 @@
 # Import required packages
-import torch
-from tqdm import tqdm
+from datetime import datetime
+import torch 
+import numpy as np
 
+from tqdm import tqdm
+from pprint import pprint
 import wandb
-# from utils.dataset import create_dataset
-from utils.model import *
+from utils.model import get_knn, get_flow_model
 from utils.robot import Robot
 from utils.settings import config as cfg
-from utils.utils import *
+from utils.utils import load_all_data, EarlyStopping, get_train_loader, train_step, test
 
-def train_step(model, batch, optimizer, scheduler):
-    """
-    _summary_
 
-    Args:
-        model (_type_): _description_
-        batch (_type_): _description_
-        optimizer (_type_): _description_
-        scheduler (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    x, y = add_noise(batch)
-
-    loss = -model(y).log_prob(x)  # -log p(x | y)
-    loss = loss.mean()
-
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    scheduler.step()
-
-    return loss.item()
-
+USE_WANDB = False
+# NUM_RECORD_STEPS = 14e3
+PATIENCE = 4    
 
 def mini_train(config=None,
-               robot=None,
-               J_tr=None,
-               P_tr=None,
-               P_ts=None,
-               F=None,
-               knn=None) -> None:
+               begin_time=None) -> None:
+    
+    robot = Robot(verbose=False)
+    J_tr, P_tr, P_ts, F = load_all_data(robot)
+    knn = get_knn(P_tr=P_tr)
+    early_stopping = EarlyStopping(patience=PATIENCE, verbose=True, delta=1e-4)
     # data generation
     if torch.cuda.is_available():
         device = 'cuda'
@@ -71,8 +52,8 @@ def mini_train(config=None,
 
     for ep in range(config['num_epochs']):
         t = tqdm(train_loader)
-        step = 0
         batch_loss = np.zeros((len(train_loader)))
+        step = 0
         for batch in t:
             loss = train_step(model=solver,
                               batch=batch,
@@ -83,9 +64,9 @@ def mini_train(config=None,
             t.set_postfix(bar, refresh=True)
 
             step += 1
-
+            
         rand = np.random.randint(low=0, high=len(P_ts), size=cfg.num_eval_size)
-        position_errors, orientation_errors, _ = test(
+        avg_position_error, avg_orientation_error, _ = test(
             robot=robot,
             P_ts=P_ts[rand],
             F=F,
@@ -94,55 +75,79 @@ def mini_train(config=None,
             K=cfg.K,
             print_report=False,
         )
-        wandb.log({
-            'position_errors': position_errors.mean(),
-            'train_loss': batch_loss.mean(),
-        })
+        
+        if USE_WANDB:
+            wandb.log({
+                'ep': ep,
+                'position_errors': avg_position_error,
+                'orientation_errors': avg_orientation_error,
+                'train_loss': batch_loss.mean(),
+            })
+        else:
+            pprint({
+                'ep': ep,
+                'position_errors': avg_position_error,
+                'orientation_errors': avg_orientation_error,
+                'train_loss': batch_loss.mean(),
+            })
 
-        if ep % 3 == 1:
-            torch.save(solver.state_dict(), cfg.path_solver)
+        # early_stopping needs the validation loss to check if it has decresed, 
+        # and if it has, it will make a checkpoint of the current model
+        early_stopping(avg_position_error, solver)
+                
+        if early_stopping.early_stop:
+            print("Early stopping")
+            break   
+                
+    model_weights_path =  cfg.weight_dir + begin_time + '.pth'
+    
+    torch.save({
+        'solver': solver.state_dict(),
+        'opt': optimizer.state_dict(),
+        }, model_weights_path)
+    del robot
+    del J_tr
+    del P_tr
+    del P_ts
+    del F
+    del knn
+    del train_loader
+    del scheduler
+    del optimizer
+    del solver
     print("Finished Training")
 
 
 def main() -> None:
-    # start a new wandb run to track this script
-    wandb.init(
-        # set the wandb project where this run will be logged
-        project="msik_train",
-        # entity
-        entity="luca_nthu",
-        # track hyperparameters and run metadata
-        config=cfg,
-        notes=f'r={cfg.r}',
-    )
-    robot = Robot(verbose=False)
-    J_tr, P_tr = data_collection(robot=robot, N=cfg.N_train)
-    _, P_ts = data_collection(robot=robot, N=cfg.N_test)
-    F = posture_feature_extraction(J_tr)
-    knn = get_knn(P_tr=P_tr)
-
+    begin_time = datetime.now().strftime("%m%d-%H%M")
+    # note that we define values from `wandb.config`
+    # instead of defining hard values
+    if USE_WANDB:   
+        wandb.init(name=begin_time,
+                         notes=f'r=0')
+    
+    # note that we define values from `wandb.config`
+    # instead of defining hard values
     config = {
-        'subnet_width': cfg.subnet_width,
-        'subnet_num_layers': cfg.subnet_num_layers,
-        'num_transforms': cfg.num_transforms,
-        'lr': cfg.lr,
-        'lr_weight_decay': cfg.lr_weight_decay,
-        'decay_step_size': cfg.decay_step_size,
-        'gamma': cfg.decay_gamma,
-        'batch_size': cfg.batch_size,
-        'num_epochs': cfg.num_epochs,
+        'subnet_width': 1400,
+        'subnet_num_layers': 3,
+        'num_transforms': 9,
+        'lr': 2.1e-4,
+        'lr_weight_decay': 2.7e-2,
+        'decay_step_size': 4e4,
+        'gamma': 5e-2,
+        'batch_size': 128,
+        'num_epochs': 1,
     }
 
     mini_train(config=config,
-               robot=robot,
-               J_tr=J_tr,
-               P_tr=P_tr,
-               P_ts=P_ts,
-               F=F,
-               knn=knn)
+               begin_time=begin_time)
 
-    # [optional] finish the wandb run, necessary in notebooks
-    wandb.finish()
+    if USE_WANDB:
+        # [optional] finish the wandb run, necessary in notebooks
+        wandb.finish()
+    else:
+        pprint(f"Finish job {begin_time}")
 
 
 if __name__ == "__main__":

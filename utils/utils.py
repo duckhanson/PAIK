@@ -58,16 +58,17 @@ def data_collection(robot, N: int):
 
     return J, P
 
-def load_all_data(robot):
+def load_all_data(robot, enable_normalize=config.enable_normalize):
     J_tr, P_tr = data_collection(robot=robot, N=config.N_train)
     _, P_ts = data_collection(robot=robot, N=config.N_test)
     F = posture_feature_extraction(J=J_tr)
     
-    if config.enable_normalize:
+    if enable_normalize:
         J_tr = normalize(J_tr, robot.joint_min, robot.joint_max)
         P_ts = normalize(P_ts, P_tr.min(axis=0), P_tr.max(axis=0))
         P_tr = normalize(P_tr, P_tr.min(axis=0), P_tr.max(axis=0))
-        F = normalize(F, F.min(axis=0), F.max(axis=0))
+        if F is not None:
+            F = normalize(F, F.min(axis=0), F.max(axis=0))
         print("Load normalize data. [NOTICE] Please check out denormalize works !")
     
     return J_tr, P_tr, P_ts, F
@@ -89,11 +90,16 @@ def posture_feature_extraction(J: np.array):
         posture features
     """
     F = None
+    
+    if config.r == 0:
+        return F
+    
     if os.path.exists(path=config.path_F):
         F = load_numpy(file_path=config.path_F)
     
-    if F is None or F.shape[-1] != config.r:
-        hnne = HNNE(dim=config.r, ann_threshold=config.num_neighbors)
+    if F is None or F.shape[-1] != config.r or len(F) != len(J):
+        # hnne = HNNE(dim=config.r, ann_threshold=config.num_neighbors)
+        hnne = HNNE(dim=config.r)
         # maximum number of data for hnne (11M), we use max_num_data_hnne to test
         num_data = min(config.max_num_data_hnne, len(J))
         F = hnne.fit_transform(X=J[:num_data], dim=config.r, verbose=True)
@@ -124,9 +130,12 @@ def get_train_loader(J: np.array, P: np.array, F: np.array, batch_size: int = co
     :return: torch dataloader
     :rtype: dataloader
     """
-    assert len(J) == len(P) and len(P) == len(F)
+    assert len(J) == len(P) and (F is None or len(P) == len(F))
 
-    C = np.column_stack((P, F))
+    if F is None:
+        C = P
+    else:
+        C = np.column_stack((P, F))
 
     dataset = create_dataset(features=J, targets=C, device=device)
     loader = dataset.create_loader(shuffle=True, batch_size=batch_size)
@@ -345,12 +354,15 @@ def train_step(model, batch, optimizer, scheduler):
     return loss.item()
 
 def data_preprocess_for_inference(P, F, knn):
-    # Data Preprocessing: Posture Feature Extraction
-    ref_F = nearest_neighbor_F(knn, np.atleast_2d(P), F) # knn
-    # ref_F = rand_F(P, F) # f_rand
-    # ref_F = pick_F(P, F) # f_pick
-    
-    C = np.column_stack((np.atleast_2d(P), np.atleast_2d(ref_F)))
+    if F is not None:
+        # Data Preprocessing: Posture Feature Extraction
+        ref_F = nearest_neighbor_F(knn, np.atleast_2d(P), F) # knn
+        # ref_F = rand_F(P, F) # f_rand
+        # ref_F = pick_F(P, F) # f_pick
+        C = np.column_stack((np.atleast_2d(P), np.atleast_2d(ref_F)))
+    else:
+        C = P
+        
     C = C.astype(np.float32)
 
     # Project to Tensor(device)
@@ -480,6 +492,7 @@ def test(
     # Data Preprocessing
     C = data_preprocess_for_inference(P=P_ts, F=F, knn=knn)
 
+
     time_begin = time.time()
     # Begin inference
     with torch.inference_mode():
@@ -502,7 +515,7 @@ def test(
             print(f"average inference time (of {len(P_ts)} P): {avg_inference_time} sec.")
             return df
         else:
-            return position_errors, avg_inference_time
+            return position_errors.mean(), None, avg_inference_time
     else:
         # Calculate Position Errors and Inference Time
         for i, P in enumerate(P_ts):
@@ -513,12 +526,12 @@ def test(
         orientation_errors = orientation_errors.flatten()
         
         if print_report:
-            df = pd.DataFrame([position_errors, orientation_errors], columns=["position errors (m)", "orientation_errors (rad)"])
+            df = pd.DataFrame(np.column_stack((position_errors, orientation_errors)), columns=["position errors (m)", "orientation_errors (rad)"])
             print(df.describe())
             print(f"average inference time (of {len(P_ts)} P): {avg_inference_time} sec.")
             return df
         else:
-            return position_errors, orientation_errors, avg_inference_time
+            return position_errors.mean(), orientation_errors.mean(), avg_inference_time
 
 
 def sample_J_traj(P_path, ref_F, solver, robot):

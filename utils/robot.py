@@ -4,7 +4,7 @@ import swift
 
 # from numpy import linalg as LA
 from spatialmath import SE3
-from spatialmath.base import r2q
+from klampt.math import so3
 from pyquaternion import Quaternion
 from tqdm import tqdm
 from utils.settings import config, ets_table
@@ -95,7 +95,7 @@ class Robot:
         """
         T = self.robot.fkine(q)  # forward kinematics
         # output is a SE3 matrix, use t to get position.
-        r = r2q(T.R)
+        r = so3.quaternion(T.R.flatten())
         t = T.t
         if self.verbose:
             print(f"Given {q}, via fkine, get {t}")
@@ -152,7 +152,7 @@ class Robot:
             step += 1
         ee_samples = ee_samples.reshape((-1, config.m))
 
-        return q_samples
+        return q_samples, ee_samples
     
     def uniform_sample_J_quaternion(self, num_samples: int):
         assert config.m == 3 + 4 # pos (3) + qua (4)
@@ -227,6 +227,7 @@ class Robot:
         :return: _description_
         :rtype: _type_
         """
+        J, P = qs, ee_pos
         if config.enable_normalize:
             J = denormalize(qs, self.joint_min, self.joint_max)
             P = denormalize(ee_pos, self.pos_min, self.pos_max)
@@ -279,6 +280,7 @@ class Robot:
         :return: _description_
         :rtype: _type_
         """
+        J, P = qs, ee_pos
         if config.enable_normalize:
             J = denormalize(qs, self.joint_min, self.joint_max)
             P = denormalize(ee_pos, self.pos_min, self.pos_max)

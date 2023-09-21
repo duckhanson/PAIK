@@ -4,6 +4,7 @@ import swift
 
 # from numpy import linalg as LA
 from spatialmath import SE3
+from spatialmath.base import r2q
 from klampt.math import so3
 from pyquaternion import Quaternion
 from tqdm import tqdm
@@ -95,7 +96,8 @@ class Robot:
         """
         T = self.robot.fkine(q)  # forward kinematics
         # output is a SE3 matrix, use t to get position.
-        r = so3.quaternion(T.R.flatten())
+        # r = so3.quaternion(T.R.flatten())
+        r = r2q(T.R)
         t = T.t
         if self.verbose:
             print(f"Given {q}, via fkine, get {t}")
@@ -256,19 +258,27 @@ class Robot:
         """
         ori_err = np.zeros((len(preds)))
         # position, orientation of target
-        
-        ots = np.atleast_2d(target)[:, 3:]
-        
         # position, orientation of preds
         ops = preds[:, 3:]
-        # orientation error
-        i = 0
-        for op, ot in zip(ops, ots):
-            ot = Quaternion(array=ot)
-            op = Quaternion(array=op)
-            ori_err[i] = Quaternion.distance(op, ot)
-            i += 1
         
+        if target.shape == preds.shape:
+            ots = np.atleast_2d(target)[:, 3:]
+            
+            # orientation error
+            i = 0
+            for op, ot in zip(ops, ots):
+                ot = Quaternion(array=ot)
+                op = Quaternion(array=op)
+                ori_err[i] = Quaternion.distance(op, ot)
+                i += 1
+        else:
+            ot = Quaternion(target[3:])
+            # orientation error
+            i = 0
+            for i, op in enumerate(ops):
+                op = Quaternion(array=op)
+                ori_err[i] = Quaternion.distance(op, ot)
+            
         return ori_err.mean()     
 
     def position_orientation_errors_Arr_Inputs(self, qs: np.ndarray, ee_pos: np.ndarray):
@@ -289,7 +299,7 @@ class Robot:
             J = denormalize(qs, self.joint_min, self.joint_max)
             P = denormalize(ee_pos, self.pos_min, self.pos_max)
         
-        preds = np.zeros_like(P)
+        preds = np.zeros((len(J), P.shape[-1]))
 
         for i, q in enumerate(J):
             preds[i] = self.forward_kinematics_quaternion(q)

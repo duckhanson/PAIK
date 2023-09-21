@@ -38,7 +38,7 @@ def mini_train(config=None,
     # Build Generative model, NSF
     # Neural spline flow (NSF) with 3 sample features and 5 context features
     solver, optimizer, scheduler = get_flow_model(
-        load_model=cfg.use_pretrained,
+        enable_load_model=cfg.use_pretrained,
         num_transforms=config["num_transforms"],
         subnet_width=config["subnet_width"],
         subnet_num_layers=config["subnet_num_layers"],
@@ -129,15 +129,15 @@ def main() -> None:
     # note that we define values from `wandb.config`
     # instead of defining hard values
     config = {
-        'subnet_width': 1400,
+        'subnet_width': 1024,
         'subnet_num_layers': 3,
-        'num_transforms': 9,
-        'lr': 2.1e-4,
+        'num_transforms': 12,
+        'lr': 5e-4,
         'lr_weight_decay': 2.7e-2,
         'decay_step_size': 4e4,
-        'gamma': 5e-2,
+        'gamma': 9.79e-2,
         'batch_size': 128,
-        'num_epochs': 1,
+        'num_epochs': 10,
     }
 
     mini_train(config=config,

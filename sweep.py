@@ -23,7 +23,7 @@ sweep_config = {
     },
     'parameters': {
         'subnet_width': {
-            'values': [1200, 1400, 1500]
+            'values': [1024]
             # 'value': 1600
         },
         'subnet_num_layers': {
@@ -31,14 +31,14 @@ sweep_config = {
             'value': 3
         },
         'num_transforms': {
-            'values': [9, 10, 11]  # 6, 8, ..., 16
+            'values': [11, 12, 13, 14]  # 6, 8, ..., 16
         },
         'lr': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
             'q': 1e-5,
-            'min': 2e-4,
-            'max': 6.5e-4,
+            'min': 3e-4,
+            'max': 7e-4,
         },
         'lr_weight_decay': {
             # a flat distribution between 0 and 0.1
@@ -48,14 +48,14 @@ sweep_config = {
             'max': 15e-2,
         },
         'decay_step_size': {
-            'values': [2e4, 4e4],
+            'values': [4e4],
             # 'value': 4e4
         },
         'gamma': {
             'distribution': 'q_uniform',
             'q': 1e-2,
-            'min': 5e-2,
-            'max': 15e-2,
+            'min': 8e-2,
+            'max': 9.8e-2,
         },
         'batch_size': {
             'value': 128
@@ -89,7 +89,7 @@ def mini_train(config=None,
     # Build Generative model, NSF
     # Neural spline flow (NSF) with 3 sample features and 5 context features
     solver, optimizer, scheduler = get_flow_model(
-        load_model=cfg.use_pretrained,
+        enable_load_model=cfg.use_pretrained,
         num_transforms=config["num_transforms"],
         subnet_width=config["subnet_width"],
         subnet_num_layers=config["subnet_num_layers"],
@@ -188,9 +188,9 @@ def main() -> None:
 
 if __name__ == '__main__':
     sweep_id = wandb.sweep(sweep=sweep_config,
-                           project=f'msik_sweep_2.5M_m{cfg.m}_r{cfg.r}',
+                           project=f'ikflow_2.5M_setting',
                            entity='luca_nthu')
     # Start sweep job.
-    wandb.agent(sweep_id, function=main, count=20)
+    wandb.agent(sweep_id, function=main, count=10)
     wandb.finish()
     

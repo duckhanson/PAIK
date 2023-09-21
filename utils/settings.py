@@ -43,7 +43,7 @@ class Config:
         self.m = 3 + 4 # position(x, y, z) + quaternion
         # self.m = 3 # position(x, y, z)
         # self.r = self.n - self.m  # degrees of redundancy r = n - m
-        self.r = 1
+        self.r = 0
         # self.r = 4
         # training
         # self.N_train = 2500_0000 # 2500_0000

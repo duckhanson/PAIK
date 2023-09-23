@@ -40,10 +40,10 @@ class Config:
         self.robot_name = "panda"
         self.enable_normalize = False
         self.n = ets_table[self.robot_name]  # n = dof
-        self.m = 3 + 4 # position(x, y, z) + quaternion
-        # self.m = 3 # position(x, y, z)
+        # self.m = 3 + 4 # position(x, y, z) + quaternion
+        self.m = 3 # position(x, y, z)
         # self.r = self.n - self.m  # degrees of redundancy r = n - m
-        self.r = 0
+        self.r = 7
         # self.r = 4
         # training
         # self.N_train = 2500_0000 # 2500_0000

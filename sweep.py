@@ -31,7 +31,7 @@ sweep_config = {
             'value': 3
         },
         'num_transforms': {
-            'values': [11, 12, 13, 14]  # 6, 8, ..., 16
+            'values': [7, 8, 9, 13, 14]  # 6, 8, ..., 16
         },
         'lr': {
             # a flat distribution between 0 and 0.1
@@ -48,7 +48,7 @@ sweep_config = {
             'max': 15e-2,
         },
         'decay_step_size': {
-            'values': [4e4],
+            'values': [2e4, 4e4, 6e4],
             # 'value': 4e4
         },
         'gamma': {
@@ -188,9 +188,9 @@ def main() -> None:
 
 if __name__ == '__main__':
     sweep_id = wandb.sweep(sweep=sweep_config,
-                           project=f'ikflow_2.5M_setting',
+                           project=f'msik_2.5M_null_motion',
                            entity='luca_nthu')
     # Start sweep job.
-    wandb.agent(sweep_id, function=main, count=10)
+    wandb.agent(sweep_id, function=main, count=20)
     wandb.finish()
     

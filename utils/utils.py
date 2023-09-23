@@ -1,5 +1,6 @@
 import os
 # from tqdm.auto import tqdm
+from tqdm import trange, tqdm
 import pickle
 import time
 from datetime import datetime
@@ -61,7 +62,7 @@ def data_collection(robot, N: int):
 def load_all_data(robot, enable_normalize=config.enable_normalize):
     J_tr, P_tr = data_collection(robot=robot, N=config.N_train)
     _, P_ts = data_collection(robot=robot, N=config.N_test)
-    F = posture_feature_extraction(J=J_tr)
+    F = posture_feature_extraction(robot=robot, J=J_tr)
     
     if enable_normalize:
         J_tr = normalize(J_tr, robot.joint_min, robot.joint_max)
@@ -74,13 +75,46 @@ def load_all_data(robot, enable_normalize=config.enable_normalize):
     return J_tr, P_tr, P_ts, F
         
 
+def null_space_motion_single(robot, q):
+    """
+    return null space motion = (1-Jt@J)@Jm with normalize
 
-def posture_feature_extraction(J: np.array):
+    Parameters
+    ----------
+    robot : Robot
+        abstract class of Robot
+    q : np.array
+        joint configuration
+
+    Returns
+    -------
+    np.array
+        normalized null space motion that maximize manipulability
+    """
+    jacob = robot.robot.jacob0(q)
+    null_projection = (1 - jacob.T@jacob)
+    null_space_policy = robot.robot.jacobm(q)
+    null_space_motion = null_projection@null_space_policy
+    norm_motion = null_space_motion / np.linalg.norm(null_space_motion)
+    return norm_motion.reshape((config.n))
+
+def null_space_motion_array(robot, qs):
+    null_motion_array = np.zeros_like(qs)
+    i = 0
+    for q in tqdm(qs):
+        null_motion_array[i] = null_space_motion_single(robot, q)
+        i += 1
+    return null_motion_array
+        
+
+def posture_feature_extraction(robot, J: np.array):
     """
     generate posture feature from J (training data)
 
     Parameters
     ----------
+    robot: Robot
+        abstract class of Robot
     J : np.array
         joint configurations
 
@@ -98,18 +132,21 @@ def posture_feature_extraction(J: np.array):
         F = load_numpy(file_path=config.path_F)
     
     if F is None or F.shape[-1] != config.r or len(F) != len(J):
-        # hnne = HNNE(dim=config.r, ann_threshold=config.num_neighbors)
-        hnne = HNNE(dim=config.r)
-        # maximum number of data for hnne (11M), we use max_num_data_hnne to test
-        num_data = min(config.max_num_data_hnne, len(J))
-        F = hnne.fit_transform(X=J[:num_data], dim=config.r, verbose=True)
-        # query nearest neighbors for the rest of J
-        if len(F) != len(J):
-            knn = NearestNeighbors(n_neighbors=1)
-            knn.fit(J[:num_data])
-            neigh_idx = knn.kneighbors(J[num_data:], n_neighbors=1, return_distance=False)
-            neigh_idx = neigh_idx.flatten()
-            F = np.row_stack((F, F[neigh_idx]))
+        if config.r == config.n:
+            F = null_space_motion_array(robot, J)
+        else:
+            # hnne = HNNE(dim=config.r, ann_threshold=config.num_neighbors)
+            hnne = HNNE(dim=config.r)
+            # maximum number of data for hnne (11M), we use max_num_data_hnne to test
+            num_data = min(config.max_num_data_hnne, len(J))
+            F = hnne.fit_transform(X=J[:num_data], dim=config.r, verbose=True)
+            # query nearest neighbors for the rest of J
+            if len(F) != len(J):
+                knn = NearestNeighbors(n_neighbors=1)
+                knn.fit(J[:num_data])
+                neigh_idx = knn.kneighbors(J[num_data:], n_neighbors=1, return_distance=False)
+                neigh_idx = neigh_idx.flatten()
+                F = np.row_stack((F, F[neigh_idx]))
 
         save_numpy(file_path=config.path_F, arr=F)
     print(f"F load successfully from {config.path_F}")

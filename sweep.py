@@ -12,7 +12,7 @@ from utils.utils import load_all_data, EarlyStopping, get_train_loader, train_st
 
 
 # NUM_RECORD_STEPS = 14e3
-PATIENCE = 3
+PATIENCE = 5
 
 sweep_config = {
     'name': 'sweep',
@@ -31,37 +31,37 @@ sweep_config = {
             'value': 3
         },
         'num_transforms': {
-            'values': [7, 8, 9, 13, 14]  # 6, 8, ..., 16
+            'values': [8, 9, 10]  # 6, 8, ..., 16
         },
         'lr': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
             'q': 1e-5,
             'min': 3e-4,
-            'max': 7e-4,
+            'max': 5.5e-4,
         },
         'lr_weight_decay': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
             'q': 1e-3,
             'min': 1e-2,
-            'max': 15e-2,
+            'max': 8e-2,
         },
         'decay_step_size': {
-            'values': [2e4, 4e4, 6e4],
+            'values': [6e4, 8e4],
             # 'value': 4e4
         },
         'gamma': {
             'distribution': 'q_uniform',
-            'q': 1e-2,
+            'q': 1e-3,
             'min': 8e-2,
-            'max': 9.8e-2,
+            'max': 9.4e-2,
         },
         'batch_size': {
             'value': 128
         },
         'num_epochs': {
-            'value': 10
+            'value': 15
         }
     },
 }
@@ -143,7 +143,7 @@ def mini_train(config=None,
                 
     model_weights_path =  cfg.weight_dir + begin_time + '.pth'
     
-    if avg_position_error < 6e-3:
+    if avg_position_error < 7e-3:
         torch.save({
             'solver': solver.state_dict(),
             'opt': optimizer.state_dict(),
@@ -188,7 +188,7 @@ def main() -> None:
 
 if __name__ == '__main__':
     sweep_id = wandb.sweep(sweep=sweep_config,
-                           project=f'msik_2.5M_null_motion',
+                           project=f'msik_2.5M_JP_dim_red',
                            entity='luca_nthu')
     # Start sweep job.
     wandb.agent(sweep_id, function=main, count=20)

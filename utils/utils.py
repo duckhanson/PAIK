@@ -62,8 +62,8 @@ def data_collection(robot, N: int):
 def load_all_data(robot, enable_normalize=config.enable_normalize):
     J_tr, P_tr = data_collection(robot=robot, N=config.N_train)
     _, P_ts = data_collection(robot=robot, N=config.N_test)
-    F = posture_feature_extraction(robot=robot, J=J_tr)
-    
+    F = posture_feature_extraction(robot=robot, J=J_tr, P=P_tr)
+
     if enable_normalize:
         J_tr = normalize(J_tr, robot.joint_min, robot.joint_max)
         P_ts = normalize(P_ts, P_tr.min(axis=0), P_tr.max(axis=0))
@@ -101,13 +101,14 @@ def null_space_motion_single(robot, q):
 def null_space_motion_array(robot, qs):
     null_motion_array = np.zeros_like(qs)
     i = 0
+    print("Start null space motion calculation")
     for q in tqdm(qs):
         null_motion_array[i] = null_space_motion_single(robot, q)
         i += 1
     return null_motion_array
         
 
-def posture_feature_extraction(robot, J: np.array):
+def posture_feature_extraction(robot, J: np.array, P: np.array):
     """
     generate posture feature from J (training data)
 
@@ -117,6 +118,8 @@ def posture_feature_extraction(robot, J: np.array):
         abstract class of Robot
     J : np.array
         joint configurations
+    P : np.array
+        poses of the robot
 
     Returns
     -------
@@ -139,12 +142,13 @@ def posture_feature_extraction(robot, J: np.array):
             hnne = HNNE(dim=config.r)
             # maximum number of data for hnne (11M), we use max_num_data_hnne to test
             num_data = min(config.max_num_data_hnne, len(J))
-            F = hnne.fit_transform(X=J[:num_data], dim=config.r, verbose=True)
+            S = np.column_stack((J, P))
+            F = hnne.fit_transform(X=S[:num_data], dim=config.r, verbose=True)
             # query nearest neighbors for the rest of J
             if len(F) != len(J):
                 knn = NearestNeighbors(n_neighbors=1)
-                knn.fit(J[:num_data])
-                neigh_idx = knn.kneighbors(J[num_data:], n_neighbors=1, return_distance=False)
+                knn.fit(S[:num_data])
+                neigh_idx = knn.kneighbors(S[num_data:], n_neighbors=1, return_distance=False)
                 neigh_idx = neigh_idx.flatten()
                 F = np.row_stack((F, F[neigh_idx]))
 
@@ -585,6 +589,7 @@ def sample_J_traj(P_path, ref_F, solver, robot):
     :return: _description_
     :rtype: _type_
     """
+    P_path = P_path[:, :config.m]
     ref_F = np.tile(ref_F, (len(P_path), 1))
 
     C = np.column_stack((P_path, ref_F, np.zeros((len(P_path),))))

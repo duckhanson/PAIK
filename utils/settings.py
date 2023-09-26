@@ -43,7 +43,7 @@ class Config:
         # self.m = 3 + 4 # position(x, y, z) + quaternion
         self.m = 3 # position(x, y, z)
         # self.r = self.n - self.m  # degrees of redundancy r = n - m
-        self.r = 7
+        self.r = 4
         # self.r = 4
         # training
         # self.N_train = 2500_0000 # 2500_0000
@@ -77,7 +77,7 @@ class Config:
         self.path_knn = self.train_dir + f"knn-{self.N_train}-{self.n}-{self.m}-{self.r}-norm{self.enable_normalize}.pickle"
 
         # flow parameter
-        self.use_pretrained = True
+        self.use_pretrained = False
         self.architecture = "nsf"
         self.device = "cuda"
         self.num_conditions = (

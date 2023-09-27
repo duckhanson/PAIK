@@ -77,7 +77,7 @@ class Config:
         self.path_knn = self.train_dir + f"knn-{self.N_train}-{self.n}-{self.m}-{self.r}-norm{self.enable_normalize}.pickle"
 
         # flow parameter
-        self.use_pretrained = False
+        self.use_pretrained = True
         self.architecture = "nsf"
         self.device = "cuda"
         self.num_conditions = (

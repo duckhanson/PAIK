@@ -31,7 +31,7 @@ sweep_config = {
             'value': 3
         },
         'num_transforms': {
-            'values': [8, 9, 10]  # 6, 8, ..., 16
+            'values': [9, 10, 11]  # 6, 8, ..., 16
         },
         'lr': {
             # a flat distribution between 0 and 0.1
@@ -45,17 +45,17 @@ sweep_config = {
             'distribution': 'q_uniform',
             'q': 1e-3,
             'min': 1e-2,
-            'max': 8e-2,
+            'max': 4e-2,
         },
         'decay_step_size': {
-            'values': [6e4, 8e4],
+            'values': [5e4, 6e4, 7e4],
             # 'value': 4e4
         },
         'gamma': {
             'distribution': 'q_uniform',
             'q': 1e-3,
-            'min': 8e-2,
-            'max': 9.4e-2,
+            'min': 9e-2,
+            'max': 9.5e-2,
         },
         'batch_size': {
             'value': 128
@@ -191,6 +191,6 @@ if __name__ == '__main__':
                            project=f'msik_2.5M_JP_dim_red',
                            entity='luca_nthu')
     # Start sweep job.
-    wandb.agent(sweep_id, function=main, count=20)
+    wandb.agent(sweep_id, function=main, count=10)
     wandb.finish()
     

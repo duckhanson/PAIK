@@ -8,7 +8,6 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import torch
-from scipy.spatial import distance # distance.cosine as cosine_distance
 from hnne import HNNE
 from sklearn.neighbors import NearestNeighbors
 
@@ -42,80 +41,31 @@ def data_collection(robot, N: int):
     :return: J, P
     :rtype: np.array, np.array
     """
-    assert config.m == 3 or config.m == 3 + 4
-    
     path_J, path_P = _get_data_path(len_data=N)
 
     J = load_numpy(file_path=path_J)
     P = load_numpy(file_path=path_P)
 
     if len(J) != N or len(P) != N:
-        if config.m == 3:
-            J, P = robot.uniform_sample_J(num_samples=N)
-        else:
-            J, P = robot.uniform_sample_J_quaternion(num_samples=N)
+        J, P = robot.sample_joint_angles_and_poses(n=N, return_torch=False)
         save_numpy(file_path=path_J, arr=J)
         save_numpy(file_path=path_P, arr=P)
 
     return J, P
 
-def load_all_data(robot, enable_normalize=config.enable_normalize):
+def load_all_data(robot):
     J_tr, P_tr = data_collection(robot=robot, N=config.N_train)
     _, P_ts = data_collection(robot=robot, N=config.N_test)
-    F = posture_feature_extraction(robot=robot, J=J_tr, P=P_tr)
-
-    if enable_normalize:
-        J_tr = normalize(J_tr, robot.joint_min, robot.joint_max)
-        P_ts = normalize(P_ts, P_tr.min(axis=0), P_tr.max(axis=0))
-        P_tr = normalize(P_tr, P_tr.min(axis=0), P_tr.max(axis=0))
-        if F is not None:
-            F = normalize(F, F.min(axis=0), F.max(axis=0))
-        print("Load normalize data. [NOTICE] Please check out denormalize works !")
-    
+    F = posture_feature_extraction(J=J_tr, P=P_tr)
     return J_tr, P_tr, P_ts, F
         
 
-def null_space_motion_single(robot, q):
-    """
-    return null space motion = (1-Jt@J)@Jm with normalize
-
-    Parameters
-    ----------
-    robot : Robot
-        abstract class of Robot
-    q : np.array
-        joint configuration
-
-    Returns
-    -------
-    np.array
-        normalized null space motion that maximize manipulability
-    """
-    jacob = robot.robot.jacob0(q)
-    null_projection = (1 - jacob.T@jacob)
-    null_space_policy = robot.robot.jacobm(q)
-    null_space_motion = null_projection@null_space_policy
-    norm_motion = null_space_motion / np.linalg.norm(null_space_motion)
-    return norm_motion.reshape((config.n))
-
-def null_space_motion_array(robot, qs):
-    null_motion_array = np.zeros_like(qs)
-    i = 0
-    print("Start null space motion calculation")
-    for q in tqdm(qs):
-        null_motion_array[i] = null_space_motion_single(robot, q)
-        i += 1
-    return null_motion_array
-        
-
-def posture_feature_extraction(robot, J: np.array, P: np.array):
+def posture_feature_extraction(J: np.array, P: np.array):
     """
     generate posture feature from J (training data)
 
     Parameters
     ----------
-    robot: Robot
-        abstract class of Robot
     J : np.array
         joint configurations
     P : np.array
@@ -135,22 +85,19 @@ def posture_feature_extraction(robot, J: np.array, P: np.array):
         F = load_numpy(file_path=config.path_F)
     
     if F is None or F.shape[-1] != config.r or len(F) != len(J):
-        if config.r == config.n:
-            F = null_space_motion_array(robot, J)
-        else:
-            # hnne = HNNE(dim=config.r, ann_threshold=config.num_neighbors)
-            hnne = HNNE(dim=config.r)
-            # maximum number of data for hnne (11M), we use max_num_data_hnne to test
-            num_data = min(config.max_num_data_hnne, len(J))
-            S = np.column_stack((J, P))
-            F = hnne.fit_transform(X=S[:num_data], dim=config.r, verbose=True)
-            # query nearest neighbors for the rest of J
-            if len(F) != len(J):
-                knn = NearestNeighbors(n_neighbors=1)
-                knn.fit(S[:num_data])
-                neigh_idx = knn.kneighbors(S[num_data:], n_neighbors=1, return_distance=False)
-                neigh_idx = neigh_idx.flatten()
-                F = np.row_stack((F, F[neigh_idx]))
+        # hnne = HNNE(dim=config.r, ann_threshold=config.num_neighbors)
+        hnne = HNNE(dim=config.r)
+        # maximum number of data for hnne (11M), we use max_num_data_hnne to test
+        num_data = min(config.max_num_data_hnne, len(J))
+        S = np.column_stack((J, P))
+        F = hnne.fit_transform(X=S[:num_data], dim=config.r, verbose=True)
+        # query nearest neighbors for the rest of J
+        if len(F) != len(J):
+            knn = NearestNeighbors(n_neighbors=1)
+            knn.fit(S[:num_data])
+            neigh_idx = knn.kneighbors(S[num_data:], n_neighbors=1, return_distance=False)
+            neigh_idx = neigh_idx.flatten()
+            F = np.row_stack((F, F[neigh_idx]))
 
         save_numpy(file_path=config.path_F, arr=F)
     print(f"F load successfully from {config.path_F}")
@@ -183,77 +130,6 @@ def get_train_loader(J: np.array, P: np.array, F: np.array, batch_size: int = co
 
     return loader
 
-
-def get_test_loader(P: np.array, F: np.array):
-    """
-    a testing loader
-
-    :param J: joint configurations
-    :type J: np.array
-    :param P: end-effector positions
-    :type P: np.array
-    :param F: posture features
-    :type F: np.array
-    :return: torch dataloader
-    :rtype: dataloader
-    """
-    assert len(P) < len(F)  # P from testing dataset, F from training dataset
-    # Algo 1. random pick up f from F # 0.008 m
-    rng = np.random.default_rng()
-    rand = rng.integers(low=0, high=len(F), size=len(P))
-    f_extended = F[rand]
-
-    # Algo 2. random number f # 0.01 m
-    # f_mean = np.repeat(np.atleast_2d(np.mean(F, axis=0)), [len(P)], axis=0)
-    # f_rand = np.random.rand(len(P), F.shape[-1]) # [0, 1)
-    # f_extended = f_mean + f_rand  * 0.03
-
-    # Algo 3. knn search nearest P (nP), pickup its F
-
-    C = np.column_stack((P, f_extended))
-    
-    dataset = create_dataset(features=np.zeros_like(C), targets=C)
-    loader = dataset.create_loader(shuffle=True, batch_size=config.batch_size)
-
-    return loader
-
-
-def get_inference_loader(P: np.array, F: np.array, knn=None):
-    """
-    an inference loader
-
-    Parameters
-    ----------
-    P : np.array
-        end-effector positions for inference
-    F : np.array
-        posture features from training data
-    knn : _type_, optional
-        knn model fit P_train, by default None
-
-    Returns
-    -------
-    inference_loader
-        a torch dataloader
-    """
-    assert len(P) < len(F)
-
-    # get knn
-    if knn is None:
-        knn = load_pickle(file_path=config.path_knn)
-
-    # get reference F
-    f_extended = nearest_neighbor_F(knn, P_ts=P, F=F)
-
-    # create loader
-    C = np.column_stack((P, f_extended))
-    
-    dataset = create_dataset(features=np.zeros_like(C), targets=C)
-    loader = dataset.create_loader(shuffle=True, batch_size=config.batch_size)
-
-    return loader
-
-
 def load_pickle(file_path: str):
     """
     load pickle file, e.g. hnne, knn model
@@ -282,7 +158,6 @@ def load_pickle(file_path: str):
     else:
         raise FileNotFoundError(f"{file_path}: file not exist and return None.")
 
-
 def save_pickle(file_path: str, obj):
     """
     save object as a pickle file
@@ -302,7 +177,6 @@ def save_pickle(file_path: str, obj):
     with open(file_path, "wb") as f:
         # Pickle the 'data' dictionary using the highest protocol available.
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
-
 
 def load_numpy(file_path: str):
     """
@@ -324,7 +198,6 @@ def load_numpy(file_path: str):
         print(f"{file_path}: file not exist and return empty np array.")
         return np.array([])
 
-
 def save_numpy(file_path: str, arr: np.array):
     """
     save arr as a numpy file
@@ -342,7 +215,6 @@ def save_numpy(file_path: str, arr: np.array):
         print(f"mkdir {dir_path}")
         os.mkdir(path=dir_path)
     np.save(file_path, arr)
-
 
 def add_noise(batch, esp: float = config.noise_esp, step: int = 0, eval: bool = False):
     J, C = batch
@@ -411,7 +283,6 @@ def data_preprocess_for_inference(P, F, knn):
     _, C = add_noise((torch.zeros_like(C), C), eval=True)
 
     return C
-
 
 def nearest_neighbor_F(knn: NearestNeighbors, P_ts: np.array, F: np.array, n_neighbors: int=1):
     P_ts = np.atleast_2d(P_ts)
@@ -540,6 +411,7 @@ def test(
         J_hat = solver(C).sample((K,))
         J_hat = J_hat.detach().cpu().numpy()
 
+    
     avg_inference_time = round((time.time() - time_begin) / len(P_ts), 2)
 
     if config.m == 3:
@@ -573,74 +445,6 @@ def test(
             return df
         else:
             return position_errors.mean(), orientation_errors.mean(), avg_inference_time
-
-
-def sample_J_traj(P_path, ref_F, solver, robot):
-    """
-    _summary_
-    example of use:
-    df, qs = sample_J_traj(ee_traj, ref_F, nflow)
-    :param P_path: _description_
-    :type P_path: _type_
-    :param ref_F: _description_
-    :type ref_F: _type_
-    :param solver: _description_
-    :type solver: _type_
-    :return: _description_
-    :rtype: _type_
-    """
-    P_path = P_path[:, :config.m]
-    ref_F = np.tile(ref_F, (len(P_path), 1))
-
-    C = np.column_stack((P_path, ref_F, np.zeros((len(P_path),))))
-    C = torch.tensor(data=C, device="cuda", dtype=torch.float32)
-
-    with torch.inference_mode():
-        J_hat = solver(C).sample((1,))
-
-    J_hat = J_hat.detach().cpu().numpy()[0]
-    df = eval_J_traj(robot, J_hat, P_path=P_path, position_errors=None)
-    return df, J_hat
-
-
-def sample_P_path(robot, load_time: str = "") -> str:
-    """
-    _summary_
-    example of use
-
-    for generate
-    traj_dir = sample_P_path(robot=panda, load_time=')
-
-    for demo
-    traj_dir = sample_P_path(robot=panda, load_time='05232300')
-
-    :param robot: _description_
-    :type robot: _type_
-    :param load_time: _description_, defaults to ''
-    :type load_time: str, optional
-    :return: _description_
-    :rtype: str
-    """
-    if load_time == "":
-        traj_dir = config.traj_dir + datetime.now().strftime("%m%d%H%M%S") + "/"
-    else:
-        traj_dir = config.traj_dir + load_time + "/"
-
-    P_path_file_path = traj_dir + "ee_traj.npy"
-    J_traj_file_path = traj_dir + "q_traj.npy"
-
-    if load_time == "" or not os.path.exists(path=J_traj_file_path):
-        # P_path, J_traj = robot.path_generate_via_stable_joint_traj(dist_ratio=0.9, t=20)
-        P_path, J_traj = robot.path_generate_via_stable_joint_traj_quaternion(dist_ratio=0.9, t=20)
-        
-        save_numpy(file_path=P_path_file_path, arr=P_path)
-        save_numpy(file_path=J_traj_file_path, arr=J_traj)
-
-    if os.path.exists(path=traj_dir):
-        print(f"{traj_dir} load successfully.")
-
-    return traj_dir
-
 
 def path_following(
     robot,
@@ -749,7 +553,6 @@ def eval_J_traj(
     )
     return df
 
-
 def create_robot_dirs() -> None:
     """
     _summary_
@@ -758,7 +561,6 @@ def create_robot_dirs() -> None:
         if not os.path.exists(path=dp):
             os.makedirs(name=dp)
             print(f"Create {dp}")
-
 
 def remove_empty_robot_dirs() -> None:
     """

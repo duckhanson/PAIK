@@ -3,26 +3,31 @@ from datetime import datetime
 import torch 
 import numpy as np
 
+import math
 from tqdm import tqdm
 from pprint import pprint
 import wandb
 from utils.model import get_knn, get_flow_model
-from utils.robot import Robot
+from utils.robot import get_robot
 from utils.settings import config as cfg
-from utils.utils import load_all_data, EarlyStopping, get_train_loader, train_step, test
+from utils.utils import init_seeds, load_all_data, EarlyStopping, get_train_loader, train_step, evaluate_solver
 
 
 USE_WANDB = False
 # NUM_RECORD_STEPS = 14e3
 PATIENCE = 4    
+POSE_ERR_THRESH = 7e-3
 
 def mini_train(config=None,
-               begin_time=None) -> None:
+               begin_time=None,
+               use_wandb=USE_WANDB,
+               patience=PATIENCE,
+               pose_err_thres=POSE_ERR_THRESH) -> None:
     
-    robot = Robot(verbose=False)
+    robot = get_robot()
     J_tr, P_tr, P_ts, F = load_all_data(robot)
     knn = get_knn(P_tr=P_tr)
-    early_stopping = EarlyStopping(patience=PATIENCE, verbose=True, delta=1e-4)
+    early_stopping = EarlyStopping(patience=patience, verbose=True, delta=1e-4)
     # data generation
     if torch.cuda.is_available():
         device = 'cuda'
@@ -66,17 +71,16 @@ def mini_train(config=None,
             step += 1
             
         rand = np.random.randint(low=0, high=len(P_ts), size=cfg.num_eval_size)
-        avg_position_error, avg_orientation_error, _ = test(
+        avg_position_error, avg_orientation_error = evaluate_solver(
             robot=robot,
             P_ts=P_ts[rand],
             F=F,
             solver=solver,
             knn=knn,
             K=cfg.K,
-            print_report=False,
         )
         
-        if USE_WANDB:
+        if use_wandb:
             wandb.log({
                 'ep': ep,
                 'position_errors': avg_position_error,
@@ -91,20 +95,26 @@ def mini_train(config=None,
                 'train_loss': batch_loss.mean(),
             })
 
+        if np.isnan(avg_position_error) or avg_position_error > 1e-1:
+            print(f"Early stopping ({avg_position_error} > 1e-1)")
+            break
+        
         # early_stopping needs the validation loss to check if it has decresed, 
         # and if it has, it will make a checkpoint of the current model
         early_stopping(avg_position_error, solver)
-                
+        
         if early_stopping.early_stop:
             print("Early stopping")
-            break   
+            break
                 
     model_weights_path =  cfg.weight_dir + begin_time + '.pth'
     
-    torch.save({
-        'solver': solver.state_dict(),
-        'opt': optimizer.state_dict(),
-        }, model_weights_path)
+    if avg_position_error < pose_err_thres:
+        torch.save({
+            'solver': solver.state_dict(),
+            'opt': optimizer.state_dict(),
+            }, model_weights_path)
+        
     del robot
     del J_tr
     del P_tr
@@ -131,7 +141,7 @@ def main() -> None:
     config = {
         'subnet_width': 1024,
         'subnet_num_layers': 3,
-        'num_transforms': 12,
+        'num_transforms': 9,
         'lr': 5e-4,
         'lr_weight_decay': 2.7e-2,
         'decay_step_size': 4e4,
@@ -151,4 +161,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    init_seeds()
     main()

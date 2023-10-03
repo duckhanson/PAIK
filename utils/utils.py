@@ -10,10 +10,18 @@ import pandas as pd
 import torch
 from hnne import HNNE
 from sklearn.neighbors import NearestNeighbors
-
+from jrl.evaluation import solution_pose_errors
 from utils.dataset import create_dataset
 from utils.settings import config
 
+def init_seeds(seed=42):
+    torch.manual_seed(seed) # sets the seed for generating random numbers.
+    torch.cuda.manual_seed(seed) # Sets the seed for generating random numbers for the current GPU. It’s safe to call this function if CUDA is not available; in that case, it is silently ignored.
+    torch.cuda.manual_seed_all(seed) # Sets the seed for generating random numbers on all GPUs. It’s safe to call this function if CUDA is not available; in that case, it is silently ignored.
+
+    if seed == 0:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 def _get_data_path(len_data):
     """
@@ -49,7 +57,7 @@ def data_collection(robot, N: int):
     if len(J) != N or len(P) != N:
         J, P = robot.sample_joint_angles_and_poses(n=N, return_torch=False)
         save_numpy(file_path=path_J, arr=J)
-        save_numpy(file_path=path_P, arr=P)
+        save_numpy(file_path=path_P, arr=P[:, :config.m])
 
     return J, P
 
@@ -267,6 +275,9 @@ def train_step(model, batch, optimizer, scheduler):
     return loss.item()
 
 def data_preprocess_for_inference(P, F, knn):
+    if config.m == 3:
+        P = P[:, :3]
+    
     if F is not None:
         # Data Preprocessing: Posture Feature Extraction
         ref_F = nearest_neighbor_F(knn, np.atleast_2d(P), F) # knn
@@ -299,6 +310,27 @@ def pick_F(P_ts: np.array, F: np.array):
     idx = np.random.randint(low=0, high=len(F), size=len(np.atleast_2d(P_ts)))
     return F[idx]
 
+def evaluate_solver(robot, solver, P_ts, F, knn, K=10):
+    C = data_preprocess_for_inference(P=P_ts, F=F, knn=knn)
+
+    with torch.inference_mode():
+        J_hat = solver(C).sample((K,))
+
+    l2_errs = np.empty((J_hat.shape[0], J_hat.shape[1]))
+    ang_errs = np.empty((J_hat.shape[0], J_hat.shape[1]))
+    if P_ts.shape[-1] == 3:
+        P_ts = np.column_stack((P_ts, np.ones(shape=(len(P_ts), 4))))
+    for i, J in enumerate(J_hat):
+        l2_errs[i], ang_errs[i] = solution_pose_errors(robot=robot, solutions=J, target_poses=P_ts)
+        
+    l2_errs = l2_errs.flatten()
+    ang_errs = ang_errs.flatten()
+
+    # df = pd.DataFrame()
+    # df['l2_errs'] = l2_errs
+    # df['ang_errs'] = ang_errs
+    # print(df.describe())
+    return l2_errs.mean(), ang_errs.mean()
 
 def inference(
     robot, P_inf: np.array, F: np.array, solver, knn, K: int, print_report: bool = False
@@ -397,10 +429,6 @@ def test(
     """
     assert len(P_ts) < 1000
 
-    position_errors = np.zeros(shape=(len(P_ts), K))
-    orientation_errors = np.zeros(shape=(len(P_ts), K))
-    
-
     # Data Preprocessing
     C = data_preprocess_for_inference(P=P_ts, F=F, knn=knn)
 
@@ -409,10 +437,12 @@ def test(
     # Begin inference
     with torch.inference_mode():
         J_hat = solver(C).sample((K,))
-        J_hat = J_hat.detach().cpu().numpy()
+    # J_hat = J_hat.detach().cpu().numpy()
 
     
     avg_inference_time = round((time.time() - time_begin) / len(P_ts), 2)
+    
+    P_hat = robot.forward_kinematics_batch(torch.from_numpy(J_hat.reshape(-1, cfg.n)).to(cfg.device))
 
     if config.m == 3:
         # Calculate Position Errors and Inference Time

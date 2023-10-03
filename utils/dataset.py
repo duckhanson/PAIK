@@ -80,4 +80,9 @@ class CustomDataset(Dataset):
         return self.features[id], self.targets[id]
 
     def create_loader(self, shuffle, batch_size):
-        return DataLoader(self, batch_size=batch_size, shuffle=shuffle, drop_last=True)
+        return DataLoader(self, 
+                          batch_size=batch_size, 
+                          shuffle=shuffle, 
+                          drop_last=True,
+                        #   generator=torch.Generator(device='cuda')
+                          )

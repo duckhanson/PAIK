@@ -310,27 +310,7 @@ def pick_F(P_ts: np.array, F: np.array) :
     idx = np.random.randint(low=0, high=len(F), size=len(np.atleast_2d(P_ts)))
     return F[idx]
 
-def evaluate_solver(robot, solver, P_ts, F, knn, K=10):
-    C = data_preprocess_for_inference(P=P_ts, F=F, knn=knn)
 
-    with torch.inference_mode():
-        J_hat = solver(C).sample((K,))
-
-    l2_errs = np.empty((J_hat.shape[0], J_hat.shape[1]))
-    ang_errs = np.empty((J_hat.shape[0], J_hat.shape[1]))
-    if P_ts.shape[-1] == 3:
-        P_ts = np.column_stack((P_ts, np.ones(shape=(len(P_ts), 4))))
-    for i, J in enumerate(J_hat):
-        l2_errs[i], ang_errs[i] = solution_pose_errors(robot=robot, solutions=J, target_poses=P_ts)
-        
-    l2_errs = l2_errs.flatten()
-    ang_errs = ang_errs.flatten()
-
-    # df = pd.DataFrame()
-    # df['l2_errs'] = l2_errs
-    # df['ang_errs'] = ang_errs
-    # print(df.describe())
-    return l2_errs.mean(), ang_errs.mean()
 
 def inference(
     robot, P_inf: np.array, F: np.array, solver, knn, K: int, print_report: bool = False

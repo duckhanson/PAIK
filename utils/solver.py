@@ -95,7 +95,7 @@ class Solver:
         # Randomly sample poses from test set
         P = self._random_sample_poses(num_poses=num_poses)
         
-        time_begin = time.time()
+        time_begin = time()
         # Data Preprocessing
         C = data_preprocess_for_inference(P=P, F=self._F, knn=self._knn)
 
@@ -104,7 +104,7 @@ class Solver:
             J_hat = self._solver(C).sample((num_sols,))
             J_hat = torch.reshape(J_hat, (num_poses, num_sols, -1))
             
-        avg_inference_time = round((time.time() - time_begin) / num_poses, 2)
+        avg_inference_time = round((time() - time_begin) / num_poses, 2)
             
         l2_errs = np.empty((J_hat.shape[0], J_hat.shape[1]))
         ang_errs = np.empty((J_hat.shape[0], J_hat.shape[1]))

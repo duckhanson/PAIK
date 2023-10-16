@@ -1,5 +1,5 @@
 # Import required packages
-from datetime import datetime
+from time import time
 from typing import Any
 import numpy as np
 import torch
@@ -91,10 +91,11 @@ class Solver:
         P = self._P_ts[idx]
         return P
     
-    def random_evaluation(self, num_poses: int, num_sols: int):
+    def random_evaluation(self, num_poses: int, num_sols: int, return_time: bool=False):
         # Randomly sample poses from test set
         P = self._random_sample_poses(num_poses=num_poses)
         
+        time_begin = time.time()
         # Data Preprocessing
         C = data_preprocess_for_inference(P=P, F=self._F, knn=self._knn)
 
@@ -102,6 +103,8 @@ class Solver:
         with torch.inference_mode():
             J_hat = self._solver(C).sample((num_sols,))
             J_hat = torch.reshape(J_hat, (num_poses, num_sols, -1))
+            
+        avg_inference_time = round((time.time() - time_begin) / num_poses, 2)
             
         l2_errs = np.empty((J_hat.shape[0], J_hat.shape[1]))
         ang_errs = np.empty((J_hat.shape[0], J_hat.shape[1]))
@@ -117,7 +120,10 @@ class Solver:
         # df['l2_errs'] = l2_errs
         # df['ang_errs'] = ang_errs
         # print(df.describe())
-        return l2_errs.mean(), ang_errs.mean()
+        if return_time:
+            return l2_errs.mean(), ang_errs.mean(), avg_inference_time
+        else:
+            return l2_errs.mean(), ang_errs.mean()
     
     def _update_solver(self):
         self._solver = FlowModule(

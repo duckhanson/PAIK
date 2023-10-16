@@ -23,7 +23,7 @@ def mini_train(config=None,
                use_wandb=USE_WANDB,
                patience=PATIENCE,
                pose_err_thres=POSE_ERR_THRESH) -> None:
-    
+    init_seeds()
     robot = get_robot()
     J_tr, P_tr, P_ts, F = load_all_data(robot)
     knn = get_knn(P_tr=P_tr)

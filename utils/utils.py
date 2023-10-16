@@ -306,7 +306,7 @@ def nearest_neighbor_F(knn: NearestNeighbors, P_ts: np.array, F: np.array, n_nei
 def rand_F(P_ts: np.array, F: np.array):
     return np.random.rand(len(np.atleast_2d(P_ts)), F.shape[-1])
 
-def pick_F(P_ts: np.array, F: np.array):
+def pick_F(P_ts: np.array, F: np.array) :
     idx = np.random.randint(low=0, high=len(F), size=len(np.atleast_2d(P_ts)))
     return F[idx]
 

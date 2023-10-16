@@ -8,7 +8,7 @@ from utils.utils import init_seeds
 USE_WANDB = True
 # NUM_RECORD_STEPS = 14e3
 PATIENCE = 3
-POSE_ERR_THRESH = 7e-3
+POSE_ERR_THRESH = 1e-2
 
 sweep_config = {
     'name': 'sweep',
@@ -19,7 +19,7 @@ sweep_config = {
     },
     'parameters': {
         'subnet_width': {
-            'values': [1024]
+            'values': [1500, 1600]
             # 'value': 1600
         },
         'subnet_num_layers': {
@@ -27,14 +27,15 @@ sweep_config = {
             'value': 3
         },
         'num_transforms': {
-            'values': [11, 12, 13, 16]  # 6, 8, ..., 16
+            'values': [15, 16]  # 6, 8, ..., 16
+            # 'value': 16
         },
         'lr': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
-            'q': 1e-7,
-            'min': 1e-6,
-            'max': 4e-6,
+            'q': 1e-5,
+            'min': 1e-4,
+            'max': 5e-4,
         },
         'lr_weight_decay': {
             # a flat distribution between 0 and 0.1
@@ -63,7 +64,6 @@ sweep_config = {
 }
     
 def main() -> None:
-    init_seeds()
     begin_time = datetime.now().strftime("%m%d-%H%M")
     # note that we define values from `wandb.config`
     # instead of defining hard values
@@ -97,6 +97,6 @@ if __name__ == '__main__':
                            project=f'msik_2.5M_JP_dim_red',
                            entity='luca_nthu')
     # Start sweep job.
-    wandb.agent(sweep_id, function=main, count=10)
+    wandb.agent(sweep_id, function=main, count=2)
     wandb.finish()
     

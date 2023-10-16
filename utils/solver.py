@@ -2,14 +2,13 @@
 from datetime import datetime
 from typing import Any
 import numpy as np
-import pandas as pd
 import torch
 
 from jrl.robot import Robot
 from jrl.robots import Panda, Fetch, FetchArm
 
-from utils.model import *
-from utils.utils import *
+from utils.model import get_flow_model, get_knn
+from utils.utils import load_all_data, data_preprocess_for_inference
 
 DEFAULT_SOLVER_PARAM_M3 = {
         'subnet_width': 1400,
@@ -21,6 +20,7 @@ DEFAULT_SOLVER_PARAM_M3 = {
         'gamma': 5e-2,
         'batch_size': 128,
         'num_epochs': 10,
+        'ckpt_name': 'nsf',
     }
 
 DEFAULT_SOLVER_PARAM_M7 = {
@@ -33,6 +33,7 @@ DEFAULT_SOLVER_PARAM_M7 = {
         'gamma': 5e-2,
         'batch_size': 128,
         'num_epochs': 10,
+        'ckpt_name': 'nsf',
     }
 
 class Solver:
@@ -49,7 +50,8 @@ class Solver:
                 lr_weight_decay=solver_param["lr_weight_decay"],
                 decay_step_size=solver_param["decay_step_size"],
                 gamma=solver_param["gamma"],
-                device='cuda')
+                device='cuda',
+                ckpt_name=solver_param["ckpt_name"])
         self._solver = flow
         self._optimizer = optimizer
         self._scheduler = scheduler

@@ -23,7 +23,8 @@ def get_flow_model(
     lr_weight_decay=config.lr_weight_decay,
     decay_step_size=config.decay_step_size,
     gamma=config.decay_gamma,
-    device=config.device
+    device=config.device,
+    ckpt_name=config.architecture,
 ):
     """
     Return nsf model and optimizer
@@ -57,16 +58,17 @@ def get_flow_model(
     flow = get_sflow_model(flow, shrink_ratio=shrink_ratio, device=device)
     optimizer = AdamW(flow.parameters(), lr=lr, weight_decay=lr_weight_decay)
 
-    if enable_load_model and path.exists(path=config.path_solver):
+    path_solver = config.weight_dir + f"{ckpt_name}.pth"
+    if enable_load_model and path.exists(path=path_solver):
         try:
-            state = torch.load(config.path_solver)
+            state = torch.load(path_solver)
             flow.load_state_dict(state_dict=state['solver'])
             optimizer = AdamW(flow.parameters(), lr=lr, weight_decay=lr_weight_decay)
             optimizer.load_state_dict(state_dict=state['opt'])
             
-            print(f"Model load successfully from {config.path_solver}")
+            print(f"Model load successfully from {path_solver}")
         except Exception:
-            print(f"Load err from {config.path_solver}, assuming you use different architecture.")
+            print(f"Load err from {path_solver}, assuming you use different architecture.")
     else:
         print("Create a new model and start training.")
 

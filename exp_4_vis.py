@@ -281,9 +281,10 @@ def visualize_fk(robot: Robot, solver="klampt"):
 #     )
 
 
-def random_target_pose(robot: Robot, solver: Solver, nb_sols: int=5):
+def random_target_pose(robot: Robot, solver: Solver, num_samples: int=5, k: int=1):
     """Set the end effector to a randomly drawn pose. Generate and visualize `nb_sols` solutions for the pose"""
-
+    nb_sols = num_samples * k
+    
     def setup_fn(worlds):
         vis.add(f"robot_goal", worlds[0].robot(0))
         vis.setColor(f"robot_goal", 0.5, 1, 1, 0)
@@ -302,7 +303,7 @@ def random_target_pose(robot: Robot, solver: Solver, nb_sols: int=5):
         target_pose = robot.forward_kinematics_klampt(random_sample)[0]
 
         # Get solutions to pose of random sample
-        ik_solutions = solver.solve(target_pose, nb_sols, return_numpy=True)
+        ik_solutions = solver.solve(target_pose, num_samples, k=k, return_numpy=True)
         qs = robot._x_to_qs(ik_solutions)
         for i in range(nb_sols):
             worlds[i + 1].robot(0).setConfig(qs[i])
@@ -378,10 +379,10 @@ def oscillate_joints(robot: Robot):
 def main():
     robot = Panda()
     # pprint(dir(robot))
-    solver = Solver(robot=robot, solver_param=DEFAULT_SOLVER_PARAM_M3)
+    solver = Solver(robot=robot, solver_param=DEFAULT_SOLVER_PARAM_M7)
     # visualize_fk(robot=robot)
-    # random_target_pose(robot=robot, solver=solver, nb_sols=5)
-    oscillate_joints(robot=robot)
+    random_target_pose(robot=robot, solver=solver, num_samples=5, k=1)
+    # oscillate_joints(robot=robot)
     
     
 

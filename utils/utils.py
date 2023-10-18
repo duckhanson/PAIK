@@ -66,7 +66,7 @@ def load_all_data(robot):
     _, P_ts = data_collection(robot=robot, N=config.N_test)
     F = posture_feature_extraction(J=J_tr, P=P_tr)
     return J_tr, P_tr, P_ts, F
-        
+
 
 def posture_feature_extraction(J: np.array, P: np.array):
     """
@@ -274,16 +274,21 @@ def train_step(model, batch, optimizer, scheduler):
 
     return loss.item()
 
-def data_preprocess_for_inference(P, F, knn):
+def data_preprocess_for_inference(P, F, knn, k: int=1):
+    P = np.atleast_2d(P)
+    F = np.atleast_2d(F)
+    
     if config.m == 3:
         P = P[:, :3]
-    
     if F is not None:
         # Data Preprocessing: Posture Feature Extraction
-        ref_F = nearest_neighbor_F(knn, np.atleast_2d(P), F) # knn
+        ref_F = nearest_neighbor_F(knn, P, F, n_neighbors=k) # knn
+        ref_F = np.atleast_2d(ref_F)
         # ref_F = rand_F(P, F) # f_rand
         # ref_F = pick_F(P, F) # f_pick
-        C = np.column_stack((np.atleast_2d(P), np.atleast_2d(ref_F)))
+        if len(P) == 1 and k > 1:
+            P = np.tile(P, (len(ref_F), 1))
+        C = np.column_stack((P, ref_F))
     else:
         C = P
         
@@ -373,6 +378,28 @@ def inference(
         print(df.describe())
     else:
         return J_hat, position_errors, inference_time
+
+def evaluate_solver(robot, solver, P_ts, F, knn, K=10):
+    C = data_preprocess_for_inference(P=P_ts, F=F, knn=knn)
+
+    with torch.inference_mode():
+        J_hat = solver(C).sample((K,))
+
+    l2_errs = np.empty((J_hat.shape[0], J_hat.shape[1]))
+    ang_errs = np.empty((J_hat.shape[0], J_hat.shape[1]))
+    if P_ts.shape[-1] == 3:
+        P_ts = np.column_stack((P_ts, np.ones(shape=(len(P_ts), 4))))
+    for i, J in enumerate(J_hat):
+        l2_errs[i], ang_errs[i] = solution_pose_errors(robot=robot, solutions=J, target_poses=P_ts)
+        
+    l2_errs = l2_errs.flatten()
+    ang_errs = ang_errs.flatten()
+
+    # df = pd.DataFrame()
+    # df['l2_errs'] = l2_errs
+    # df['ang_errs'] = ang_errs
+    # print(df.describe())
+    return l2_errs.mean(), ang_errs.mean()
 
 
 def test(

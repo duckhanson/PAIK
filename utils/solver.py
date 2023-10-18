@@ -28,9 +28,9 @@ DEFAULT_SOLVER_PARAM_M3 = {
     }
 
 DEFAULT_SOLVER_PARAM_M7 = {
-        'subnet_width': 1500,
+        'subnet_width': 1024,
         'subnet_num_layers': 3,
-        'num_transforms': 16,
+        'num_transforms': 14,
         'lr': 1.3e-4,
         'lr_weight_decay': 3.1e-2,
         'decay_step_size': 6e4,
@@ -38,7 +38,7 @@ DEFAULT_SOLVER_PARAM_M7 = {
         'shrink_ratio': 0.61,
         'batch_size': 128,
         'num_epochs': 15,
-        'ckpt_name': '1016-1439',
+        'ckpt_name': '1018-0133',
     }
 
 class Solver:
@@ -67,18 +67,38 @@ class Solver:
         # load inference data
         self._J_tr, self._P_tr, self._P_ts, self._F = load_all_data(self._robot)
         self._knn = get_knn(P_tr=self._P_tr)
+        self.num_conditions = self._P_tr.shape[-1]
         
     def sample(self, C, K):
         return self._solver(C).sample((K,))
     
-    def solve(self, single_pose: np.array, num_sols: int, return_numpy: bool=False):
-        # Data Preprocessing
-        C = data_preprocess_for_inference(P=single_pose, F=self._F, knn=self._knn)
+    def solve(self, single_pose: np.array, num_sols: int, k: int=1, return_numpy: bool=False):
+        """
+        _summary_
+
+        Parameters
+        ----------
+        single_pose : np.array
+            a single task point, m=3 or m=7
+        num_sols : int
+            number of solutions to be sampled from base distribution
+        k : int, optional
+            number of posture features to be sampled from knn, by default 1
+        return_numpy : bool, optional
+            return numpy array type or torch cuda tensor type, by default False
+
+        Returns
+        -------
+        array_like
+            array_like(num_sols * k, n_dofs)
+        """
+        C = data_preprocess_for_inference(P=single_pose, F=self._F, knn=self._knn, k=k)
 
         # Begin inference
         with torch.inference_mode():
             J_hat = self._solver(C).sample((num_sols,))
-            J_hat = torch.reshape(J_hat, (num_sols, -1))
+                
+        J_hat = torch.reshape(J_hat, (num_sols * k, -1))
             
         if return_numpy:
             J_hat = J_hat.detach().cpu().numpy()
@@ -94,7 +114,6 @@ class Solver:
     def random_evaluation(self, num_poses: int, num_sols: int, return_time: bool=False):
         # Randomly sample poses from test set
         P = self._random_sample_poses(num_poses=num_poses)
-        
         time_begin = time()
         # Data Preprocessing
         C = data_preprocess_for_inference(P=P, F=self._F, knn=self._knn)
@@ -102,24 +121,24 @@ class Solver:
         # Begin inference
         with torch.inference_mode():
             J_hat = self._solver(C).sample((num_sols,))
-            J_hat = torch.reshape(J_hat, (num_poses, num_sols, -1))
             
-        avg_inference_time = round((time() - time_begin) / num_poses, 2)
-            
-        l2_errs = np.empty((J_hat.shape[0], J_hat.shape[1]))
-        ang_errs = np.empty((J_hat.shape[0], J_hat.shape[1]))
-        if P.shape[-1] == 3:
+        l2_errs = np.empty((num_poses, num_sols))
+        ang_errs = np.empty((num_poses, num_sols))
+        if self.num_conditions == 3:
             P = np.column_stack((P, np.ones(shape=(len(P), 4))))
-        for i, J in enumerate(J_hat):
-            l2_errs[i], ang_errs[i] = solution_pose_errors(robot=self._robot, solutions=J, target_poses=P)
+        for i in range(num_poses):
+
+            l2_errs[i], ang_errs[i] = solution_pose_errors(robot=self._robot, solutions=J_hat[:, i, :], target_poses=P[i])
             
         l2_errs = l2_errs.flatten()
         ang_errs = ang_errs.flatten()
+        
+        avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
-        # df = pd.DataFrame()
-        # df['l2_errs'] = l2_errs
-        # df['ang_errs'] = ang_errs
-        # print(df.describe())
+        # # df = pd.DataFrame()
+        # # df['l2_errs'] = l2_errs
+        # # df['ang_errs'] = ang_errs
+        # # print(df.describe())
         if return_time:
             return l2_errs.mean(), ang_errs.mean(), avg_inference_time
         else:

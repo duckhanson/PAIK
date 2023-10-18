@@ -25,6 +25,7 @@ def get_flow_model(
     gamma=config.decay_gamma,
     device=config.device,
     ckpt_name=config.architecture,
+    random_perm=True,
 ):
     """
     Return nsf model and optimizer
@@ -39,7 +40,7 @@ def get_flow_model(
             features=config.n,
             context=config.num_conditions,
             transforms=num_transforms,
-            randperm=True,
+            randperm=random_perm,
             bins=10,
             activation=config.activation,
             hidden_features=[subnet_width] * subnet_num_layers,

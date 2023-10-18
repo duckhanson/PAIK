@@ -43,7 +43,7 @@ def mini_train(config=None,
     # Build Generative model, NSF
     # Neural spline flow (NSF) with 3 sample features and 5 context features
     solver, optimizer, scheduler = get_flow_model(
-        enable_load_model=cfg.use_pretrained,
+        enable_load_model=False,
         num_transforms=config["num_transforms"],
         subnet_width=config["subnet_width"],
         subnet_num_layers=config["subnet_num_layers"],
@@ -51,6 +51,7 @@ def mini_train(config=None,
         lr_weight_decay=config["lr_weight_decay"],
         decay_step_size=config["decay_step_size"],
         gamma=config["gamma"],
+        random_perm=False,
         device=device)
 
     solver.train()

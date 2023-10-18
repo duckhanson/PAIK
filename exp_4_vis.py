@@ -280,9 +280,20 @@ def visualize_fk(robot: Robot, solver="klampt"):
 #         robot, nb_sols, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=time_p_loop, title=title
 #     )
 
+def sample_latent_space(robot: Robot, solver: Solver, num_samples: int=5):
+    random_target_pose(robot=robot, solver=solver, num_samples=num_samples, k=1)
 
+def sample_posture_space(robot: Robot, solver: Solver, k: int=5):
+    old_shrink_ratio = solver.shirnk_ratio
+    solver.shirnk_ratio = 0
+    random_target_pose(robot=robot, solver=solver, num_samples=1, k=k)
+    solver.shirnk_ratio = old_shrink_ratio
+    
 def random_target_pose(robot: Robot, solver: Solver, num_samples: int=5, k: int=1):
     """Set the end effector to a randomly drawn pose. Generate and visualize `nb_sols` solutions for the pose"""
+    if k > 1:
+        assert solver.shirnk_ratio == 0, "Shrink ratio must be 0 for k > 1 (sweep posture, fix latent)"
+    
     nb_sols = num_samples * k
     
     def setup_fn(worlds):
@@ -316,6 +327,7 @@ def random_target_pose(robot: Robot, solver: Solver, num_samples: int=5, k: int=
 
     n_worlds = nb_sols + 1
     _run_demo(robot, n_worlds, setup_fn, loop_fn, viz_update_fn, time_p_loop=time_p_loop, title=title)
+
 
 
 def oscillate_joints(robot: Robot):
@@ -381,7 +393,8 @@ def main():
     # pprint(dir(robot))
     solver = Solver(robot=robot, solver_param=DEFAULT_SOLVER_PARAM_M7)
     # visualize_fk(robot=robot)
-    random_target_pose(robot=robot, solver=solver, num_samples=5, k=1)
+    # sample_latent_space(robot=robot, solver=solver, num_samples=5)
+    sample_posture_space(robot=robot, solver=solver, k=5)  
     # oscillate_joints(robot=robot)
     
     

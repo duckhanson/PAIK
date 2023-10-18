@@ -8,7 +8,7 @@ from utils.utils import init_seeds
 USE_WANDB = True
 # NUM_RECORD_STEPS = 14e3
 PATIENCE = 3
-POSE_ERR_THRESH = 1e-2
+POSE_ERR_THRESH = 1.4e-2
 
 sweep_config = {
     'name': 'sweep',
@@ -19,16 +19,16 @@ sweep_config = {
     },
     'parameters': {
         'subnet_width': {
-            'values': [1500, 1600]
-            # 'value': 1600
+            # 'values': [1024, 1200]
+            'value': 1024
         },
         'subnet_num_layers': {
             # 'values': [3, 4]
             'value': 3
         },
         'num_transforms': {
-            'values': [15, 16]  # 6, 8, ..., 16
-            # 'value': 16
+            'values': [8, 9, 10, 11, 13, 14]  # 6, 8, ..., 16
+            # 'value': 11
         },
         'lr': {
             # a flat distribution between 0 and 0.1
@@ -45,8 +45,8 @@ sweep_config = {
             'max': 4e-2,
         },
         'decay_step_size': {
-            'values': [5e4, 6e4, 7e4],
-            # 'value': 4e4
+            # 'values': [2e4, 3e4, 4e4],
+            'value': 2e4
         },
         'gamma': {
             'distribution': 'q_uniform',
@@ -58,7 +58,7 @@ sweep_config = {
             'value': 128
         },
         'num_epochs': {
-            'value': 15
+            'value': 10
         }
     },
 }
@@ -94,9 +94,9 @@ def main() -> None:
 if __name__ == '__main__':
     init_seeds(seed=42)
     sweep_id = wandb.sweep(sweep=sweep_config,
-                           project=f'msik_2.5M_JP_dim_red',
+                           project=f'msik_2.4M_klampt',
                            entity='luca_nthu')
     # Start sweep job.
-    wandb.agent(sweep_id, function=main, count=2)
+    wandb.agent(sweep_id, function=main, count=15)
     wandb.finish()
     

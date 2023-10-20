@@ -10,8 +10,8 @@ from jrl.evaluation import solution_pose_errors
 from utils.model import get_flow_model, get_knn
 from utils.utils import load_all_data, data_preprocess_for_inference
 
-from zuko.distributions import BoxUniform, DiagNormal
-from zuko.flows import CNF, NSF, FlowModule, Unconditional
+from zuko.distributions import BoxUniform, DiagNormal, NormalizingFlow
+from zuko.flows import CNF, NSF, Unconditional
 
 DEFAULT_SOLVER_PARAM_M3 = {
         'subnet_width': 1400,
@@ -70,9 +70,10 @@ class Solver:
         self.num_conditions = self._P_tr.shape[-1]
         
     def sample(self, C, K):
-        return self._solver(C).sample((K,))
+        with torch.inference_mode():
+            return self._solver(C).sample((K,))
     
-    def solve(self, single_pose: np.array, num_sols: int, k: int=1, return_numpy: bool=False):
+    def solve(self, single_pose: np.ndarray, num_sols: int, k: int=1, return_numpy: bool=False):
         """
         _summary_
 
@@ -95,8 +96,7 @@ class Solver:
         C = data_preprocess_for_inference(P=single_pose, F=self._F, knn=self._knn, k=k)
 
         # Begin inference
-        with torch.inference_mode():
-            J_hat = self._solver(C).sample((num_sols,))
+        J_hat = self.sample(C, num_sols)
                 
         J_hat = torch.reshape(J_hat, (num_sols * k, -1))
             
@@ -119,8 +119,7 @@ class Solver:
         C = data_preprocess_for_inference(P=P, F=self._F, knn=self._knn)
 
         # Begin inference
-        with torch.inference_mode():
-            J_hat = self._solver(C).sample((num_sols,))
+        J_hat = self.sample(C, num_sols)
             
         l2_errs = np.empty((num_poses, num_sols))
         ang_errs = np.empty((num_poses, num_sols))
@@ -144,14 +143,23 @@ class Solver:
         else:
             return l2_errs.mean(), ang_errs.mean()
     
+    # def _update_solver(self):
+    #     self._solver = FlowModule(
+    #         transforms=self._solver.transforms,
+    #         # base=Unconditional(
+    #         #     DiagNormal,
+    #         #     torch.zeros((self._robot.n_dofs,)) + self._init_latent,
+    #         #     torch.ones((self._robot.n_dofs,)) * self._shink_ratio,
+    #         #     buffer=True,
+    #         # ),
+    #     )
+    
     def _update_solver(self):
-        self._solver = FlowModule(
+        self._solver = Flow(
             transforms=self._solver.transforms,
-            base=Unconditional(
-                DiagNormal,
+            base=DiagNormal(
                 torch.zeros((self._robot.n_dofs,)) + self._init_latent,
                 torch.ones((self._robot.n_dofs,)) * self._shink_ratio,
-                buffer=True,
             ),
         )
     

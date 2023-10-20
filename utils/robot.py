@@ -63,7 +63,7 @@ def sample_P_path(load_time: str = "", num_steps=20) -> str:
 
     return traj_dir
 
-def sample_J_traj(P_path, ref_F, solver, robot):
+def sample_J_traj(P_path, ref_F, solver):
     """
     _summary_
     example of use:
@@ -77,14 +77,16 @@ def sample_J_traj(P_path, ref_F, solver, robot):
     :return: _description_
     :rtype: _type_
     """
+    assert solver.shrink_ratio < 0.2, "shrink_ratio should be less than 0.2"
+    assert solver.shrink_ratio > 0.0, "shrink_ratio should be greater than 0.0"
+    
     P_path = P_path[:, :cfg.m]
     ref_F = np.tile(ref_F, (len(P_path), 1))
 
     C = np.column_stack((P_path, ref_F, np.zeros((len(P_path),))))
     C = torch.tensor(data=C, device="cuda", dtype=torch.float32)
 
-    with torch.inference_mode():
-        J_hat = solver(C).sample((1,))
+    J_hat = solver.sample(C, 1)
 
     J_hat = J_hat.detach().cpu().numpy()[0]
     # df = eval_J_traj(robot, J_hat, P_path=P_path, position_errors=None)

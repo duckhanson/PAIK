@@ -7,8 +7,8 @@ from utils.utils import init_seeds
 
 USE_WANDB = True
 # NUM_RECORD_STEPS = 14e3
-PATIENCE = 3
-POSE_ERR_THRESH = 1.4e-2
+PATIENCE = 4
+POSE_ERR_THRESH = 1.1e-2
 
 sweep_config = {
     'name': 'sweep',
@@ -19,40 +19,40 @@ sweep_config = {
     },
     'parameters': {
         'subnet_width': {
-            # 'values': [1024, 1200]
-            'value': 1024
+            'values': [900, 1024, 1200]
+            # 'value': 1024
         },
         'subnet_num_layers': {
             # 'values': [3, 4]
             'value': 3
         },
         'num_transforms': {
-            'values': [8, 9, 10, 11, 13, 14]  # 6, 8, ..., 16
+            'values': [7, 8, 9]  # 6, 8, ..., 16
             # 'value': 11
         },
         'lr': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
             'q': 1e-5,
-            'min': 1e-4,
-            'max': 5e-4,
+            'min': 3e-4,
+            'max': 8e-4,
         },
         'lr_weight_decay': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
             'q': 1e-3,
             'min': 1e-2,
-            'max': 4e-2,
+            'max': 9e-2,
         },
         'decay_step_size': {
-            # 'values': [2e4, 3e4, 4e4],
-            'value': 2e4
+            'values': [2e4, 4e4, 6e4],
+            # 'value': 2e4
         },
         'gamma': {
             'distribution': 'q_uniform',
             'q': 1e-3,
-            'min': 9e-2,
-            'max': 9.5e-2,
+            'min': 5e-2,
+            'max': 9.9e-2,
         },
         'batch_size': {
             'value': 128
@@ -68,7 +68,7 @@ def main() -> None:
     # note that we define values from `wandb.config`
     # instead of defining hard values
     wandb.init(name=begin_time,
-                     notes=f'25M')
+                     notes=f'smallest but 1 cm model')
 
     # note that we define values from `wandb.config`
     # instead of defining hard values

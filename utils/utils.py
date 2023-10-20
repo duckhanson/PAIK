@@ -47,7 +47,7 @@ def data_collection(robot, N: int):
     :param N: #data required
     :type N: int
     :return: J, P
-    :rtype: np.array, np.array
+    :rtype: np.ndarray, np.ndarray
     """
     path_J, path_P = _get_data_path(len_data=N)
 
@@ -68,20 +68,20 @@ def load_all_data(robot):
     return J_tr, P_tr, P_ts, F
 
 
-def posture_feature_extraction(J: np.array, P: np.array):
+def posture_feature_extraction(J: np.ndarray, P: np.ndarray):
     """
     generate posture feature from J (training data)
 
     Parameters
     ----------
-    J : np.array
+    J : np.ndarray
         joint configurations
-    P : np.array
+    P : np.ndarray
         poses of the robot
 
     Returns
     -------
-    F : np.array
+    F : np.ndarray
         posture features
     """
     F = None
@@ -113,16 +113,16 @@ def posture_feature_extraction(J: np.array, P: np.array):
     return F
 
 
-def get_train_loader(J: np.array, P: np.array, F: np.array, batch_size: int = config.batch_size, device: str = config.device):
+def get_train_loader(J: np.ndarray, P: np.ndarray, F: np.ndarray, batch_size: int = config.batch_size, device: str = config.device):
     """
     a training loader
 
     :param J: joint configurations
-    :type J: np.array
+    :type J: np.ndarray
     :param P: end-effector positions
-    :type P: np.array
+    :type P: np.ndarray
     :param F: posture features
-    :type F: np.array
+    :type F: np.ndarray
     :return: torch dataloader
     :rtype: dataloader
     """
@@ -206,7 +206,7 @@ def load_numpy(file_path: str):
         print(f"{file_path}: file not exist and return empty np array.")
         return np.array([])
 
-def save_numpy(file_path: str, arr: np.array):
+def save_numpy(file_path: str, arr: np.ndarray):
     """
     save arr as a numpy file
 
@@ -214,7 +214,7 @@ def save_numpy(file_path: str, arr: np.array):
     ----------
     file_path : str
         file_path = file_name.np
-    arr : np.array
+    arr : np.ndarray
         data
     """
 
@@ -300,7 +300,7 @@ def data_preprocess_for_inference(P, F, knn, k: int=1):
 
     return C
 
-def nearest_neighbor_F(knn: NearestNeighbors, P_ts: np.array, F: np.array, n_neighbors: int=1):
+def nearest_neighbor_F(knn: NearestNeighbors, P_ts: np.ndarray, F: np.ndarray, n_neighbors: int=1):
     P_ts = np.atleast_2d(P_ts)
     assert len(P_ts) < len(F)
     neigh_idx = knn.kneighbors(P_ts[:, :3], n_neighbors=n_neighbors, return_distance=False)
@@ -308,17 +308,17 @@ def nearest_neighbor_F(knn: NearestNeighbors, P_ts: np.array, F: np.array, n_nei
     
     return F[neigh_idx]
 
-def rand_F(P_ts: np.array, F: np.array):
+def rand_F(P_ts: np.ndarray, F: np.ndarray):
     return np.random.rand(len(np.atleast_2d(P_ts)), F.shape[-1])
 
-def pick_F(P_ts: np.array, F: np.array) :
+def pick_F(P_ts: np.ndarray, F: np.ndarray) :
     idx = np.random.randint(low=0, high=len(F), size=len(np.atleast_2d(P_ts)))
     return F[idx]
 
 
 
 def inference(
-    robot, P_inf: np.array, F: np.array, solver, knn, K: int, print_report: bool = False
+    robot, P_inf: np.ndarray, F: np.ndarray, solver, knn, K: int, print_report: bool = False
 ):
     """
     inference function, Note that: inference time include data preprocessing and postprocessing.
@@ -327,9 +327,9 @@ def inference(
     ----------
     robot : Robot
         Robot arm
-    P_inf : np.array
+    P_inf : np.ndarray
         end-effector positions for inference
-    F : np.array
+    F : np.ndarray
         posture features from training data
     solver : Normalizing Flow model
         a trained normalizing flow model
@@ -342,11 +342,11 @@ def inference(
 
     Returns
     -------
-    J_hat : np.array
+    J_hat : np.ndarray
         joint configurations
-    position_errors : np.array
+    position_errors : np.ndarray
         position errors
-    inference_time : np.array
+    inference_time : np.ndarray
         inference time of K samples for each P in P_inf
     """
     assert len(P_inf) < 1000
@@ -403,7 +403,7 @@ def evaluate_solver(robot, solver, P_ts, F, knn, K=10):
 
 
 def test(
-    robot, P_ts: np.array, F: np.array, solver, knn, K: int, print_report: bool = True
+    robot, P_ts: np.ndarray, F: np.ndarray, solver, knn, K: int, print_report: bool = True
 ):
     """
     test function, Note that: inference time refers to solver inference time, not include data preprocessing or postprocessing.
@@ -412,9 +412,9 @@ def test(
     ----------
     robot : Robot
         Robot arm
-    P_ts : np.array
+    P_ts : np.ndarray
         end-effector positions for testing
-    F : np.array
+    F : np.ndarray
         posture features from training data
     solver : Normalizing Flow model
         a trained normalizing flow model
@@ -427,9 +427,9 @@ def test(
 
     Returns
     -------
-    J_hat : np.array
+    J_hat : np.ndarray
         joint configurations
-    position_errors : np.array
+    position_errors : np.ndarray
         position errors
     avg_inference_time : float
         average inference time over #(len(P_ts)*K) samples
@@ -510,7 +510,7 @@ def path_following(
         the number of generated joint trajectory samples, by default 3
     """
     raise NotImplementedError("Need to consider normalize :)")
-    def load_and_plot(exp_traj_path: str, ee_path: np.array):
+    def load_and_plot(exp_traj_path: str, ee_path: np.ndarray):
         if os.path.exists(path=exp_traj_path):
             robot.plot(qs=qs)
         else:
@@ -552,7 +552,7 @@ def calc_ang_errs(qs):
 
 
 def eval_J_traj(
-    robot, J_traj: np.array, P_path: np.array = None, position_errors: np.array = None
+    robot, J_traj: np.ndarray, P_path: np.ndarray = None, position_errors: np.ndarray = None
 ):
     """
     evalution of J_traj for path-following tasks
@@ -561,11 +561,11 @@ def eval_J_traj(
     ----------
     robot : Robot
         robot arm
-    J_traj : np.array
+    J_traj : np.ndarray
         a joint trajectory
-    P_path : np.array, optional
+    P_path : np.ndarray, optional
         an end-effector position path, by default None
-    position_errors : np.array, optional
+    position_errors : np.ndarray, optional
         position errors for FK(J_traj)-P_path, by default None
 
     Returns

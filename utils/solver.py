@@ -10,8 +10,8 @@ from jrl.evaluation import solution_pose_errors
 from utils.model import get_flow_model, get_knn
 from utils.utils import load_all_data, data_preprocess_for_inference
 
-from zuko.distributions import BoxUniform, DiagNormal, NormalizingFlow
-from zuko.flows import CNF, NSF, Unconditional
+from zuko.distributions import DiagNormal
+from zuko.flows import Flow, Unconditional
 
 DEFAULT_SOLVER_PARAM_M3 = {
         'subnet_width': 1400,
@@ -79,7 +79,7 @@ class Solver:
 
         Parameters
         ----------
-        single_pose : np.array
+        single_pose : np.ndarray
             a single task point, m=3 or m=7
         num_sols : int
             number of solutions to be sampled from base distribution
@@ -143,24 +143,15 @@ class Solver:
         else:
             return l2_errs.mean(), ang_errs.mean()
     
-    # def _update_solver(self):
-    #     self._solver = FlowModule(
-    #         transforms=self._solver.transforms,
-    #         # base=Unconditional(
-    #         #     DiagNormal,
-    #         #     torch.zeros((self._robot.n_dofs,)) + self._init_latent,
-    #         #     torch.ones((self._robot.n_dofs,)) * self._shink_ratio,
-    #         #     buffer=True,
-    #         # ),
-    #     )
-    
     def _update_solver(self):
         self._solver = Flow(
-            transforms=self._solver.transforms,
-            base=DiagNormal(
+            transforms=self._solver.transforms, # type: ignore
+            base=Unconditional(
+                DiagNormal,
                 torch.zeros((self._robot.n_dofs,)) + self._init_latent,
                 torch.ones((self._robot.n_dofs,)) * self._shink_ratio,
-            ),
+                buffer=True,
+            ), # type: ignore
         )
     
     @property

@@ -7,8 +7,8 @@ from utils.settings import config
 
 def create_dataset(
     verbose: bool = False,
-    features: np.array = None,
-    targets: np.array = None,
+    features: np.ndarray = None,
+    targets: np.ndarray = None,
     enable_normalize: bool = False,
     device: str = config.device,
 ):
@@ -18,9 +18,9 @@ def create_dataset(
     :param verbose: _description_, defaults to False
     :type verbose: bool, optional
     :param features: _description_, defaults to None
-    :type features: np.array, optional
+    :type features: np.ndarray, optional
     :param targets: _description_, defaults to None
-    :type targets: np.array, optional
+    :type targets: np.ndarray, optional
     :param enable_normalize: _description_, defaults to False
     :type enable_normalize: bool, optional
     :param device: _description_, defaults to config.device

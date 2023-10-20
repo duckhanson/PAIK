@@ -7,8 +7,9 @@ import torch
 from sklearn.neighbors import NearestNeighbors
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import StepLR
-from zuko.distributions import BoxUniform, DiagNormal
-from zuko.flows import CNF, NSF, FlowModule, Unconditional
+from zuko.distributions import DiagNormal
+from zuko.flows import Flow, Unconditional
+from zuko.flows.spline import NSF
 
 from utils.settings import config
 from utils.utils import save_pickle, load_pickle
@@ -45,14 +46,14 @@ def get_flow_model(
             activation=config.activation,
             hidden_features=[subnet_width] * subnet_num_layers,
         ).to(device)
-    elif config.architecture == "cnf":
-        flow = CNF(
-            features=config.n,
-            context=config.num_conditions,
-            transforms=num_transforms,
-            activation=config.activation,
-            hidden_features=[subnet_width] * subnet_num_layers,
-        ).to(device)
+    # elif config.architecture == "cnf":
+    #     flow = CNF(
+    #         features=config.n,
+    #         context=config.num_conditions,
+    #         transforms=num_transforms,
+    #         activation=config.activation,
+    #         hidden_features=[subnet_width] * subnet_num_layers,
+    #     ).to(device)
     else:
         raise NotImplementedError("Not support architecture.")
 
@@ -78,38 +79,6 @@ def get_flow_model(
 
     return flow, optimizer, scheduler
 
-
-def get_iflow_model(
-    flow: NSF, init_sample: torch.Tensor, shrink_ratio: float = 0.01
-) -> FlowModule:
-    """
-    sampling from initial samples as search space centers
-    seach shrink_ratio region
-
-    :param flow: _description_
-    :type flow: NSF
-    :param init_sample: _description_
-    :type init_sample: torch.Tensor
-    :param shrink_ratio: _description_, defaults to 0.01
-    :type shrink_ratio: float, optional
-    :return: _description_
-    :rtype: FlowModule
-    """
-    iflow = FlowModule(
-        transforms=flow.transforms,
-        base=Unconditional(
-            DiagNormal,
-            torch.zeros((config.n,)) + init_sample,
-            torch.ones((config.n,)) * shrink_ratio,
-            buffer=True,
-        ),
-    )
-
-    iflow.to(config.device)
-
-    return iflow
-
-
 def get_sflow_model(flow: NSF, shrink_ratio: float = config.shrink_ratio, device: str = config.device):
     """
     shrink normal distribution model
@@ -119,7 +88,7 @@ def get_sflow_model(flow: NSF, shrink_ratio: float = config.shrink_ratio, device
     :return: _description_
     :rtype: _type_
     """
-    sflow = FlowModule(
+    sflow = Flow(
         transforms=flow.transforms,
         base=Unconditional(
             DiagNormal,
@@ -134,36 +103,13 @@ def get_sflow_model(flow: NSF, shrink_ratio: float = config.shrink_ratio, device
     return sflow
 
 
-def get_nflow_model(flow: NSF, shrink_ratio=config.shrink_ratio):
-    """
-    _summary_
-
-    :param flow: _description_
-    :type flow: NSF
-    :return: _description_
-    :rtype: _type_
-    """
-    nflow = FlowModule(
-        transforms=flow.transforms,
-        base=Unconditional(
-            BoxUniform,
-            -torch.ones((config.n,)) * shrink_ratio,
-            torch.ones((config.n,)) * shrink_ratio,
-            buffer=True,
-        ),
-    )
-
-    nflow.to(config.device)
-
-    return nflow
-
-def get_knn(P_tr: np.array):
+def get_knn(P_tr: np.ndarray):
     """
     fit a knn model
 
     Parameters
     ----------
-    P_tr : np.array
+    P_tr : np.ndarray
         end-effector positions of training data
 
     Returns

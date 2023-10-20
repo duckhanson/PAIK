@@ -2,7 +2,6 @@
 import os
 from time import time
 from datetime import datetime
-from typing import Any
 import numpy as np
 import pandas as pd
 import torch
@@ -11,10 +10,9 @@ from klampt.model import trajectory
 from jrl.robot import Robot
 from jrl.evaluation import solution_pose_errors
 
-from utils.robot import get_robot
-from utils.settings import config as settings
+from utils.settings import config as cfg
 from utils.model import get_flow_model, get_knn
-from utils.utils import load_all_data, data_preprocess_for_inference, load_numpy, save_numpy, nearest_neighbor_F
+from utils.utils import load_all_data, data_preprocess_for_inference, nearest_neighbor_F, load_numpy, save_numpy
 
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
@@ -88,7 +86,7 @@ class Solver:
         return self._init_latent
     
     @property
-    def shirnk_ratio(self):
+    def shrink_ratio(self):
         return self._shink_ratio
     
     @property
@@ -99,8 +97,8 @@ class Solver:
     def param(self):
         return self._solver_param
     
-    @shirnk_ratio.setter
-    def shirnk_ratio(self, value: float):
+    @shrink_ratio.setter
+    def shrink_ratio(self, value: float):
         assert value >= 0 and value < 1
         self._shink_ratio = value
         self._update_solver()
@@ -202,31 +200,29 @@ class Solver:
         
     def _sample_P_path(self, load_time: str = "", num_steps=20) -> np.ndarray:
         """
-        _summary_
-        example of use
+        sample a path from P_ts
 
-        for generate
-        traj_dir = sample_P_path(load_time=')
+        Parameters
+        ----------
+        load_time : str, optional
+            file name of load P_path, by default ""
+        num_steps : int, optional
+            length of the generated path, by default 20
 
-        for demo
-        traj_dir = sample_P_path(load_time='05232300')
-
-        :param robot: _description_
-        :type robot: _type_
-        :param load_time: _description_, defaults to ''
-        :type load_time: str, optional
-        :return: _description_
-        :rtype: str
+        Returns
+        -------
+        np.ndarray
+            array_like(num_steps, m)
         """
         if load_time == "":
-            traj_dir = settings.traj_dir + datetime.now().strftime("%m%d%H%M%S") + "/"
+            traj_dir = cfg.traj_dir + datetime.now().strftime("%m%d%H%M%S") + "/"
         else:
-            traj_dir = settings.traj_dir + load_time + "/"
+            traj_dir = cfg.traj_dir + load_time + "/"
 
         P_path_file_path = traj_dir + "ee_traj.npy"
 
         if load_time == "" or not os.path.exists(path=P_path_file_path):
-            # endPoints = np.random.rand(2, settings.m) # 2 for begin and end
+            # endPoints = np.random.rand(2, cfg.m) # 2 for begin and end
             rand_idxs = np.random.randint(low=0, high=len(self._P_ts), size=2)
             endPoints = self._P_ts[rand_idxs]
             traj = trajectory.Trajectory(milestones=endPoints) # type: ignore
@@ -246,6 +242,21 @@ class Solver:
         return P_path
     
     def _sample_J_traj(self, P_path: np.ndarray, ref_F: np.ndarray):
+        """
+        sample a trajectory from IK solver that fit P_path
+
+        Parameters
+        ----------
+        P_path : np.ndarray
+            a sequence of target end-effector poses
+        ref_F : np.ndarray
+            posture features
+
+        Returns
+        -------
+        torch.Tensor
+            array_like(num_steps, n_dofs)
+        """
         assert self._shink_ratio < 0.2, "shrink_ratio should be less than 0.2"
         
         P_path = P_path[:, :self._m]
@@ -265,15 +276,32 @@ class Solver:
         load_time: str = "", 
         num_traj: int = 3,
         num_steps=20,
-        shirnk_ratio: float = 0.1,
+        shrink_ratio: float = 0.1,
         enable_evaluation: bool = False,
         enable_plot: bool = False,
     ) -> None:
-        
+        """
+        evaluate the performance of path following
+
+        Parameters
+        ----------
+        load_time : str, optional
+            file name of load P_path, by default ""
+        num_traj : int, optional
+            number of demo trajectories, by default 3
+        num_steps : int, optional
+            length of the generated path, by default 20
+        shrink_ratio : float, optional
+            the shrink ratio of the based distribution of IK solver, by default 0.1
+        enable_evaluation : bool, optional
+            use evaluation or not, by default False
+        enable_plot : bool, optional
+            use plot or not, by default False
+        """
         old_shink_ratio = self._shink_ratio
-        self.shirnk_ratio = shirnk_ratio
+        self.shrink_ratio = shrink_ratio
         
-        print(f'using shrink_ratio: {self.shirnk_ratio}')
+        print(f'using shrink_ratio: {self.shrink_ratio}')
         
         P_path = self._sample_P_path(load_time=load_time, num_steps=num_steps)
         if self._m == 3:
@@ -307,7 +335,7 @@ class Solver:
             if enable_plot:
                 pass
 
-        self.shirnk_ratio = old_shink_ratio
+        self.shrink_ratio = old_shink_ratio
         
     
     

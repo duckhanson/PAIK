@@ -25,7 +25,7 @@ def get_flow_model(
     decay_step_size: int=config.decay_step_size,
     gamma: float=config.decay_gamma,
     device=config.device,
-    ckpt_name: str=config.architecture,
+    ckpt_name: str='',
     random_perm: bool=True,
     n: int=config.n,
     m: int=config.m,

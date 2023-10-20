@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pprint import pprint
 from jrl.robot import Robot
 from utils.solver import Solver, DEFAULT_SOLVER_PARAM_M3, DEFAULT_SOLVER_PARAM_M7
+from utils.robot import get_robot
 from jrl.robots import Panda, Fetch, FetchArm
 from klampt.math import so3
 from klampt.model import coordinates, trajectory
@@ -15,6 +16,104 @@ import torch
 import torch.optim
 from utils.settings import config
 
+class Visualizer(Solver):
+    def __init__(self, robot: Robot, solver_param: dict) -> None:
+        super().__init__(robot, solver_param)
+
+    def _plot_pose(self, name: str, pose: np.ndarray, hide_label: bool = False):
+        vis.add(
+            name,
+            coordinates.Frame(name=name, worldCoordinates=(so3.from_quaternion(pose[3:]), pose[0:3])), # type: ignore
+            hide_label=hide_label,
+        )
+
+
+    def _run_demo(
+        self,
+        n_worlds: int,
+        setup_fn: Callable[[List[WorldModel]], None],
+        loop_fn: Callable[[List[WorldModel], Any], None],
+        viz_update_fn: Callable[[List[WorldModel], Any], None],
+        demo_state: Any = None,
+        time_p_loop: float = 2.5,
+        title: str = "Anonymous demo",
+        load_terrain: bool = True,
+    ):
+        """Internal function for running a demo."""
+
+        worlds = [self.robot.klampt_world_model.copy() for _ in range(n_worlds)]
+
+        # TODO: Adjust terrain height for each robot
+        if load_terrain:
+            terrain_filepath = "visualization_resources/terrains/plane.off"
+            res = worlds[0].loadTerrain(terrain_filepath)
+            assert res, f"Failed to load terrain '{terrain_filepath}'"
+            vis.add("terrain", worlds[0].terrain(0))
+
+        setup_fn(worlds)
+
+        vis.setWindowTitle(title)
+        vis.show()
+        while vis.shown():
+            # Modify the world here. Do not modify the internal state of any visualization items outside of the lock
+            vis.lock()
+
+            loop_fn(worlds, demo_state)
+            vis.unlock()
+
+            # Outside of the lock you can use any vis.X functions, including vis.setItemConfig() to modify the state of objects
+            viz_update_fn(worlds, demo_state)
+            sleep(time_p_loop)
+        vis.kill()
+        
+    def sample_latent_space(self, num_samples: int=5):
+        self._random_target_pose(num_samples=num_samples, k=1)
+
+    def sample_posture_space(self, k: int=5):
+        old_shrink_ratio = self.shrink_ratio
+        self.shrink_ratio = 0
+        self._random_target_pose(num_samples=1, k=k)
+        self.shrink_ratio = old_shrink_ratio
+        
+    def _random_target_pose(self, num_samples: int=5, k: int=1):
+        """Set the end effector to a randomly drawn pose. Generate and visualize `nb_sols` solutions for the pose"""
+        if k > 1:
+            assert self.shrink_ratio == 0, "Shrink ratio must be 0 for k > 1 (sweep posture, fix latent)"
+        
+        nb_sols = num_samples * k
+        
+        def setup_fn(worlds):
+            vis.add(f"robot_goal", worlds[0].robot(0))
+            vis.setColor(f"robot_goal", 0.5, 1, 1, 0)
+            vis.setColor((f"robot_goal", self.robot.end_effector_link_name), 0, 1, 0, 0.7)
+
+            for i in range(1, nb_sols + 1):
+                vis.add(f"robot_{i}", worlds[i].robot(0))
+                vis.setColor(f"robot_{i}", 1, 1, 1, 1)
+                vis.setColor((f"robot_{i}", self.robot.end_effector_link_name), 1, 1, 1, 0.71)
+
+        def loop_fn(worlds, _demo_state):
+            # Get random sample
+            random_sample = self.robot.sample_joint_angles(1)
+            random_sample_q = self.robot._x_to_qs(random_sample)
+            worlds[0].robot(0).setConfig(random_sample_q[0])
+            target_pose = self.robot.forward_kinematics_klampt(random_sample)[0]
+
+            # Get solutions to pose of random sample
+            ik_solutions = self.solve(target_pose, num_samples, k=k, return_numpy=True)
+            qs = self.robot._x_to_qs(ik_solutions) # type: ignore
+            for i in range(nb_sols):
+                worlds[i + 1].robot(0).setConfig(qs[i])
+
+        time_p_loop = 2.5
+        title = "Solutions for randomly drawn poses - Green link is the target pose"
+
+        def viz_update_fn(worlds, _demo_state):
+            return
+
+        n_worlds = nb_sols + 1
+        self._run_demo(n_worlds, setup_fn, loop_fn, viz_update_fn, time_p_loop=time_p_loop, title=title)
+    
 # =========================
 # Parameters
 # =========================
@@ -41,7 +140,7 @@ _CLAMP_TO_JOINT_LIMITS = True
 def _plot_pose(name: str, pose: np.ndarray, hide_label: bool = False):
     vis.add(
         name,
-        coordinates.Frame(name=name, worldCoordinates=(so3.from_quaternion(pose[3:]), pose[0:3])),
+        coordinates.Frame(name=name, worldCoordinates=(so3.from_quaternion(pose[3:]), pose[0:3])), # type: ignore
         hide_label=hide_label,
     )
 
@@ -124,7 +223,7 @@ def visualize_fk(robot: Robot, solver="klampt"):
             # (B x 3*(n+1) )
             x_torch = torch.from_numpy(x_random).float().to(config.device)
             fk = robot.forward_kinematics_batch(x_torch)
-            ee_pose = fk[0, 0:3]
+            ee_pose = fk[0, 0:3] # type: ignore
             vis.add("ee", (so3.identity(), ee_pose[0:3]), length=0.15, width=2)
 
     def viz_update_fn(worlds, _demo_state):
@@ -284,15 +383,15 @@ def sample_latent_space(robot: Robot, solver: Solver, num_samples: int=5):
     random_target_pose(robot=robot, solver=solver, num_samples=num_samples, k=1)
 
 def sample_posture_space(robot: Robot, solver: Solver, k: int=5):
-    old_shrink_ratio = solver.shirnk_ratio
-    solver.shirnk_ratio = 0
+    old_shrink_ratio = solver.shrink_ratio
+    solver.shrink_ratio = 0
     random_target_pose(robot=robot, solver=solver, num_samples=1, k=k)
-    solver.shirnk_ratio = old_shrink_ratio
+    solver.shrink_ratio = old_shrink_ratio
     
 def random_target_pose(robot: Robot, solver: Solver, num_samples: int=5, k: int=1):
     """Set the end effector to a randomly drawn pose. Generate and visualize `nb_sols` solutions for the pose"""
     if k > 1:
-        assert solver.shirnk_ratio == 0, "Shrink ratio must be 0 for k > 1 (sweep posture, fix latent)"
+        assert solver.shrink_ratio == 0, "Shrink ratio must be 0 for k > 1 (sweep posture, fix latent)"
     
     nb_sols = num_samples * k
     
@@ -389,13 +488,17 @@ def oscillate_joints(robot: Robot):
 # =========================
 
 def main():
-    robot = Panda()
-    # pprint(dir(robot))
-    solver = Solver(robot=robot, solver_param=DEFAULT_SOLVER_PARAM_M7)
-    # visualize_fk(robot=robot)
-    # sample_latent_space(robot=robot, solver=solver, num_samples=5)
-    sample_posture_space(robot=robot, solver=solver, k=5)  
+    # robot = Panda()
+    # # pprint(dir(robot))
+    # solver = Solver(robot=robot, solver_param=DEFAULT_SOLVER_PARAM_M7)
+    # # visualize_fk(robot=robot)
+    # # sample_latent_space(robot=robot, solver=solver, num_samples=5)
+    # sample_posture_space(robot=robot, solver=solver, k=5)  
     # oscillate_joints(robot=robot)
+    
+    visualizer = Visualizer(robot=get_robot(), solver_param=DEFAULT_SOLVER_PARAM_M7)
+    # visualizer.sample_latent_space(num_samples=5)
+    visualizer.sample_posture_space(k=5)
     
     
 

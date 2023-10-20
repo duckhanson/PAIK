@@ -1,36 +1,43 @@
 # Import required packages
+import os
 from time import time
+from datetime import datetime
 from typing import Any
 import numpy as np
+import pandas as pd
 import torch
 
+from klampt.model import trajectory
 from jrl.robot import Robot
 from jrl.evaluation import solution_pose_errors
 
+from utils.robot import get_robot
+from utils.settings import config as settings
 from utils.model import get_flow_model, get_knn
-from utils.utils import load_all_data, data_preprocess_for_inference
+from utils.utils import load_all_data, data_preprocess_for_inference, load_numpy, save_numpy, nearest_neighbor_F
 
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 
 DEFAULT_SOLVER_PARAM_M3 = {
-        'subnet_width': 1400,
+        'subnet_width': 1024,
         'subnet_num_layers': 3,
-        'num_transforms': 9,
-        'lr': 2.1e-4,
-        'lr_weight_decay': 2.7e-2,
-        'decay_step_size': 4e4,
-        'gamma': 5e-2,
+        'num_transforms': 10,
+        'lr': 3.3e-4,
+        'lr_weight_decay': 1.3e-2,
+        'decay_step_size': 7e4,
+        'gamma': 9.4e-2,
         'shrink_ratio': 0.61,
         'batch_size': 128,
         'num_epochs': 10,
-        'ckpt_name': 'nsf',
+        'ckpt_name': '0930-0346',
+        'nmr': (7, 3, 4),
     }
 
 DEFAULT_SOLVER_PARAM_M7 = {
         'subnet_width': 1024,
         'subnet_num_layers': 3,
-        'num_transforms': 14,
+        'num_transforms': 8,
         'lr': 1.3e-4,
         'lr_weight_decay': 3.1e-2,
         'decay_step_size': 6e4,
@@ -38,14 +45,17 @@ DEFAULT_SOLVER_PARAM_M7 = {
         'shrink_ratio': 0.61,
         'batch_size': 128,
         'num_epochs': 15,
-        'ckpt_name': '1018-0133',
+        'ckpt_name': '1019-1842',
+        'nmr': (7, 7, 1),
     }
 
 class Solver:
     def __init__(self, robot: Robot, solver_param: dict = DEFAULT_SOLVER_PARAM_M3) -> None:
         self._robot = robot
         self._solver_param = solver_param
+        self._device = 'cuda'
         # Neural spline flow (NSF) with 3 sample features and 5 context features
+        n, m, r = solver_param['nmr']
         flow, optimizer, scheduler = get_flow_model(
                 enable_load_model=True,
                 num_transforms=solver_param["num_transforms"],
@@ -56,103 +66,22 @@ class Solver:
                 lr_weight_decay=solver_param["lr_weight_decay"],
                 decay_step_size=solver_param["decay_step_size"],
                 gamma=solver_param["gamma"],
-                device='cuda',
-                ckpt_name=solver_param["ckpt_name"])
+                device=self._device,
+                ckpt_name=solver_param["ckpt_name"],
+                n=n,
+                m=m,
+                r=r) # type: ignore
         self._solver = flow
         self._optimizer = optimizer
         self._scheduler = scheduler
         self._shink_ratio = solver_param["shrink_ratio"]
-        self._init_latent = torch.zeros((1, self.robot.n_dofs)).cuda()
+        self._init_latent = torch.zeros((1, self.robot.n_dofs)).to(self._device)
         
         # load inference data
-        self._J_tr, self._P_tr, self._P_ts, self._F = load_all_data(self._robot)
-        self._knn = get_knn(P_tr=self._P_tr)
-        self.num_conditions = self._P_tr.shape[-1]
-        
-    def sample(self, C, K):
-        with torch.inference_mode():
-            return self._solver(C).sample((K,))
-    
-    def solve(self, single_pose: np.ndarray, num_sols: int, k: int=1, return_numpy: bool=False):
-        """
-        _summary_
-
-        Parameters
-        ----------
-        single_pose : np.ndarray
-            a single task point, m=3 or m=7
-        num_sols : int
-            number of solutions to be sampled from base distribution
-        k : int, optional
-            number of posture features to be sampled from knn, by default 1
-        return_numpy : bool, optional
-            return numpy array type or torch cuda tensor type, by default False
-
-        Returns
-        -------
-        array_like
-            array_like(num_sols * k, n_dofs)
-        """
-        C = data_preprocess_for_inference(P=single_pose, F=self._F, knn=self._knn, k=k)
-
-        # Begin inference
-        J_hat = self.sample(C, num_sols)
-                
-        J_hat = torch.reshape(J_hat, (num_sols * k, -1))
-            
-        if return_numpy:
-            J_hat = J_hat.detach().cpu().numpy()
-            
-        return J_hat
-    
-    def _random_sample_poses(self, num_poses: int):
-        # Randomly sample poses from test set
-        idx = np.random.choice(self._P_ts.shape[0], num_poses, replace=False)
-        P = self._P_ts[idx]
-        return P
-    
-    def random_evaluation(self, num_poses: int, num_sols: int, return_time: bool=False):
-        # Randomly sample poses from test set
-        P = self._random_sample_poses(num_poses=num_poses)
-        time_begin = time()
-        # Data Preprocessing
-        C = data_preprocess_for_inference(P=P, F=self._F, knn=self._knn)
-
-        # Begin inference
-        J_hat = self.sample(C, num_sols)
-            
-        l2_errs = np.empty((num_poses, num_sols))
-        ang_errs = np.empty((num_poses, num_sols))
-        if self.num_conditions == 3:
-            P = np.column_stack((P, np.ones(shape=(len(P), 4))))
-        for i in range(num_poses):
-
-            l2_errs[i], ang_errs[i] = solution_pose_errors(robot=self._robot, solutions=J_hat[:, i, :], target_poses=P[i])
-            
-        l2_errs = l2_errs.flatten()
-        ang_errs = ang_errs.flatten()
-        
-        avg_inference_time = round((time() - time_begin) / num_poses, 3)
-
-        # # df = pd.DataFrame()
-        # # df['l2_errs'] = l2_errs
-        # # df['ang_errs'] = ang_errs
-        # # print(df.describe())
-        if return_time:
-            return l2_errs.mean(), ang_errs.mean(), avg_inference_time
-        else:
-            return l2_errs.mean(), ang_errs.mean()
-    
-    def _update_solver(self):
-        self._solver = Flow(
-            transforms=self._solver.transforms, # type: ignore
-            base=Unconditional(
-                DiagNormal,
-                torch.zeros((self._robot.n_dofs,)) + self._init_latent,
-                torch.ones((self._robot.n_dofs,)) * self._shink_ratio,
-                buffer=True,
-            ), # type: ignore
-        )
+        assert n == self._robot.n_dofs, f"n should be {self._robot.n_dofs} as the robot"
+        self._J_tr, self._P_tr, self._P_ts, self._F = load_all_data(self._robot, n=n, m=m, r=r)
+        self._knn = get_knn(P_tr=self._P_tr, n=n, m=m, r=r)
+        self._m = m
     
     @property
     def latent(self):
@@ -182,4 +111,203 @@ class Solver:
         self._init_latent = value
         self._update_solver()
         
+    
+    def sample(self, C, K):
+        if C.device != self._device:
+            C = C.to(self._device)
+            print(f"move C to {self._device}")
+            
+        with torch.inference_mode():
+            return self._solver(C).sample((K,))
+    
+    def solve(self, single_pose: np.ndarray, num_sols: int, k: int=1, return_numpy: bool=False):
+        """
+        _summary_
+
+        Parameters
+        ----------
+        single_pose : np.ndarray
+            a single task point, m=3 or m=7
+        num_sols : int
+            number of solutions to be sampled from base distribution
+        k : int, optional
+            number of posture features to be sampled from knn, by default 1
+        return_numpy : bool, optional
+            return numpy array type or torch cuda tensor type, by default False
+
+        Returns
+        -------
+        array_like
+            array_like(num_sols * k, n_dofs)
+        """
+        C = data_preprocess_for_inference(P=single_pose, F=self._F, knn=self._knn, m=self._m, k=k)
+
+        # Begin inference
+        J_hat = self.sample(C, num_sols)
+                
+        J_hat = torch.reshape(J_hat, (num_sols * k, -1))
+            
+        if return_numpy:
+            J_hat = J_hat.detach().cpu().numpy()
+            
+        return J_hat
+    
+    def _random_sample_poses(self, num_poses: int):
+        # Randomly sample poses from test set
+        idx = np.random.choice(self._P_ts.shape[0], num_poses, replace=False)
+        P = self._P_ts[idx]
+        return P
+    
+    def random_evaluation(self, num_poses: int, num_sols: int, return_time: bool=False):
+        # Randomly sample poses from test set
+        P = self._random_sample_poses(num_poses=num_poses)
+        time_begin = time()
+        # Data Preprocessing
+        C = data_preprocess_for_inference(P=P, F=self._F, knn=self._knn, m=self._m)
+
+        # Begin inference
+        J_hat = self.sample(C, num_sols)
+            
+        l2_errs = np.empty((num_poses, num_sols))
+        ang_errs = np.empty((num_poses, num_sols))
+        if self._m == 3:
+            P = np.column_stack((P, np.ones(shape=(len(P), 4))))
+        for i in range(num_poses):
+            l2_errs[i], ang_errs[i] = solution_pose_errors(robot=self._robot, solutions=J_hat[:, i, :], target_poses=P[i])
+            
+        l2_errs = l2_errs.flatten()
+        ang_errs = ang_errs.flatten()
+        
+        avg_inference_time = round((time() - time_begin) / num_poses, 3)
+
+        # # df = pd.DataFrame()
+        # # df['l2_errs'] = l2_errs
+        # # df['ang_errs'] = ang_errs
+        # # print(df.describe())
+        if return_time:
+            return l2_errs.mean(), ang_errs.mean(), avg_inference_time
+        else:
+            return l2_errs.mean(), ang_errs.mean()
+    
+    def _update_solver(self):
+        self._solver = Flow(
+            transforms=self._solver.transforms, # type: ignore
+            base=Unconditional(
+                DiagNormal,
+                torch.zeros((self._robot.n_dofs,)) + self._init_latent,
+                torch.ones((self._robot.n_dofs,)) * self._shink_ratio,
+                buffer=True,
+            ), # type: ignore
+        )
+        
+    def _sample_P_path(self, load_time: str = "", num_steps=20) -> np.ndarray:
+        """
+        _summary_
+        example of use
+
+        for generate
+        traj_dir = sample_P_path(load_time=')
+
+        for demo
+        traj_dir = sample_P_path(load_time='05232300')
+
+        :param robot: _description_
+        :type robot: _type_
+        :param load_time: _description_, defaults to ''
+        :type load_time: str, optional
+        :return: _description_
+        :rtype: str
+        """
+        if load_time == "":
+            traj_dir = settings.traj_dir + datetime.now().strftime("%m%d%H%M%S") + "/"
+        else:
+            traj_dir = settings.traj_dir + load_time + "/"
+
+        P_path_file_path = traj_dir + "ee_traj.npy"
+
+        if load_time == "" or not os.path.exists(path=P_path_file_path):
+            # endPoints = np.random.rand(2, settings.m) # 2 for begin and end
+            rand_idxs = np.random.randint(low=0, high=len(self._P_ts), size=2)
+            endPoints = self._P_ts[rand_idxs]
+            traj = trajectory.Trajectory(milestones=endPoints) # type: ignore
+            P_path = np.empty((num_steps, settings.m))
+            for i in range(num_steps):
+                iStep = i/num_steps
+                point = traj.eval(iStep)
+                P_path[i] = point
+            
+            save_numpy(file_path=P_path_file_path, arr=P_path)
+        else:
+            P_path = load_numpy(file_path=P_path_file_path)
+
+        if os.path.exists(path=traj_dir):
+            print(f"{traj_dir} load successfully.")
+        
+        return P_path
+    
+    def _sample_J_traj(self, P_path: np.ndarray, ref_F: np.ndarray):
+        assert self._shink_ratio < 0.2, "shrink_ratio should be less than 0.2"
+        
+        P_path = P_path[:, :settings.m]
+        ref_F = np.atleast_2d(ref_F)
+        if len(P_path) != len(ref_F):        
+            ref_F = np.tile(ref_F, (len(P_path), 1)) # type: ignore
+
+        C = np.column_stack((P_path, ref_F, np.zeros((len(P_path),)))) # type: ignore
+        C = torch.from_numpy(C).float().to(self._device) # type: ignore
+
+        J_hat = self.sample(C, 1)
+        J_hat = torch.reshape(J_hat, (-1, self._robot.n_dofs))
+        return J_hat
+    
+    def path_following(
+        self,
+        load_time: str = "", 
+        num_traj: int = 3,
+        num_steps=20,
+        shirnk_ratio: float = 0.1,
+        enable_evaluation: bool = False,
+        enable_plot: bool = False,
+    ) -> None:
+        
+        old_shink_ratio = self._shink_ratio
+        self.shirnk_ratio = shirnk_ratio
+        
+        print(f'using shrink_ratio: {self.shirnk_ratio}')
+        
+        P_path = self._sample_P_path(load_time=load_time, num_steps=num_steps)
+        if self.num_conditions == 3:
+            P_path_7 = np.column_stack((P_path, np.ones((len(P_path), 4)))) # type: ignore
+        else:
+            P_path_7 = P_path
+        ref_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path[0]), self._F, n_neighbors=20) # type: ignore # knn
+        nn1_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path), self._F, n_neighbors=1) # type: ignore # knn
+        
+        # ref_F = F
+        # ref_F = rand_F(Path[0], F)
+        
+        rand_idxs = np.random.randint(low=0, high=len(ref_F), size=num_traj)
+        # rand_idxs = list(range(num_traj))
+        qs = self._sample_J_traj(P_path, nn1_F)
+        print("="*6 + f"=(use nearest)" + "="*6)
+        print(P_path_7.shape)
+        l2_err, ang_err = solution_pose_errors(robot=self._robot, solutions=qs, target_poses=P_path_7)
+        df = pd.DataFrame({'l2_err': l2_err, 'ang_err': ang_err})
+        print(df.describe())
+        
+        for i, rand in enumerate(rand_idxs):
+            qs = self._sample_J_traj(P_path, ref_F[rand])
+            print("="*6 + str(rand) + f"=({ref_F[rand]})" + "="*6)
+            
+            if enable_evaluation:
+                l2_err, ang_err = solution_pose_errors(robot=self._robot, solutions=qs, target_poses=P_path_7)
+                df = pd.DataFrame({'l2_err': l2_err, 'ang_err': ang_err})
+                print(df.describe())
+            
+            if enable_plot:
+                pass
+
+        self.shirnk_ratio = old_shink_ratio
+        
+    
     

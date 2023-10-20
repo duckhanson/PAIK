@@ -79,7 +79,6 @@ def sample_J_traj(P_path, ref_F, solver):
     """
     assert solver.shrink_ratio < 0.2, "shrink_ratio should be less than 0.2"
     assert solver.shrink_ratio > 0.0, "shrink_ratio should be greater than 0.0"
-    
     P_path = P_path[:, :cfg.m]
     ref_F = np.tile(ref_F, (len(P_path), 1))
 

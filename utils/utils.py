@@ -23,22 +23,7 @@ def init_seeds(seed=42):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-def _get_data_path(len_data):
-    """
-    _summary_
-
-    :param len_data: _description_
-    :type len_data: _type_
-    :return: (x_path, y_path, x_trans_path)
-    :rtype: _type_
-    """
-    if len_data == config.N_train:
-        return config.path_J_train, config.path_P_train
-    else:
-        return config.path_J_test, config.path_P_test
-
-
-def data_collection(robot, N: int):
+def data_collection(robot, N: int, n: int, m: int, r: int):
     """
     collect data using uniform sampling
 
@@ -49,7 +34,10 @@ def data_collection(robot, N: int):
     :return: J, P
     :rtype: np.ndarray, np.ndarray
     """
-    path_J, path_P = _get_data_path(len_data=N)
+    if N == config.N_train:
+        path_J, path_P = config.path_J_train(n, m, r), config.path_P_train(n, m, r)
+    else:
+        path_J, path_P = config.path_J_test(n, m, r), config.path_P_test(n, m, r)
 
     J = load_numpy(file_path=path_J)
     P = load_numpy(file_path=path_P)
@@ -57,18 +45,18 @@ def data_collection(robot, N: int):
     if len(J) != N or len(P) != N:
         J, P = robot.sample_joint_angles_and_poses(n=N, return_torch=False)
         save_numpy(file_path=path_J, arr=J)
-        save_numpy(file_path=path_P, arr=P[:, :config.m])
+        save_numpy(file_path=path_P, arr=P[:, :m])
 
     return J, P
 
-def load_all_data(robot):
-    J_tr, P_tr = data_collection(robot=robot, N=config.N_train)
-    _, P_ts = data_collection(robot=robot, N=config.N_test)
-    F = posture_feature_extraction(J=J_tr, P=P_tr)
+def load_all_data(robot, n=config.n, m=config.m, r=config.r):
+    J_tr, P_tr = data_collection(robot=robot, N=config.N_train, n=n, m=m, r=r)
+    _, P_ts = data_collection(robot=robot, N=config.N_test, n=n, m=m, r=r)
+    F = posture_feature_extraction(J=J_tr, P=P_tr, n=n, m=m, r=r)
     return J_tr, P_tr, P_ts, F
 
 
-def posture_feature_extraction(J: np.ndarray, P: np.ndarray):
+def posture_feature_extraction(J: np.ndarray, P: np.ndarray, n: int, m: int, r: int):
     """
     generate posture feature from J (training data)
 
@@ -89,16 +77,17 @@ def posture_feature_extraction(J: np.ndarray, P: np.ndarray):
     if config.r == 0:
         return F
     
-    if os.path.exists(path=config.path_F):
-        F = load_numpy(file_path=config.path_F)
+    path = config.path_F(n, m, r)
+    if os.path.exists(path=path):
+        F = load_numpy(file_path=path)
     
-    if F is None or F.shape[-1] != config.r or len(F) != len(J):
-        # hnne = HNNE(dim=config.r, ann_threshold=config.num_neighbors)
-        hnne = HNNE(dim=config.r)
+    if F is None or F.shape[-1] != r or len(F) != len(J):
+        # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
+        hnne = HNNE(dim=r)
         # maximum number of data for hnne (11M), we use max_num_data_hnne to test
         num_data = min(config.max_num_data_hnne, len(J))
         S = np.column_stack((J, P))
-        F = hnne.fit_transform(X=S[:num_data], dim=config.r, verbose=True)
+        F = hnne.fit_transform(X=S[:num_data], dim=r, verbose=True)
         # query nearest neighbors for the rest of J
         if len(F) != len(J):
             knn = NearestNeighbors(n_neighbors=1)
@@ -107,8 +96,8 @@ def posture_feature_extraction(J: np.ndarray, P: np.ndarray):
             neigh_idx = neigh_idx.flatten()
             F = np.row_stack((F, F[neigh_idx]))
 
-        save_numpy(file_path=config.path_F, arr=F)
-    print(f"F load successfully from {config.path_F}")
+        save_numpy(file_path=path, arr=F)
+    print(f"F load successfully from {path}")
 
     return F
 
@@ -274,16 +263,16 @@ def train_step(model, batch, optimizer, scheduler):
 
     return loss.item()
 
-def data_preprocess_for_inference(P, F, knn, k: int=1):
+def data_preprocess_for_inference(P, F, knn, m: int, k: int=1):
     P = np.atleast_2d(P)
     F = np.atleast_2d(F)
     
-    if config.m == 3:
+    if m == 3:
         P = P[:, :3]
     if F is not None:
         # Data Preprocessing: Posture Feature Extraction
         ref_F = nearest_neighbor_F(knn, P, F, n_neighbors=k) # knn
-        ref_F = np.atleast_2d(ref_F)
+        ref_F = np.atleast_2d(ref_F) # type: ignore
         # ref_F = rand_F(P, F) # f_rand
         # ref_F = pick_F(P, F) # f_pick
         if len(P) == 1 and k > 1:
@@ -300,11 +289,14 @@ def data_preprocess_for_inference(P, F, knn, k: int=1):
 
     return C
 
-def nearest_neighbor_F(knn: NearestNeighbors, P_ts: np.ndarray, F: np.ndarray, n_neighbors: int=1):
-    P_ts = np.atleast_2d(P_ts)
+def nearest_neighbor_F(knn: NearestNeighbors, P_ts: np.ndarray[float, float], F: np.ndarray[float, float], n_neighbors: int=1):
+    if F is None:
+        raise ValueError("F cannot be None")
+    
+    P_ts = np.atleast_2d(P_ts) # type: ignore
     assert len(P_ts) < len(F)
     neigh_idx = knn.kneighbors(P_ts[:, :3], n_neighbors=n_neighbors, return_distance=False)
-    neigh_idx = neigh_idx.flatten()
+    neigh_idx = neigh_idx.flatten() # type: ignore
     
     return F[neigh_idx]
 
@@ -380,7 +372,7 @@ def inference(
         return J_hat, position_errors, inference_time
 
 def evaluate_solver(robot, solver, P_ts, F, knn, K=10):
-    C = data_preprocess_for_inference(P=P_ts, F=F, knn=knn)
+    C = data_preprocess_for_inference(P=P_ts, F=F, knn=knn, m=solver._m)
 
     with torch.inference_mode():
         J_hat = solver(C).sample((K,))

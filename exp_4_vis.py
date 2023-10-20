@@ -315,7 +315,7 @@ def random_target_pose(robot: Robot, solver: Solver, num_samples: int=5, k: int=
 
         # Get solutions to pose of random sample
         ik_solutions = solver.solve(target_pose, num_samples, k=k, return_numpy=True)
-        qs = robot._x_to_qs(ik_solutions)
+        qs = robot._x_to_qs(ik_solutions) # type: ignore
         for i in range(nb_sols):
             worlds[i + 1].robot(0).setConfig(qs[i])
 

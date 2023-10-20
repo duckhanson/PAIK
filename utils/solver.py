@@ -230,7 +230,7 @@ class Solver:
             rand_idxs = np.random.randint(low=0, high=len(self._P_ts), size=2)
             endPoints = self._P_ts[rand_idxs]
             traj = trajectory.Trajectory(milestones=endPoints) # type: ignore
-            P_path = np.empty((num_steps, settings.m))
+            P_path = np.empty((num_steps, self._m))
             for i in range(num_steps):
                 iStep = i/num_steps
                 point = traj.eval(iStep)
@@ -248,7 +248,7 @@ class Solver:
     def _sample_J_traj(self, P_path: np.ndarray, ref_F: np.ndarray):
         assert self._shink_ratio < 0.2, "shrink_ratio should be less than 0.2"
         
-        P_path = P_path[:, :settings.m]
+        P_path = P_path[:, :self._m]
         ref_F = np.atleast_2d(ref_F)
         if len(P_path) != len(ref_F):        
             ref_F = np.tile(ref_F, (len(P_path), 1)) # type: ignore
@@ -276,7 +276,7 @@ class Solver:
         print(f'using shrink_ratio: {self.shirnk_ratio}')
         
         P_path = self._sample_P_path(load_time=load_time, num_steps=num_steps)
-        if self.num_conditions == 3:
+        if self._m == 3:
             P_path_7 = np.column_stack((P_path, np.ones((len(P_path), 4)))) # type: ignore
         else:
             P_path_7 = P_path

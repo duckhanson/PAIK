@@ -4,9 +4,9 @@ from dataclasses import dataclass
 
 from pprint import pprint
 from jrl.robot import Robot
-from utils.solver import Solver, DEFAULT_SOLVER_PARAM_M3, DEFAULT_SOLVER_PARAM_M7
-from utils.robot import get_robot
 from jrl.robots import Panda, Fetch, FetchArm
+from jrl.evaluation import solution_pose_errors
+
 from klampt.math import so3
 from klampt.model import coordinates, trajectory
 from klampt import vis
@@ -15,6 +15,9 @@ import numpy as np
 import torch
 import torch.optim
 from utils.settings import config
+from utils.solver import Solver, DEFAULT_SOLVER_PARAM_M3, DEFAULT_SOLVER_PARAM_M7
+from utils.robot import get_robot
+
 
 class Visualizer(Solver):
     def __init__(self, robot: Robot, solver_param: dict) -> None:
@@ -113,6 +116,77 @@ class Visualizer(Solver):
 
         n_worlds = nb_sols + 1
         self._run_demo(n_worlds, setup_fn, loop_fn, viz_update_fn, time_p_loop=time_p_loop, title=title)
+        
+    # TODO(@jeremysm): Add/flesh out plots. Consider plotting each solutions x, or error
+    def oscillate_target(self, nb_sols=5, fixed_latent=True):
+        """Oscillating target pose"""
+
+        time_p_loop = 0.01
+        title = "Solutions for oscillating target pose"
+        if fixed_latent:
+            # latent = torch.randn((nb_sols, ik_solver.network_width)).to(config.device)
+            self.shrink_ratio = 0
+        
+        target_pose_fn = lambda counter: np.array([0.25 * np.sin(counter / 50), 0.5, 0.25, 1.0, 0.0, 0.0, 0.0])
+
+        def setup_fn(worlds):
+            vis.add("coordinates", coordinates.manager())
+            for i in range(len(worlds)):
+                vis.add(f"robot_{i}", worlds[i].robot(0))
+                vis.setColor(f"robot_{i}", 1, 1, 1, 1)
+                vis.setColor((f"robot_{i}", self.robot.end_effector_link_name), 1, 1, 1, 0.71)
+
+            # Axis
+            vis.add("x_axis", trajectory.Trajectory([1, 0], [[1, 0, 0], [0, 0, 0]]))
+            vis.add("y_axis", trajectory.Trajectory([1, 0], [[0, 1, 0], [0, 0, 0]]))
+
+            # Add target pose plot
+            vis.addPlot("target_pose")
+            vis.logPlot("target_pose", "target_pose x", 0)
+            vis.setPlotDuration("target_pose", 5)
+            vis.addPlot("solution_error")
+            vis.addPlot("solution_error")
+            vis.logPlot("solution_error", "l2 (mm)", 0)
+            vis.logPlot("solution_error", "angular (deg)", 0)
+            vis.setPlotDuration("solution_error", 5)
+            vis.setPlotRange("solution_error", 0, 25)
+
+        @dataclass
+        class DemoState:
+            counter: int
+            target_pose: np.ndarray
+            ave_l2_error: float
+            ave_angular_error: float
+
+        def loop_fn(worlds, _demo_state):
+            # Update target pose
+            _demo_state.target_pose = target_pose_fn(_demo_state.counter)
+
+            # Get solutions to pose of random sample
+            ik_solutions = self.solve(_demo_state.target_pose, nb_sols, k=1)    
+            l2_errors, ang_errors = solution_pose_errors(self.robot, ik_solutions, _demo_state.target_pose)
+
+            _demo_state.ave_l2_error = np.mean(l2_errors) * 1000
+            _demo_state.ave_ang_error = np.rad2deg(np.mean(ang_errors))
+
+            # Update viz with solutions
+            qs = self.robot._x_to_qs(ik_solutions.detach().cpu().numpy())
+            for i in range(nb_sols):
+                worlds[i].robot(0).setConfig(qs[i])
+
+            # Update _demo_state
+            _demo_state.counter += 1
+
+        def viz_update_fn(worlds, _demo_state):
+            _plot_pose("target_pose.", _demo_state.target_pose)
+            vis.logPlot("target_pose", "target_pose x", _demo_state.target_pose[0])
+            vis.logPlot("solution_error", "l2 (mm)", _demo_state.ave_l2_error)
+            vis.logPlot("solution_error", "angular (deg)", _demo_state.ave_ang_error)
+
+        demo_state = DemoState(counter=0, target_pose=target_pose_fn(0), ave_l2_error=0, ave_angular_error=0)
+        self._run_demo(
+            nb_sols, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=time_p_loop, title=title
+        )
     
 # =========================
 # Parameters
@@ -498,7 +572,8 @@ def main():
     
     visualizer = Visualizer(robot=get_robot(), solver_param=DEFAULT_SOLVER_PARAM_M7)
     # visualizer.sample_latent_space(num_samples=5)
-    visualizer.sample_posture_space(k=5)
+    # visualizer.sample_posture_space(k=5)
+    visualizer.oscillate_target(nb_sols=5, fixed_latent=True)
     
     
 

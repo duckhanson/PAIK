@@ -8,10 +8,9 @@ import math
 from tqdm import tqdm
 from pprint import pprint
 import wandb
-from utils.model import get_knn, get_flow_model
 from utils.robot import get_robot
 from utils.settings import config as cfg
-from utils.utils import init_seeds, load_all_data, EarlyStopping, get_train_loader, train_step, evaluate_solver
+from utils.utils import init_seeds, EarlyStopping, get_train_loader, train_step
 
 from utils.solver import Solver, DEFAULT_SOLVER_PARAM_M7, DEFAULT_SOLVER_PARAM_M3
 
@@ -50,7 +49,9 @@ class Trainer(Solver):
                 batch_loss[step] = loss
                 bar = {"loss": f"{np.round(loss, 3)}"}
                 t.set_postfix(bar, refresh=True)
-
+                if np.isnan(loss):
+                    print(f"Early stopping ({loss} is nan)")
+                    break
                 step += 1
             
             avg_position_error, avg_orientation_error = self.random_evaluation(num_poses=num_eval_poses, num_sols=num_eval_sols) # type: ignore

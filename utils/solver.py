@@ -28,6 +28,8 @@ DEFAULT_SOLVER_PARAM_M3 = {
         'shrink_ratio': 0.61,
         'batch_size': 128,
         'num_epochs': 10,
+        'model_architecture': 'nsf',
+        'opt_type': 'adamw',
         'ckpt_name': '0930-0346',
         'nmr': (7, 3, 4),
     }
@@ -43,12 +45,14 @@ DEFAULT_SOLVER_PARAM_M7 = {
         'shrink_ratio': 0.61,
         'batch_size': 128,
         'num_epochs': 15,
+        'model_architecture': 'nsf',
+        'opt_type': 'adamw',
         'ckpt_name': '1019-1842',
         'nmr': (7, 7, 1),
     }
 
 class Solver:
-    def __init__(self, robot: Robot, solver_param: dict = DEFAULT_SOLVER_PARAM_M3) -> None:
+    def __init__(self, robot: Robot, solver_param: dict = DEFAULT_SOLVER_PARAM_M7) -> None:
         self._robot = robot
         self._solver_param = solver_param
         self._device = 'cuda'
@@ -64,7 +68,9 @@ class Solver:
                 lr_weight_decay=solver_param["lr_weight_decay"],
                 decay_step_size=solver_param["decay_step_size"],
                 gamma=solver_param["gamma"],
+                optimizer_type=solver_param['opt_type'],
                 device=self._device,
+                model_architecture=solver_param["model_architecture"],
                 ckpt_name=solver_param["ckpt_name"],
                 n=n,
                 m=m,

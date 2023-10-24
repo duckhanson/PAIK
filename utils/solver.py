@@ -285,7 +285,7 @@ class Solver:
         shrink_ratio: float = 0.1,
         enable_evaluation: bool = False,
         enable_plot: bool = False,
-    ) -> None:
+    ):
         """
         evaluate the performance of path following
 
@@ -314,7 +314,7 @@ class Solver:
             P_path_7 = np.column_stack((P_path, np.ones((len(P_path), 4)))) # type: ignore
         else:
             P_path_7 = P_path
-        ref_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path[0]), self._F, n_neighbors=20) # type: ignore # knn
+        ref_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path[0]), self._F, n_neighbors=300) # type: ignore # knn
         nn1_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path), self._F, n_neighbors=1) # type: ignore # knn
         
         # ref_F = F
@@ -322,15 +322,16 @@ class Solver:
         
         rand_idxs = np.random.randint(low=0, high=len(ref_F), size=num_traj)
         # rand_idxs = list(range(num_traj))
-        qs = self._sample_J_traj(P_path, nn1_F)
-        print("="*6 + f"=(use nearest)" + "="*6)
-        print(P_path_7.shape)
-        l2_err, ang_err = solution_pose_errors(robot=self._robot, solutions=qs, target_poses=P_path_7)
-        df = pd.DataFrame({'l2_err': l2_err, 'ang_err': ang_err})
-        print(df.describe())
-        
+        # qs = self._sample_J_traj(P_path, nn1_F)
+        # print("="*6 + f"=(use nearest)" + "="*6)
+        # print(P_path_7.shape)
+        # l2_err, ang_err = solution_pose_errors(robot=self._robot, solutions=qs, target_poses=P_path_7)
+        # df = pd.DataFrame({'l2_err': l2_err, 'ang_err': ang_err})
+        # print(df.describe())
+        Qs = np.empty((num_traj, num_steps, self._robot.n_dofs))
         for i, rand in enumerate(rand_idxs):
             qs = self._sample_J_traj(P_path, ref_F[rand])
+            Qs[i] = qs.detach().cpu().numpy()
             print("="*6 + str(rand) + f"=({ref_F[rand]})" + "="*6)
             
             if enable_evaluation:
@@ -338,8 +339,8 @@ class Solver:
                 df = pd.DataFrame({'l2_err': l2_err, 'ang_err': ang_err})
                 print(df.describe())
             
-            if enable_plot:
-                pass
+        if enable_plot:
+            return P_path, Qs, ref_F[rand_idxs]
 
         self.shrink_ratio = old_shink_ratio
         

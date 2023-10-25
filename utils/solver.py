@@ -314,9 +314,10 @@ class Solver:
             P_path_7 = np.column_stack((P_path, np.ones((len(P_path), 4)))) # type: ignore
         else:
             P_path_7 = P_path
-        ref_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path[0]), self._F, n_neighbors=300) # type: ignore # knn
-        nn1_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path), self._F, n_neighbors=1) # type: ignore # knn
-        
+        # ref_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path[0]), self._F, n_neighbors=300) # type: ignore # knn
+        # nn1_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path), self._F, n_neighbors=1) # type: ignore # knn
+        ref_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path), self._F, n_neighbors=30) # type: ignore # knn
+        ref_F = ref_F.flatten()
         # ref_F = F
         # ref_F = rand_F(Path[0], F)
         
@@ -332,6 +333,7 @@ class Solver:
         for i, rand in enumerate(rand_idxs):
             qs = self._sample_J_traj(P_path, ref_F[rand])
             Qs[i] = qs.detach().cpu().numpy()
+            
             print("="*6 + str(rand) + f"=({ref_F[rand]})" + "="*6)
             
             if enable_evaluation:

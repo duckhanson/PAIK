@@ -118,23 +118,25 @@ class Visualizer(Solver):
         self._run_demo(n_worlds, setup_fn, loop_fn, viz_update_fn, time_p_loop=time_p_loop, title=title)
         
     # TODO(@jeremysm): Add/flesh out plots. Consider plotting each solutions x, or error
-    def oscillate_target(self, load_time: str = '1024210848', nb_sols=5, fixed_latent=True):
+    def visualize_path_following(self, load_time: str = '', num_traj: int = 5, shrink_ratio: float = 0):
+        P_path, J_traj, ref_F = self.path_following(load_time=load_time, 
+                                         num_traj=num_traj, 
+                                         shrink_ratio=shrink_ratio, 
+                                         enable_plot=True) # type: ignore
+        P_path = np.tile(P_path, (num_traj, 1))
+        Qs = np.empty((num_traj, J_traj.shape[1], 17))
+        for i, J in enumerate(J_traj):
+            qs = np.asarray(self.robot._x_to_qs(J)) # type: ignore
+            Qs[i] = qs
+        P_path = P_path.reshape(-1, P_path.shape[-1])
+        Qs = Qs.reshape(-1, Qs.shape[-1])
+        self._oscillate_target(Qs, P_path)
+        
+    def _oscillate_target(self, Qs, P_path):
         """Oscillating target pose"""
 
         time_p_loop = 0.01
         title = "Solutions for oscillating target pose"
-        shrink_ratio = self.shrink_ratio
-        if fixed_latent:
-            # latent = torch.randn((nb_sols, ik_solver.network_width)).to(config.device)
-            shrink_ratio = 0
-        
-        P_path, J_traj, ref_F = self.path_following(load_time=load_time, 
-                                         num_traj=nb_sols, 
-                                         shrink_ratio=shrink_ratio, 
-                                         enable_plot=True) # type: ignore
-        Qs = np.empty((nb_sols, len(P_path), 17))    
-        for i, J in enumerate(J_traj):
-            Qs[i] = np.asarray(self.robot._x_to_qs(J)) # type: ignore
 
         def target_pose_fn(counter: int):
             return P_path[max(counter, len(P_path)-1)]
@@ -177,12 +179,9 @@ class Visualizer(Solver):
 
             # _demo_state.ave_l2_error = np.mean(l2_errors) * 1000
             # _demo_state.ave_ang_error = np.rad2deg(np.mean(ang_errors))
-            print("="*6 + f"=({ref_F})" + "="*6)
 
             # Update viz with solutions
-            for i in range(nb_sols):
-                qs = Qs[i, _demo_state.counter]
-                worlds[i].robot(0).setConfig(qs)
+            worlds[0].robot(0).setConfig(Qs[_demo_state.counter])
 
             # Update _demo_state
             if _demo_state.direction:
@@ -205,7 +204,7 @@ class Visualizer(Solver):
         demo_state = DemoState(counter=0, target_pose=target_pose_fn(0), direction=True)
         
         self._run_demo(
-            nb_sols, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=time_p_loop, title=title
+            1, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=time_p_loop, title=title
         )
     
 # =========================
@@ -593,7 +592,7 @@ def main():
     visualizer = Visualizer(robot=get_robot(), solver_param=DEFAULT_SOLVER_PARAM_M7)
     # visualizer.sample_latent_space(num_samples=5)
     # visualizer.sample_posture_space(k=5)
-    visualizer.oscillate_target(nb_sols=1, fixed_latent=True)
+    visualizer.visualize_path_following(load_time='1024210848', num_traj=3, shrink_ratio=0)
     
     
 

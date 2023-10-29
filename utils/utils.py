@@ -213,14 +213,15 @@ def save_numpy(file_path: str, arr: np.ndarray):
         os.mkdir(path=dir_path)
     np.save(file_path, arr)
 
-def add_noise(batch, esp: float):
+def add_noise(batch, esp: float, std_scale: float):
     J, C = batch
     if esp < 1e-9:
         std = torch.zeros((C.shape[0], 1)).to(C.device)
         C = torch.column_stack((C, std))
     else:
+        # softflow implementation
         s = esp * torch.rand((C.shape[0], 1)).to(C.device)
-        C = torch.column_stack((C, s))
+        C = torch.column_stack((C, s * std_scale))
         noise = torch.normal(
             mean=torch.zeros_like(input=J),
             std=torch.repeat_interleave(input=s, repeats=J.shape[1], dim=1),

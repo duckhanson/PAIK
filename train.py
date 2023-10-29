@@ -19,7 +19,7 @@ USE_WANDB = False
 PATIENCE = 4    
 POSE_ERR_THRESH = 7e-3
 
-def train_step(model, batch, optimizer, noise_esp: float = 1e-3):
+def train_step(model, batch, optimizer, noise_esp: float, std_scale: float):
     """
     _summary_
 
@@ -32,7 +32,7 @@ def train_step(model, batch, optimizer, noise_esp: float = 1e-3):
     Returns:
         _type_: _description_
     """
-    x, y = add_noise(batch, esp=noise_esp)
+    x, y = add_noise(batch, esp=noise_esp, std_scale=std_scale)
 
     loss = -model(y).log_prob(x)  # -log p(x | y)
     loss = loss.mean()
@@ -48,6 +48,7 @@ class Trainer(Solver):
         super().__init__(robot, solver_param)
         self.__noise_esp = self.param['noise_esp']
         self.__noise_esp_decay = self.param['noise_esp_decay'] # 0.8 - 0.9
+        self.__std_scale = 1 / self.__noise_esp
     
     def __update_noise_esp(self, epoch: int):
         self.__noise_esp = self.param['noise_esp'] * (self.__noise_esp_decay ** epoch)
@@ -74,7 +75,8 @@ class Trainer(Solver):
                 loss = train_step(model=self._solver,
                                 batch=batch,
                                 optimizer=self._optimizer,
-                                noise_esp=self.__noise_esp)
+                                noise_esp=self.__noise_esp,
+                                std_scale=self.__std_scale)
                 batch_loss[step] = loss
                 bar = {"loss": f"{np.round(loss, 3)}"}
                 t.set_postfix(bar, refresh=True)

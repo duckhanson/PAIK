@@ -44,8 +44,7 @@ class Trainer(Solver):
             for batch in t:
                 loss = train_step(model=self._solver,
                                 batch=batch,
-                                optimizer=self._optimizer,
-                                scheduler=self._scheduler)
+                                optimizer=self._optimizer)
                 batch_loss[step] = loss
                 bar = {"loss": f"{np.round(loss, 3)}"}
                 t.set_postfix(bar, refresh=True)
@@ -53,8 +52,16 @@ class Trainer(Solver):
                     print(f"Early stopping ({loss} is nan)")
                     break
                 step += 1
+                
+                if self.param['sche_type'] == 'step':
+                    self._scheduler.step() # type: ignore
             
             avg_position_error, avg_orientation_error = self.random_evaluation(num_poses=num_eval_poses, num_sols=num_eval_sols) # type: ignore
+            
+            if self.param['sche_type'] == 'plateau':
+                self._scheduler.step(avg_position_error) # type: ignore
+            elif self.param['sche_type'] == 'cos':
+                self._scheduler.step() # type: ignore
             
             if use_wandb:
                 wandb.log({

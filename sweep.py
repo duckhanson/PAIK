@@ -81,23 +81,23 @@ nsf_config = {
     },
     'parameters': {
         'subnet_width': {
-            # 'values': [900, 1024, 1200]
-            'value': 1024
+            'values': [1024, 1150, 1248]
+            # 'value': 1024
         },
         'subnet_num_layers': {
             # 'values': [3, 4]
             'value': 3
         },
         'num_transforms': {
-            'values': [8, 9, 10]  # 6, 8, ..., 16
+            'values': [7, 8]  # 6, 8, ..., 16
             # 'value': 12
         },
         'lr': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
             'q': 1e-5,
-            'min': 2e-4,
-            'max': 6e-4,
+            'min': 3e-4,
+            'max': 4e-4,
             # 'value': 5e-4,
         },
         'lr_weight_decay': {
@@ -105,17 +105,17 @@ nsf_config = {
             'distribution': 'q_uniform',
             'q': 1e-3,
             'min': 1e-2,
-            'max': 4e-2,
+            'max': 2.5e-2,
             # 'value': 9.79e-1,
         },
         'decay_step_size': {
-            'values': [4e4, 5e4, 6e4],
-            # 'value': 2e4
+            # 'values': [4e4, 5e4, 6e4],
+            'value': 4e4
         },
         'gamma': {
             'distribution': 'q_uniform',
             'q': 1e-3,
-            'min': 7e-2,
+            'min': 7.8e-2,
             'max': 9e-2,
             # 'value': 9.79e-1 
         },
@@ -123,14 +123,19 @@ nsf_config = {
             'value': 128
         },
         'num_epochs': {
-            'value': 10
+            'value': 15
         },
         'model_architecture': {
             'value': 'nsf'
         },
         'opt_type': {
-            'values': ['adam', 'adamw', 'sgd', 'sgd_nesterov']
+            # 'values': ['adam', 'adamw', 'sgd', 'sgd_nesterov']
+            'value': 'adamw'
         },
+        'sche_type': {
+            'values': ['step', 'plateau'], # cos bad
+            # 'value': 'step'
+        }
     },
 }
 
@@ -158,6 +163,7 @@ def main() -> None:
         'shrink_ratio': 0.31,
         'model_architecture': wandb.config.model_architecture,
         'opt_type': wandb.config.opt_type,
+        'sche_type': wandb.config.sche_type,
         'ckpt_name': '',
         'nmr': (7, 7, 1),
     }

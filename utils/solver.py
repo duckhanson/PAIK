@@ -30,6 +30,7 @@ DEFAULT_SOLVER_PARAM_M3 = {
         'num_epochs': 10,
         'model_architecture': 'nsf',
         'opt_type': 'adamw',
+        'sched_type': 'steplr',
         'ckpt_name': '0930-0346',
         'nmr': (7, 3, 4),
     }
@@ -47,6 +48,7 @@ DEFAULT_SOLVER_PARAM_M7 = {
         'num_epochs': 15,
         'model_architecture': 'nsf',
         'opt_type': 'adamw',
+        'sched_type': 'steplr',
         'ckpt_name': '1019-1842',
         'nmr': (7, 7, 1),
     }
@@ -69,6 +71,7 @@ class Solver:
                 decay_step_size=solver_param["decay_step_size"],
                 gamma=solver_param["gamma"],
                 optimizer_type=solver_param['opt_type'],
+                scheduler_type=solver_param['sche_type'],
                 device=self._device,
                 model_architecture=solver_param["model_architecture"],
                 ckpt_name=solver_param["ckpt_name"],

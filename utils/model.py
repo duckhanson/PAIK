@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from sklearn.neighbors import NearestNeighbors
 from torch import optim
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR, ReduceLROnPlateau
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional, MaskedAutoregressiveTransform
 from zuko.flows.coupling import GeneralCouplingTransform
@@ -29,6 +29,7 @@ def get_flow_model(
     gamma: float=config.decay_gamma,
     model_architecture: str='nsf',    
     optimizer_type: str= 'adamw',
+    scheduler_type: str= 'step',
     device=config.device,
     ckpt_name: str='',
     random_perm: bool=True,
@@ -109,6 +110,10 @@ def get_flow_model(
 
     # Train to maximize the log-likelihood
     scheduler = StepLR(optimizer, step_size=decay_step_size, gamma=gamma)
+    if scheduler_type == "cos":
+        scheduler = CosineAnnealingLR(optimizer, T_max=3, eta_min=lr * 1e-2)
+    elif scheduler_type == "plateau":
+        scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=gamma, patience=2, verbose=True)
 
     return flow, optimizer, scheduler
 

@@ -238,7 +238,7 @@ def denormalize(norm: np.ndarray, arr_min: np.ndarray, arr_max: np.ndarray):
     # arr = norm * (arr_max - arr_min) + arr_min
     return norm * (arr_max - arr_min) + arr_min
 
-def train_step(model, batch, optimizer, scheduler):
+def train_step(model, batch, optimizer):
     """
     _summary_
 
@@ -259,7 +259,6 @@ def train_step(model, batch, optimizer, scheduler):
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-    scheduler.step()
 
     return loss.item()
 

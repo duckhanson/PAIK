@@ -10,7 +10,7 @@ from pprint import pprint
 import wandb
 from utils.robot import get_robot
 from utils.settings import config as cfg
-from utils.utils import init_seeds, EarlyStopping, get_train_loader, train_step
+from utils.utils import init_seeds, EarlyStopping, get_train_loader, add_noise
 
 from utils.solver import Solver, DEFAULT_SOLVER_PARAM_M7, DEFAULT_SOLVER_PARAM_M3
 
@@ -19,9 +19,38 @@ USE_WANDB = False
 PATIENCE = 4    
 POSE_ERR_THRESH = 7e-3
 
+def train_step(model, batch, optimizer, noise_esp: float = 1e-3):
+    """
+    _summary_
+
+    Args:
+        model (_type_): _description_
+        batch (_type_): _description_
+        optimizer (_type_): _description_
+        scheduler (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    x, y = add_noise(batch, esp=noise_esp)
+
+    loss = -model(y).log_prob(x)  # -log p(x | y)
+    loss = loss.mean()
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    return loss.item()
+
 class Trainer(Solver):
     def __init__(self, robot: Robot, solver_param: dict) -> None:
         super().__init__(robot, solver_param)
+        self.__noise_esp = self.param['noise_esp']
+        self.__noise_esp_decay = self.param['noise_esp_decay'] # 0.8 - 0.9
+    
+    def __update_noise_esp(self, epoch: int):
+        self.__noise_esp = self.param['noise_esp'] * (self.__noise_esp_decay ** epoch)
         
     def mini_train(self, begin_time, num_epochs, batch_size=128, use_wandb=True, patience=4, pose_err_thres=1e-2, num_eval_poses=100, num_eval_sols=100) -> None:
         init_seeds()
@@ -44,7 +73,8 @@ class Trainer(Solver):
             for batch in t:
                 loss = train_step(model=self._solver,
                                 batch=batch,
-                                optimizer=self._optimizer)
+                                optimizer=self._optimizer,
+                                noise_esp=self.__noise_esp)
                 batch_loss[step] = loss
                 bar = {"loss": f"{np.round(loss, 3)}"}
                 t.set_postfix(bar, refresh=True)
@@ -55,6 +85,7 @@ class Trainer(Solver):
                 
                 if self.param['sche_type'] == 'step':
                     self._scheduler.step() # type: ignore
+            self.__update_noise_esp(ep)
             
             avg_position_error, avg_orientation_error = self.random_evaluation(num_poses=num_eval_poses, num_sols=num_eval_sols) # type: ignore
             
@@ -63,20 +94,18 @@ class Trainer(Solver):
             elif self.param['sche_type'] == 'cos':
                 self._scheduler.step() # type: ignore
             
+            log_info = {
+                'ep': ep,
+                'position_errors': avg_position_error,
+                'orientation_errors': avg_orientation_error,
+                'train_loss': batch_loss.mean(),
+                'noise_esp': self.__noise_esp,
+            }
+            
             if use_wandb:
-                wandb.log({
-                    'ep': ep,
-                    'position_errors': avg_position_error,
-                    'orientation_errors': avg_orientation_error,
-                    'train_loss': batch_loss.mean(),
-                })
+                wandb.log(log_info)
             else:
-                pprint({
-                    'ep': ep,
-                    'position_errors': avg_position_error,
-                    'orientation_errors': avg_orientation_error,
-                    'train_loss': batch_loss.mean(),
-                })
+                pprint(log_info)
 
             if np.isnan(avg_position_error) or avg_position_error > 1e-1:
                 print(f"Early stopping ({avg_position_error} > 1e-1)")
@@ -108,20 +137,7 @@ def main() -> None:
         wandb.init(name=begin_time,
                          notes=f'r=0')
     
-    solver_param = {
-        'subnet_width': 1024,
-        'subnet_num_layers': 3,
-        'num_transforms': 8,
-        'lr': 1.3e-4,
-        'lr_weight_decay': 3.1e-2,
-        'decay_step_size': 6e4,
-        'gamma': 9e-2,
-        'shrink_ratio': 0.61,
-        'batch_size': 128,
-        'num_epochs': 15,
-        'ckpt_name': '1019-1842',
-        'nmr': (7, 7, 1),
-    }
+    solver_param = DEFAULT_SOLVER_PARAM_M7
     
     trainer = Trainer(robot=get_robot(),
                       solver_param=solver_param)

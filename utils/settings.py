@@ -3,7 +3,6 @@ import random
 
 import numpy as np
 import torch
-from torch.nn import LeakyReLU
 
 np.random.seed(0)
 random.seed(0)
@@ -92,7 +91,6 @@ class Config:
         self.num_transforms = 7
         self.subnet_width = 1024
         self.subnet_num_layers = 3
-        self.activation = LeakyReLU
 
         # sflow parameter
         self.shrink_ratio = 0.61

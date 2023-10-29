@@ -49,7 +49,7 @@ def data_collection(robot, N: int, n: int, m: int, r: int):
 
     return J, P
 
-def load_all_data(robot, n=config.n, m=config.m, r=config.r):
+def load_all_data(robot, n, m, r):
     J_tr, P_tr = data_collection(robot=robot, N=config.N_train, n=n, m=m, r=r)
     _, P_ts = data_collection(robot=robot, N=config.N_test, n=n, m=m, r=r)
     F = posture_feature_extraction(J=J_tr, P=P_tr, n=n, m=m, r=r)
@@ -74,7 +74,7 @@ def posture_feature_extraction(J: np.ndarray, P: np.ndarray, n: int, m: int, r: 
     """
     F = None
     
-    if config.r == 0:
+    if r == 0:
         return F
     
     path = config.path_F(n, m, r)
@@ -93,7 +93,7 @@ def posture_feature_extraction(J: np.ndarray, P: np.ndarray, n: int, m: int, r: 
             knn = NearestNeighbors(n_neighbors=1)
             knn.fit(S[:num_data])
             neigh_idx = knn.kneighbors(S[num_data:], n_neighbors=1, return_distance=False)
-            neigh_idx = neigh_idx.flatten()
+            neigh_idx = neigh_idx.flatten() # type: ignore
             F = np.row_stack((F, F[neigh_idx]))
 
         save_numpy(file_path=path, arr=F)
@@ -102,7 +102,7 @@ def posture_feature_extraction(J: np.ndarray, P: np.ndarray, n: int, m: int, r: 
     return F
 
 
-def get_train_loader(J: np.ndarray, P: np.ndarray, F: np.ndarray, batch_size: int = config.batch_size, device: str = config.device):
+def get_train_loader(J: np.ndarray, P: np.ndarray, F: np.ndarray, batch_size: int, device: str):
     """
     a training loader
 
@@ -213,17 +213,17 @@ def save_numpy(file_path: str, arr: np.ndarray):
         os.mkdir(path=dir_path)
     np.save(file_path, arr)
 
-def add_noise(batch, esp: float = config.noise_esp, step: int = 0, eval: bool = False):
+def add_noise(batch, esp: float):
     J, C = batch
-    if eval or step < config.num_steps_add_noise:
+    if esp < 1e-9:
         std = torch.zeros((C.shape[0], 1)).to(C.device)
         C = torch.column_stack((C, std))
     else:
-        s = torch.rand((C.shape[0], 1)).to(C.device)
+        s = esp * torch.rand((C.shape[0], 1)).to(C.device)
         C = torch.column_stack((C, s))
         noise = torch.normal(
             mean=torch.zeros_like(input=J),
-            std=esp * torch.repeat_interleave(input=s, repeats=J.shape[1], dim=1),
+            std=torch.repeat_interleave(input=s, repeats=J.shape[1], dim=1),
         )
         J = J + noise
     return J, C
@@ -238,31 +238,7 @@ def denormalize(norm: np.ndarray, arr_min: np.ndarray, arr_max: np.ndarray):
     # arr = norm * (arr_max - arr_min) + arr_min
     return norm * (arr_max - arr_min) + arr_min
 
-def train_step(model, batch, optimizer):
-    """
-    _summary_
-
-    Args:
-        model (_type_): _description_
-        batch (_type_): _description_
-        optimizer (_type_): _description_
-        scheduler (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    x, y = add_noise(batch)
-
-    loss = -model(y).log_prob(x)  # -log p(x | y)
-    loss = loss.mean()
-
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-
-    return loss.item()
-
-def data_preprocess_for_inference(P, F, knn, m: int, k: int=1):
+def data_preprocess_for_inference(P, F, knn, m: int, k: int=1, device: str = 'cuda'):
     P = np.atleast_2d(P)
     F = np.atleast_2d(F)
     
@@ -283,8 +259,8 @@ def data_preprocess_for_inference(P, F, knn, m: int, k: int=1):
     C = C.astype(np.float32)
 
     # Project to Tensor(device)
-    C = torch.from_numpy(C).to(config.device)
-    _, C = add_noise((torch.zeros_like(C), C), eval=True)
+    C = torch.from_numpy(C).to(device)
+    _, C = add_noise((torch.zeros_like(C), C), esp=0)
 
     return C
 
@@ -306,69 +282,6 @@ def pick_F(P_ts: np.ndarray, F: np.ndarray) :
     idx = np.random.randint(low=0, high=len(F), size=len(np.atleast_2d(P_ts)))
     return F[idx]
 
-
-
-def inference(
-    robot, P_inf: np.ndarray, F: np.ndarray, solver, knn, K: int, print_report: bool = False
-):
-    """
-    inference function, Note that: inference time include data preprocessing and postprocessing.
-
-    Parameters
-    ----------
-    robot : Robot
-        Robot arm
-    P_inf : np.ndarray
-        end-effector positions for inference
-    F : np.ndarray
-        posture features from training data
-    solver : Normalizing Flow model
-        a trained normalizing flow model
-    knn : NearestNeighbor
-        a fitted knn over P_train
-    K : int
-        #samples per a position (task point)
-    print_report: bool
-        print summary of position errors and inference time. Note that it will not return anything.
-
-    Returns
-    -------
-    J_hat : np.ndarray
-        joint configurations
-    position_errors : np.ndarray
-        position errors
-    inference_time : np.ndarray
-        inference time of K samples for each P in P_inf
-    """
-    assert len(P_inf) < 1000
-    raise NotImplementedError("Not implement m=7 case")
-    position_errors = np.zeros(shape=(len(P_inf), K))
-    inference_time = np.zeros(shape=(len(P_inf)))
-
-    for i, P in enumerate(P_inf):
-        time_begin = time.time()
-
-        # Data Preprocessing
-        C = data_preprocess_for_inference(P=P, F=F, knn=knn)
-
-        # Begin inference
-        with torch.inference_mode():
-            J_hat = solver(C).sample((K,))
-            J_hat = J_hat.detach().cpu().numpy()
-        # Calculate Position Errors and Inference Time
-        position_errors[i] = robot.position_errors_Arr_Inputs(qs=J_hat, ee_pos=P)
-        inference_time[i] = round(time.time() - time_begin, 2)
-    position_errors = position_errors.flatten()
-
-    if print_report:
-        df = pd.DataFrame(position_errors, columns=["position errors (m)"])
-        print(df.describe())
-        df = pd.DataFrame(
-            inference_time, columns=[f"inference time (sec) of {K} samples"]
-        )
-        print(df.describe())
-    else:
-        return J_hat, position_errors, inference_time
 
 def evaluate_solver(robot, solver, P_ts, F, knn, K=10):
     C = data_preprocess_for_inference(P=P_ts, F=F, knn=knn, m=solver._m)
@@ -392,195 +305,6 @@ def evaluate_solver(robot, solver, P_ts, F, knn, K=10):
     # print(df.describe())
     return l2_errs.mean(), ang_errs.mean()
 
-
-def test(
-    robot, P_ts: np.ndarray, F: np.ndarray, solver, knn, K: int, print_report: bool = True
-):
-    """
-    test function, Note that: inference time refers to solver inference time, not include data preprocessing or postprocessing.
-
-    Parameters
-    ----------
-    robot : Robot
-        Robot arm
-    P_ts : np.ndarray
-        end-effector positions for testing
-    F : np.ndarray
-        posture features from training data
-    solver : Normalizing Flow model
-        a trained normalizing flow model
-    knn : NearestNeighbor
-        a fitted knn over P_train
-    K : int
-        #samples per a position (task point)
-    print_report: bool
-        print summary of position errors and inference time. Note that it will not return anything.
-
-    Returns
-    -------
-    J_hat : np.ndarray
-        joint configurations
-    position_errors : np.ndarray
-        position errors
-    avg_inference_time : float
-        average inference time over #(len(P_ts)*K) samples
-    """
-    assert len(P_ts) < 1000
-
-    # Data Preprocessing
-    C = data_preprocess_for_inference(P=P_ts, F=F, knn=knn)
-
-
-    time_begin = time.time()
-    # Begin inference
-    with torch.inference_mode():
-        J_hat = solver(C).sample((K,))
-    # J_hat = J_hat.detach().cpu().numpy()
-
-    
-    avg_inference_time = round((time.time() - time_begin) / len(P_ts), 2)
-    
-    P_hat = robot.forward_kinematics_batch(torch.from_numpy(J_hat.reshape(-1, cfg.n)).to(cfg.device))
-
-    if config.m == 3:
-        # Calculate Position Errors and Inference Time
-        for i, P in enumerate(P_ts):
-            position_errors[i] = robot.position_errors_Arr_Inputs(
-                qs=J_hat[:, i, :], ee_pos=P
-            )
-        position_errors = position_errors.flatten()
-
-        if print_report:
-            df = pd.DataFrame(position_errors, columns=["position errors (m)"])
-            print(df.describe())
-            print(f"average inference time (of {len(P_ts)} P): {avg_inference_time} sec.")
-            return df
-        else:
-            return position_errors.mean(), None, avg_inference_time
-    else:
-        # Calculate Position Errors and Inference Time
-        for i, P in enumerate(P_ts):
-            position_errors[i], orientation_errors[i] = robot.position_orientation_errors_Arr_Inputs(
-                qs=J_hat[:, i, :], ee_pos=P
-            )
-        position_errors = position_errors.flatten()
-        orientation_errors = orientation_errors.flatten()
-        
-        if print_report:
-            df = pd.DataFrame(np.column_stack((position_errors, orientation_errors)), columns=["position errors (m)", "orientation_errors (rad)"])
-            print(df.describe())
-            print(f"average inference time (of {len(P_ts)} P): {avg_inference_time} sec.")
-            return df
-        else:
-            return position_errors.mean(), orientation_errors.mean(), avg_inference_time
-
-def path_following(
-    robot,
-    Path_dir: str,
-    model,
-    knn,
-    F,
-    num_traj: int = 3,
-) -> None:
-    """
-    path following generation for our method
-    
-    Parameters
-    ----------
-    robot : _type_
-        robotic arm
-    Path_dir : str
-        path to ee Path, generated by sample_P_path
-    model : _type_
-        flow, iflow, or nflow
-    knn : _type_
-        knn of P_train
-    F : _type_
-        F_train
-    num_traj : int, optional
-        the number of generated joint trajectory samples, by default 3
-    """
-    raise NotImplementedError("Need to consider normalize :)")
-    def load_and_plot(exp_traj_path: str, ee_path: np.ndarray):
-        if os.path.exists(path=exp_traj_path):
-            robot.plot(qs=qs)
-        else:
-            print(f"{exp_traj_path} does not exist !")
-
-    Path = load_numpy(file_path=Path_dir + "ee_traj.npy")
-    Path = Path[:, :config.m]
-
-    ref_F = nearest_neighbor_F(knn, np.atleast_2d(Path), F) # knn
-    
-    exp_path = lambda idx: Path_dir + f"exp_{idx}.npy"
-    
-    rand_idxs = np.random.randint(low=0, high=len(ref_F), size=num_traj)
-    
-    for i, rand in enumerate(rand_idxs):
-        df, qs = sample_J_traj(Path, ref_F[0], model, robot)
-        print(df.describe())
-        save_numpy(file_path=exp_path(i), arr=qs)
-
-    for i in range(num_traj):
-        load_and_plot(exp_traj_path=exp_path(i), ee_path=Path)
-
-
-def calc_ang_errs(qs):
-    """
-    calcuate the sum of difference for angles
-
-    :param qs: _description_
-    :type qs: _type_
-    :return: _description_
-    :rtype: _type_
-    """
-    ang_errs = np.zeros_like(qs)
-    ang_errs[1:] = np.abs(np.diff(qs, axis=0))
-    ang_errs[0] = ang_errs[1:].mean(axis=0)
-    ang_errs = ang_errs.sum(axis=1)
-    ang_errs = np.rad2deg(ang_errs)
-    return ang_errs
-
-
-def eval_J_traj(
-    robot, J_traj: np.ndarray, P_path: np.ndarray = None, position_errors: np.ndarray = None
-):
-    """
-    evalution of J_traj for path-following tasks
-
-    Parameters
-    ----------
-    robot : Robot
-        robot arm
-    J_traj : np.ndarray
-        a joint trajectory
-    P_path : np.ndarray, optional
-        an end-effector position path, by default None
-    position_errors : np.ndarray, optional
-        position errors for FK(J_traj)-P_path, by default None
-
-    Returns
-    -------
-    df : pd.DataFrame
-        position errors and ang_errs(sum)
-    """
-    assert not (P_path is None and position_errors is None)
-
-    ang_errs = calc_ang_errs(qs=J_traj)
-
-    if position_errors is None:
-        if config.m == 3:
-            position_errors = robot.position_errors_Arr_Inputs(qs=J_traj, ee_pos=P_path)
-        elif config.m == 7:
-            position_errors, orientation_errors = robot.position_orientation_errors_Arr_Inputs(qs=J_traj, ee_pos=P_path)
-            
-
-    df = pd.DataFrame(
-        np.column_stack((position_errors, ang_errs)),
-        columns=["position_errors", "ang_errs(sum)"],
-    )
-    return df
-
 def create_robot_dirs() -> None:
     """
     _summary_
@@ -589,7 +313,7 @@ def create_robot_dirs() -> None:
         if not os.path.exists(path=dp):
             os.makedirs(name=dp)
             print(f"Create {dp}")
-
+            
 def remove_empty_robot_dirs() -> None:
     """
     _summary_

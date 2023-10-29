@@ -1,4 +1,5 @@
 # Import required packages
+import torch
 from datetime import datetime
 import wandb
 from utils.robot import get_robot
@@ -8,7 +9,7 @@ from utils.utils import init_seeds
 USE_NSF_CONFIG = True # otherwise, use nf_config
 USE_WANDB = True
 PATIENCE = 4
-POSE_ERR_THRESH = 1.3e-2
+POSE_ERR_THRESH = 1.1e-2
 
 nf_config = {
     'name': 'sweep',
@@ -128,6 +129,20 @@ nsf_config = {
         'model_architecture': {
             'value': 'nsf'
         },
+        'noise_esp': {
+            'distribution': 'q_uniform',
+            'q': 1e-4,
+            'min': 1e-3,
+            'max': 2e-3,
+            # 'value': 9.79e-1 
+        },
+        'noise_esp_decay': {
+            'distribution': 'q_uniform',
+            'q': 1e-2,
+            'min': 8e-1,
+            'max': 9e-1,
+            # 'value': 9.79e-1
+        },
         'opt_type': {
             # 'values': ['adam', 'adamw', 'sgd', 'sgd_nesterov']
             'value': 'adamw'
@@ -135,7 +150,10 @@ nsf_config = {
         'sche_type': {
             'values': ['step', 'plateau'], # cos bad
             # 'value': 'step'
-        }
+        },
+        'random_perm': {
+            'values': [False, True]
+        },
     },
 }
 
@@ -162,10 +180,15 @@ def main() -> None:
         'num_epochs': wandb.config.num_epochs,
         'shrink_ratio': 0.31,
         'model_architecture': wandb.config.model_architecture,
+        'random_perm': False,
+        'enable_load_model': False,
+        'noise_esp': wandb.config.noise_esp,
+        'noise_esp_decay': wandb.config.noise_esp_decay,
         'opt_type': wandb.config.opt_type,
         'sche_type': wandb.config.sche_type,
         'ckpt_name': '',
         'nmr': (7, 7, 1),
+        'device': 'cuda' if torch.cuda.is_available() else 'cpu',
     }
     
     trainer = Trainer(robot=get_robot(),

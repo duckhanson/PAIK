@@ -1,6 +1,6 @@
+import os
 import numpy as np
 from datetime import datetime
-import os
 # from numpy import linalg as LA
 from klampt.math import so3
 from klampt.model import trajectory

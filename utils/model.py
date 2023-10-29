@@ -5,6 +5,7 @@ from __future__ import annotations
 from os import path
 import numpy as np
 import torch
+from torch.nn import LeakyReLU
 from sklearn.neighbors import NearestNeighbors
 from torch import optim
 from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR, ReduceLROnPlateau
@@ -17,25 +18,27 @@ from zuko.flows.spline import NSF
 from utils.settings import config
 from utils.utils import save_pickle, load_pickle
 
+DEFAULT_ACTIVATION = LeakyReLU
+
 def get_flow_model(
-    enable_load_model: bool=True,
-    num_transforms: int=config.num_transforms,
-    subnet_width: int=config.subnet_width,
-    subnet_num_layers: int=config.subnet_num_layers,
-    shrink_ratio: float=config.shrink_ratio,
-    lr: float=config.lr,
-    lr_weight_decay: float=config.lr_weight_decay,
-    decay_step_size: int=config.decay_step_size,
-    gamma: float=config.decay_gamma,
-    model_architecture: str='nsf',    
-    optimizer_type: str= 'adamw',
-    scheduler_type: str= 'step',
-    device=config.device,
-    ckpt_name: str='',
-    random_perm: bool=True,
-    n: int=config.n,
-    m: int=config.m,
-    r: int=config.r,
+    num_transforms: int,
+    subnet_width: int,
+    subnet_num_layers: int,
+    shrink_ratio: float,
+    lr: float,
+    lr_weight_decay: float,
+    decay_step_size: int,
+    gamma: float,
+    model_architecture: str,    
+    optimizer_type: str,
+    scheduler_type: str,
+    device: str,
+    ckpt_name: str,
+    n: int,
+    m: int,
+    r: int,
+    random_perm: bool,
+    enable_load_model: bool,
 ):
     """
     Return nsf model and optimizer
@@ -53,7 +56,7 @@ def get_flow_model(
             transforms=num_transforms,
             randperm=random_perm,
             bins=10,
-            activation=config.activation,
+            activation=DEFAULT_ACTIVATION,
             hidden_features=[subnet_width] * subnet_num_layers,
         ).to(device)
     elif model_architecture == "nf":
@@ -62,7 +65,7 @@ def get_flow_model(
                 GeneralCouplingTransform(
                     features=n, 
                     context=num_conditions, 
-                    activation=config.activation,
+                    activation=DEFAULT_ACTIVATION,
                     hidden_features=[subnet_width] * subnet_num_layers) for _ in range(num_transforms)
                 # Unconditional(RotationTransform, torch.randn(n, n)), # type: ignore
             ],
@@ -79,15 +82,15 @@ def get_flow_model(
             context=num_conditions,
             transforms=num_transforms,
             randperm=random_perm,
-            activation=config.activation,
+            activation=DEFAULT_ACTIVATION,
             hidden_features=[subnet_width] * subnet_num_layers,
         ).to(device)
-    # elif config.architecture == "cnf":
+    # elif architecture == "cnf":
     #     flow = CNF(
-    #         features=config.n,
-    #         context=config.num_conditions,
+    #         features=n,
+    #         context=num_conditions,
     #         transforms=num_transforms,
-    #         activation=config.activation,
+    #         activation=DEFAULT_ACTIVATION,
     #         hidden_features=[subnet_width] * subnet_num_layers,
     #     ).to(device)
     else:
@@ -117,7 +120,7 @@ def get_flow_model(
 
     return flow, optimizer, scheduler
 
-def get_optimizer(params, optimizer_type, lr, weight_decay=0.0):
+def get_optimizer(params, optimizer_type, lr, weight_decay):
     if optimizer_type == "adam":
         return optim.Adam(params, lr=lr, weight_decay=weight_decay)
     elif optimizer_type == "adamw":
@@ -129,7 +132,7 @@ def get_optimizer(params, optimizer_type, lr, weight_decay=0.0):
 
     raise NotImplementedError
 
-def get_sflow_model(flow: NSF | Flow, n: int, shrink_ratio: float = config.shrink_ratio, device: str = config.device):
+def get_sflow_model(flow: NSF | Flow, n: int, shrink_ratio: float, device: str):
     """
     shrink normal distribution model
 
@@ -153,7 +156,7 @@ def get_sflow_model(flow: NSF | Flow, n: int, shrink_ratio: float = config.shrin
     return sflow
 
 
-def get_knn(P_tr: np.ndarray, n: int=config.n, m: int=config.m, r: int=config.r):
+def get_knn(P_tr: np.ndarray, n: int, m: int, r: int):
     """
     fit a knn model
 

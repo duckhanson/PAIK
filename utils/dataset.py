@@ -6,11 +6,10 @@ from utils.settings import config
 
 
 def create_dataset(
-    verbose: bool = False,
-    features: np.ndarray = None,
-    targets: np.ndarray = None,
+    features: np.ndarray,
+    targets: np.ndarray,
+    device: str,
     enable_normalize: bool = False,
-    device: str = config.device,
 ):
     """
     _summary_

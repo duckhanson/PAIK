@@ -261,7 +261,7 @@ def data_preprocess_for_inference(P, F, knn, m: int, k: int=1, device: str = 'cu
 
     # Project to Tensor(device)
     C = torch.from_numpy(C).to(device)
-    _, C = add_noise((torch.zeros_like(C), C), esp=0)
+    _, C = add_noise((torch.zeros_like(C), C), esp=0, std_scale=0)
 
     return C
 

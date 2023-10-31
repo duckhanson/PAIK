@@ -8,8 +8,8 @@ from utils.utils import init_seeds
 
 USE_NSF_CONFIG = True # otherwise, use nf_config
 USE_WANDB = True
-PATIENCE = 4
-POSE_ERR_THRESH = 1.1e-2
+PATIENCE = 5
+POSE_ERR_THRESH = 8e-3
 
 nf_config = {
     'name': 'sweep',
@@ -75,14 +75,14 @@ nf_config = {
 
 nsf_config = {
     'name': 'sweep',
-    'method': 'bayes',
+    'method': 'random',
     'metric': {
         'name': 'position_errors',
         'goal': 'minimize'
     },
     'parameters': {
         'subnet_width': {
-            'values': [1024, 1150, 1248]
+            'values': [1024, 1248, 1472]
             # 'value': 1024
         },
         'subnet_num_layers': {
@@ -90,15 +90,15 @@ nsf_config = {
             'value': 3
         },
         'num_transforms': {
-            'values': [7, 8]  # 6, 8, ..., 16
+            'values': [8, 9]  # 6, 8, ..., 16
             # 'value': 12
         },
         'lr': {
             # a flat distribution between 0 and 0.1
             'distribution': 'q_uniform',
             'q': 1e-5,
-            'min': 3e-4,
-            'max': 4e-4,
+            'min': 3.7e-4,
+            'max': 4.2e-4,
             # 'value': 5e-4,
         },
         'lr_weight_decay': {
@@ -106,7 +106,7 @@ nsf_config = {
             'distribution': 'q_uniform',
             'q': 1e-3,
             'min': 1e-2,
-            'max': 2.5e-2,
+            'max': 1.9e-2,
             # 'value': 9.79e-1,
         },
         'decay_step_size': {
@@ -116,15 +116,15 @@ nsf_config = {
         'gamma': {
             'distribution': 'q_uniform',
             'q': 1e-3,
-            'min': 7.8e-2,
-            'max': 9e-2,
+            'min': 8.6e-2,
+            'max': 9.1e-2,
             # 'value': 9.79e-1 
         },
         'batch_size': {
             'value': 128
         },
         'num_epochs': {
-            'value': 15
+            'value': 20
         },
         'model_architecture': {
             'value': 'nsf'
@@ -139,8 +139,8 @@ nsf_config = {
         'noise_esp_decay': {
             'distribution': 'q_uniform',
             'q': 1e-2,
-            'min': 8e-1,
-            'max': 9e-1,
+            'min': 8.1e-1,
+            'max': 8.6e-1,
             # 'value': 9.79e-1
         },
         'opt_type': {
@@ -148,11 +148,12 @@ nsf_config = {
             'value': 'adamw'
         },
         'sche_type': {
-            'values': ['step', 'plateau'], # cos bad
-            # 'value': 'step'
+            # 'values': ['step', 'plateau'], # cos bad
+            'value': 'plateau'
         },
         'random_perm': {
-            'values': [False, True]
+            # 'values': [False, True]
+            'value': False
         },
     },
 }
@@ -212,6 +213,6 @@ if __name__ == '__main__':
                            project=project_name,
                            entity='luca_nthu')
     # Start sweep job.
-    wandb.agent(sweep_id, function=main, count=20)
+    wandb.agent(sweep_id, function=main, count=30)
     wandb.finish()
     

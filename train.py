@@ -97,7 +97,7 @@ class Trainer(Solver):
                 self._scheduler.step() # type: ignore
             
             log_info = {
-                'ep': ep,
+                'lr': self._scheduler.get_lr(), # type: ignore
                 'position_errors': avg_position_error,
                 'orientation_errors': avg_orientation_error,
                 'train_loss': batch_loss.mean(),
@@ -111,6 +111,10 @@ class Trainer(Solver):
 
             if np.isnan(avg_position_error) or avg_position_error > 1e-1:
                 print(f"Early stopping ({avg_position_error} > 1e-1)")
+                break
+            
+            if ep > 14 and avg_position_error > 1e-2:
+                print(f"Early stopping ({avg_position_error} > 1e-2)")
                 break
             
             # early_stopping needs the validation loss to check if it has decresed, 

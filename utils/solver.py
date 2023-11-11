@@ -212,8 +212,8 @@ class Solver:
             transforms=self._solver.transforms, # type: ignore
             base=Unconditional(
                 DiagNormal,
-                torch.zeros((self._robot.n_dofs,)) + self._init_latent,
-                torch.ones((self._robot.n_dofs,)) * self._shink_ratio,
+                torch.zeros((self._robot.n_dofs,), device=self._device) + self._init_latent,
+                torch.ones((self._robot.n_dofs,), device=self._device) * self._shink_ratio,
                 buffer=True,
             ), # type: ignore
         )

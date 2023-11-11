@@ -89,7 +89,11 @@ class Trainer(Solver):
                     self._scheduler.step() # type: ignore
             self.__update_noise_esp(ep)
             
+        
+            self.shrink_ratio = 0.25
+            print(f"using shrink_ratio: {self.shrink_ratio} (fixed), where original shrink_ratio: {self.param['shrink_ratio']} (training)")
             avg_position_error, avg_orientation_error = self.random_evaluation(num_poses=num_eval_poses, num_sols=num_eval_sols) # type: ignore
+            self.shrink_ratio = self.param['shrink_ratio'] # type: ignore
             
             if self.param['sche_type'] == 'plateau':
                 self._scheduler.step(avg_position_error) # type: ignore
@@ -97,7 +101,7 @@ class Trainer(Solver):
                 self._scheduler.step() # type: ignore
             
             log_info = {
-                'lr': self._scheduler.get_lr(), # type: ignore
+                'lr': self._optimizer.param_groups[0]['lr'], # type: ignore
                 'position_errors': avg_position_error,
                 'orientation_errors': avg_orientation_error,
                 'train_loss': batch_loss.mean(),
@@ -113,7 +117,7 @@ class Trainer(Solver):
                 print(f"Early stopping ({avg_position_error} > 1e-1)")
                 break
             
-            if ep > 14 and avg_position_error > 1e-2:
+            if ep > 14 and avg_position_error > 1.5e-2:
                 print(f"Early stopping ({avg_position_error} > 1e-2)")
                 break
             

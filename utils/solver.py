@@ -41,24 +41,24 @@ DEFAULT_SOLVER_PARAM_M3 = {
     }
 
 DEFAULT_SOLVER_PARAM_M7 = {
-        'subnet_width': 1024,
-        'subnet_num_layers': 3,
-        'num_transforms': 8,
         'lr': 3.6e-4,
-        'lr_weight_decay': 1.1e-2,
-        'decay_step_size': 6e4,
-        'gamma': 8.7e-2,
-        'shrink_ratio': 0.61,
+        'gamma': 8.4e-2,
+        'opt_type': 'adamw',
+        'noise_esp': 1.9e-3,
+        'sche_type': 'plateau',
         'batch_size': 128,
         'num_epochs': 15,
+        'random_perm': True,
+        'subnet_width': 1150,
+        'num_transforms': 8,
+        'decay_step_size': 5e4,
+        'lr_weight_decay': 1.8e-2,
+        'noise_esp_decay': 0.92,
+        'subnet_num_layers': 3,
         'model_architecture': 'nsf',
-        'noise_esp': 1.5e-3,
-        'noise_esp_decay': 0.83,
-        'opt_type': 'adamw',
-        'sche_type': 'plateau',
-        'ckpt_name': '1031-1429',
+        'shrink_ratio': 0.61,
+        'ckpt_name': '1107-1013',
         'nmr': (7, 7, 1),
-        'random_perm': False,
         'enable_load_model': True,
         'device': 'cuda' if torch.cuda.is_available() else 'cpu'
     }
@@ -291,6 +291,10 @@ class Solver:
         J_hat = torch.reshape(J_hat, (-1, self._robot.n_dofs))
         return J_hat
     
+    def max_joint_angle_change(self, qs: torch.Tensor):
+        qs = qs.detach().cpu().numpy()
+        return np.rad2deg(np.max(np.abs(np.diff(qs, axis=0))))
+    
     def path_following(
         self,
         load_time: str = "", 
@@ -330,6 +334,8 @@ class Solver:
             P_path_7 = P_path
         # ref_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path[0]), self._F, n_neighbors=300) # type: ignore # knn
         # nn1_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path), self._F, n_neighbors=1) # type: ignore # knn
+        time_begin = time()
+        
         ref_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path), self._F, n_neighbors=30) # type: ignore # knn
         ref_F = ref_F.flatten()
         # ref_F = F
@@ -343,6 +349,10 @@ class Solver:
         # l2_err, ang_err = solution_pose_errors(robot=self._robot, solutions=qs, target_poses=P_path_7)
         # df = pd.DataFrame({'l2_err': l2_err, 'ang_err': ang_err})
         # print(df.describe())
+        l2_err_arr = np.empty((num_traj, num_steps))
+        ang_err_arr = np.empty((num_traj, num_steps))
+        mjac_arr = np.empty((num_traj, num_steps))
+        
         Qs = np.empty((num_traj, num_steps, self._robot.n_dofs))
         for i, rand in enumerate(rand_idxs):
             qs = self._sample_J_traj(P_path, ref_F[rand])
@@ -351,9 +361,16 @@ class Solver:
             print("="*6 + str(rand) + f"=({ref_F[rand]})" + "="*6)
             
             if enable_evaluation:
-                l2_err, ang_err = solution_pose_errors(robot=self._robot, solutions=qs, target_poses=P_path_7)
-                df = pd.DataFrame({'l2_err': l2_err, 'ang_err': ang_err})
-                print(df.describe())
+                mjac_arr[i] = self.max_joint_angle_change(qs)
+                l2_err_arr[i], ang_err_arr[i] = solution_pose_errors(robot=self._robot, solutions=qs, target_poses=P_path_7)
+    
+        avg_inference_time = round((time() - time_begin) / num_traj, 3)
+        
+        if enable_evaluation:
+            df = pd.DataFrame({'l2_err': l2_err_arr.flatten(), 'ang_err': ang_err_arr.flatten(), 'mjac': mjac_arr.flatten()})
+            print(df.describe())
+            print(f"avg_inference_time: {avg_inference_time}")
+            
             
         if enable_plot:
             return P_path, Qs, ref_F[rand_idxs]

@@ -218,7 +218,7 @@ class Solver:
             ), # type: ignore
         )
         
-    def _sample_P_path(self, load_time: str = "", num_steps=20) -> np.ndarray:
+    def _sample_P_path(self, load_time: str = "", num_steps=20, seed=47) -> np.ndarray:
         """
         sample a path from P_ts
 
@@ -234,6 +234,8 @@ class Solver:
         np.ndarray
             array_like(num_steps, m)
         """
+        np.random.seed(seed)
+        
         if load_time == "":
             traj_dir = cfg.traj_dir + datetime.now().strftime("%m%d%H%M%S") + "/"
         else:
@@ -303,6 +305,7 @@ class Solver:
         shrink_ratio: float = 0.1,
         enable_evaluation: bool = False,
         enable_plot: bool = False,
+        seed: int = 47
     ):
         """
         evaluate the performance of path following
@@ -327,7 +330,7 @@ class Solver:
         
         print(f'using shrink_ratio: {self.shrink_ratio}')
         
-        P_path = self._sample_P_path(load_time=load_time, num_steps=num_steps)
+        P_path = self._sample_P_path(load_time=load_time, num_steps=num_steps, seed=seed)
         if self._m == 3:
             P_path_7 = np.column_stack((P_path, np.ones((len(P_path), 4)))) # type: ignore
         else:
@@ -373,7 +376,7 @@ class Solver:
             
             
         if enable_plot:
-            return P_path, Qs, ref_F[rand_idxs]
+            return P_path_7, Qs, ref_F[rand_idxs]
 
         self.shrink_ratio = old_shink_ratio
         

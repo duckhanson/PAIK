@@ -1,4 +1,5 @@
 # Import required packages
+from __future__ import annotations
 import os
 from time import time
 from datetime import datetime
@@ -8,7 +9,7 @@ import torch
 
 from klampt.model import trajectory
 from jrl.robot import Robot
-from jrl.evaluation import solution_pose_errors
+from jrl.evaluation import solution_pose_errors, evaluate_solutions
 
 from utils.settings import config as cfg
 from utils.model import get_flow_model, get_knn
@@ -131,12 +132,22 @@ class Solver:
         
     
     def sample(self, C, K):
-        if C.device != self._device:
-            C = C.to(self._device)
-            print(f"move C to {self._device}")
-            
         with torch.inference_mode():
-            return self._solver(C).sample((K,))
+            return self._solver(C).sample((K,)).detach().cpu()
+        
+    
+    def sample_n(self, C, K):
+        num_poses = C.shape[0]
+        num_sols = K
+        batch_size = 100
+        C = C.view(1, *C.shape).tile(K, 1, 1)
+        C = C.reshape(-1, batch_size, C.shape[-1])
+        S = torch.empty((num_sols * num_poses, self._robot.n_dofs), device=self._device)
+        S = S.reshape(-1, batch_size, S.shape[-1])
+        for i, c in enumerate(C):
+            with torch.inference_mode():
+                S[i] = self._solver(c).sample()
+        return S.reshape(num_sols, num_poses, -1)
     
     def solve(self, single_pose: np.ndarray, num_sols: int, k: int=1, return_numpy: bool=False):
         """
@@ -185,14 +196,21 @@ class Solver:
 
         # Begin inference
         J_hat = self.sample(C, num_sols)
-            
+        
+        inference_time = round((time() - time_begin), 3)    
+        print(f"model inference time: {inference_time}")
+        
         l2_errs = np.empty((num_poses, num_sols))
         ang_errs = np.empty((num_poses, num_sols))
         if self._m == 3:
             P = np.column_stack((P, np.ones(shape=(len(P), 4))))
+        
         for i in range(num_poses):
             l2_errs[i], ang_errs[i] = solution_pose_errors(robot=self._robot, solutions=J_hat[:, i, :], target_poses=P[i])
             
+        errors_time = round((time() - time_begin), 3) - inference_time
+        print(f"calculation errors time: {errors_time}")
+        
         l2_errs = l2_errs.flatten()
         ang_errs = ang_errs.flatten()
         
@@ -293,8 +311,43 @@ class Solver:
         J_hat = torch.reshape(J_hat, (-1, self._robot.n_dofs))
         return J_hat
     
-    def max_joint_angle_change(self, qs: torch.Tensor):
-        qs = qs.detach().cpu().numpy()
+    def _sample_n_J_traj(self, P_path: np.ndarray, ref_F: np.ndarray):
+        """
+        sample a trajectory from IK solver that fit P_path
+
+        Parameters
+        ----------
+        P_path : np.ndarray
+            a sequence of target end-effector poses
+        ref_F : np.ndarray
+            posture features
+
+        Returns
+        -------
+        torch.Tensor
+            array_like(num_steps, n_dofs)
+        """
+        assert self._shink_ratio < 0.2, "shrink_ratio should be less than 0.2"
+        num_traj = len(ref_F)
+        num_steps = len(P_path)
+        
+        if self._m == 3:
+            P_path = P_path[:, :self._m]
+        
+        C = np.empty((num_traj, num_steps, self._m + ref_F.shape[-1] + 1))
+        for i, f in enumerate(ref_F):
+            f = np.tile(np.atleast_2d(f), (num_steps, 1)) # type: ignore
+            C[i] = np.column_stack((P_path, f, np.zeros((num_steps,)))) # type: ignore
+        C = C.reshape(-1, self._m + ref_F.shape[-1] + 1)
+        C = torch.from_numpy(C).float().to(self._device) # type: ignore
+
+        J_hat = self.sample(C, 1)
+        J_hat = torch.reshape(J_hat, (num_traj, num_steps, self._robot.n_dofs))
+        return J_hat
+    
+    def max_joint_angle_change(self, qs: torch.Tensor | np.ndarray):
+        if isinstance(qs, torch.Tensor):
+            qs = qs.detach().cpu().numpy()
         return np.rad2deg(np.max(np.abs(np.diff(qs, axis=0))))
     
     def path_following(
@@ -341,10 +394,11 @@ class Solver:
         
         ref_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path), self._F, n_neighbors=30) # type: ignore # knn
         ref_F = ref_F.flatten()
+        rand_idxs = np.random.randint(low=0, high=len(ref_F), size=num_traj)
+        ref_F = ref_F[rand_idxs].reshape(num_traj, -1)
         # ref_F = F
         # ref_F = rand_F(Path[0], F)
         
-        rand_idxs = np.random.randint(low=0, high=len(ref_F), size=num_traj)
         # rand_idxs = list(range(num_traj))
         # qs = self._sample_J_traj(P_path, nn1_F)
         # print("="*6 + f"=(use nearest)" + "="*6)
@@ -356,20 +410,15 @@ class Solver:
         ang_err_arr = np.empty((num_traj, num_steps))
         mjac_arr = np.empty((num_traj, num_steps))
         
-        Qs = np.empty((num_traj, num_steps, self._robot.n_dofs))
-        for i, rand in enumerate(rand_idxs):
-            qs = self._sample_J_traj(P_path, ref_F[rand])
-            Qs[i] = qs.detach().cpu().numpy()
-            
-            # print("="*6 + str(rand) + f"=({ref_F[rand]})" + "="*6)
-            
-            if enable_evaluation:
-                mjac_arr[i] = self.max_joint_angle_change(qs)
-                l2_err_arr[i], ang_err_arr[i] = solution_pose_errors(robot=self._robot, solutions=qs, target_poses=P_path_7)
-    
+        Qs = self._sample_n_J_traj(P_path, ref_F)
+        
         avg_inference_time = round((time() - time_begin) / num_traj, 3)
         
         if enable_evaluation:
+            Qs_np = Qs.detach().cpu().numpy()
+            for i in range(num_traj):
+                mjac_arr[i] = self.max_joint_angle_change(Qs_np[i])
+                l2_err_arr[i], ang_err_arr[i] = solution_pose_errors(robot=self._robot, solutions=Qs[i], target_poses=P_path_7)
             df = pd.DataFrame({'l2_err': l2_err_arr.flatten(), 'ang_err': ang_err_arr.flatten(), 'mjac': mjac_arr.flatten()})
             print(df.describe())
             print(f"avg_inference_time: {avg_inference_time}")

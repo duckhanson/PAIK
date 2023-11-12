@@ -361,7 +361,7 @@ class Solver:
             qs = self._sample_J_traj(P_path, ref_F[rand])
             Qs[i] = qs.detach().cpu().numpy()
             
-            print("="*6 + str(rand) + f"=({ref_F[rand]})" + "="*6)
+            # print("="*6 + str(rand) + f"=({ref_F[rand]})" + "="*6)
             
             if enable_evaluation:
                 mjac_arr[i] = self.max_joint_angle_change(qs)

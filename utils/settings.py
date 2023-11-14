@@ -40,14 +40,14 @@ class Config:
         self.enable_normalize = False
         self.n = ets_table[self.robot_name]  # n = dof
         # self.m = 3 + 4 # position(x, y, z) + quaternion
-        self.m = 3 # position(x, y, z)
+        self.m = 3  # position(x, y, z)
         # self.r = self.n - self.m  # degrees of redundancy r = n - m
         # self.r = 1
         self.r = 4
         # training
         # self.N_train = 2500_0000 # 2500_0000
-        self.N_train = 240_0000 # 2500_0000
-        self.N_test = 5_0000 # 5_0000
+        self.N_train = 240_0000  # 2500_0000
+        self.N_test = 5_0000  # 5_0000
         self.K = 100
 
         # data
@@ -55,19 +55,34 @@ class Config:
 
         # train
         self.train_dir = self.data_dir + "train/"
-        self.path_J_train = lambda n=self.n, m=self.m, r=self.r: self.train_dir + f"J-{self.N_train}-{n}-{m}-{r}.npy"  # joint configuration
-        self.path_P_train = lambda n=self.n, m=self.m, r=self.r: self.train_dir + f"P-{self.N_train}-{n}-{m}-{r}.npy"  # end-effector position
+        self.path_J_train = (
+            lambda n=self.n, m=self.m, r=self.r: self.train_dir
+            + f"J-{self.N_train}-{n}-{m}-{r}.npy"
+        )  # joint configuration
+        self.path_P_train = (
+            lambda n=self.n, m=self.m, r=self.r: self.train_dir
+            + f"P-{self.N_train}-{n}-{m}-{r}.npy"
+        )  # end-effector position
         # self.path_J_train = self.train_dir + f"J-{self.N_train}-{self.n}-{self.m}-{self.r}.npy"  # joint configuration
         # self.path_P_train = self.train_dir + f"P-{self.N_train}-{self.n}-{self.m}-{self.r}.npy"  # end-effector position
-        self.path_F = lambda n=self.n, m=self.m, r=self.r: self.train_dir + f"F-{self.N_train}-{n}-{m}-{r}.npy"  # hnne reduced feature vector
+        self.path_F = (
+            lambda n=self.n, m=self.m, r=self.r: self.train_dir
+            + f"F-{self.N_train}-{n}-{m}-{r}.npy"
+        )  # hnne reduced feature vector
         # self.path_F = (
         #     self.train_dir + f"F-{self.N_train}-{self.n}-{self.m}-{self.r}.npy"
         # )  # hnne reduced feature vector
 
         # val
         self.val_dir = self.data_dir + "val/"
-        self.path_J_test = lambda n=self.n, m=self.m, r=self.r: self.val_dir + f"J-{self.N_test}-{n}-{m}-{r}.npy"  # joint configuration
-        self.path_P_test = lambda n=self.n, m=self.m, r=self.r: self.val_dir + f"P-{self.N_test}-{n}-{m}-{r}.npy"  # end-effector position
+        self.path_J_test = (
+            lambda n=self.n, m=self.m, r=self.r: self.val_dir
+            + f"J-{self.N_test}-{n}-{m}-{r}.npy"
+        )  # joint configuration
+        self.path_P_test = (
+            lambda n=self.n, m=self.m, r=self.r: self.val_dir
+            + f"P-{self.N_test}-{n}-{m}-{r}.npy"
+        )  # end-effector position
         # self.path_J_test = self.val_dir + f"J-{self.N_test}-{self.n}-{self.m}-{self.r}.npy"  # joint configuration
         # self.path_P_test = self.val_dir + f"P-{self.N_test}-{self.n}-{self.m}-{self.r}.npy"  # end-effector position
         self.path_F_test = None  # hnne reduced feature vector
@@ -78,7 +93,10 @@ class Config:
         self.max_num_data_hnne = 150_0000
 
         # knn parameter
-        self.path_knn = lambda n=self.n, m=self.m, r=self.r: self.train_dir + f"knn-{self.N_train}-{n}-{m}-{r}-norm{self.enable_normalize}.pickle"
+        self.path_knn = (
+            lambda n=self.n, m=self.m, r=self.r: self.train_dir
+            + f"knn-{self.N_train}-{n}-{m}-{r}-norm{self.enable_normalize}.pickle"
+        )
         # self.path_knn = self.train_dir + f"knn-{self.N_train}-{self.n}-{self.m}-{self.r}-norm{self.enable_normalize}.pickle"
 
         # flow parameter
@@ -86,7 +104,7 @@ class Config:
         self.architecture = "nsf"
         self.device = "cuda"
         self.num_conditions = (
-            self.m  + self.r + 1
+            self.m + self.r + 1
         )  # position + posture + noise = 3-dim + 4-dim + 1-dim
         self.num_transforms = 7
         self.subnet_width = 1024

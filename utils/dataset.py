@@ -35,6 +35,7 @@ def _data_collection(robot, N: int, n: int, m: int, r: int):
 
     return J, P
 
+
 def load_all_data(robot, n, m, r):
     J_tr, P_tr = _data_collection(robot=robot, N=config.N_train, n=n, m=m, r=r)
     _, P_ts = _data_collection(robot=robot, N=config.N_test, n=n, m=m, r=r)
@@ -58,15 +59,11 @@ def _posture_feature_extraction(J: np.ndarray, P: np.ndarray, n: int, m: int, r:
     F : np.ndarray
         posture features
     """
-    F = None
-    
-    if r == 0:
-        return F
-    
+    assert r > 0
+
     path = config.path_F(n, m, r)
-    if os.path.exists(path=path):
-        F = load_numpy(file_path=path)
-    
+    F = load_numpy(file_path=path) if os.path.exists(path=path) else None
+
     if F is None or F.shape[-1] != r or len(F) != len(J):
         # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
         hnne = HNNE(dim=r)
@@ -78,8 +75,10 @@ def _posture_feature_extraction(J: np.ndarray, P: np.ndarray, n: int, m: int, r:
         if len(F) != len(J):
             knn = NearestNeighbors(n_neighbors=1)
             knn.fit(S[:num_data])
-            neigh_idx = knn.kneighbors(S[num_data:], n_neighbors=1, return_distance=False)
-            neigh_idx = neigh_idx.flatten() # type: ignore
+            neigh_idx = knn.kneighbors(
+                S[num_data:], n_neighbors=1, return_distance=False
+            )
+            neigh_idx = neigh_idx.flatten()  # type: ignore
             F = np.row_stack((F, F[neigh_idx]))
 
         save_numpy(file_path=path, arr=F)
@@ -88,7 +87,9 @@ def _posture_feature_extraction(J: np.ndarray, P: np.ndarray, n: int, m: int, r:
     return F
 
 
-def get_train_loader(J: np.ndarray, P: np.ndarray, F: np.ndarray, batch_size: int, device: str):
+def get_train_loader(
+    J: np.ndarray, P: np.ndarray, F: np.ndarray, batch_size: int, device: str
+):
     """
     a training loader
 
@@ -113,39 +114,49 @@ def get_train_loader(J: np.ndarray, P: np.ndarray, F: np.ndarray, batch_size: in
 
     return loader
 
-def data_preprocess_for_inference(P, F, knn, m: int, k: int=1, device: str = 'cuda'):
-    assert F is not None 
+
+def data_preprocess_for_inference(P, F, knn, m: int, k: int = 1, device: str = "cuda"):
+    assert F is not None
     P = np.atleast_2d(P[:, :m])
     F = np.atleast_2d(F)
-    
+
     # Data Preprocessing: Posture Feature Extraction
-    ref_F = np.atleast_2d(nearest_neighbor_F(knn, P, F, n_neighbors=k)) # type: ignore
+    ref_F = np.atleast_2d(nearest_neighbor_F(knn, P, F, n_neighbors=k))  # type: ignore
     # ref_F = rand_F(P, F) # f_rand
     # ref_F = pick_F(P, F) # f_pick
     P = np.tile(P, (len(ref_F), 1)) if len(P) == 1 and k > 1 else P
 
     # Add noise std and Project to Tensor(device)
-    C = torch.from_numpy(np.column_stack((P, ref_F, np.zeros((ref_F.shape[0], 1)))).astype(np.float32)).to(device=device) # type: ignore
+    C = torch.from_numpy(np.column_stack((P, ref_F, np.zeros((ref_F.shape[0], 1)))).astype(np.float32)).to(device=device)  # type: ignore
     return C
 
-def nearest_neighbor_F(knn: NearestNeighbors, P_ts: np.ndarray[float, float], F: np.ndarray[float, float], n_neighbors: int=1):
+
+def nearest_neighbor_F(
+    knn: NearestNeighbors,
+    P_ts: np.ndarray[float, float],
+    F: np.ndarray[float, float],
+    n_neighbors: int = 1,
+):
     if F is None:
         raise ValueError("F cannot be None")
-    
-    P_ts = np.atleast_2d(P_ts) # type: ignore
+
+    P_ts = np.atleast_2d(P_ts)  # type: ignore
     assert len(P_ts) < len(F)
     # neigh_idx = knn.kneighbors(P_ts[:, :3], n_neighbors=n_neighbors, return_distance=False)
     neigh_idx = knn.kneighbors(P_ts, n_neighbors=n_neighbors, return_distance=False)
-    neigh_idx = neigh_idx.flatten() # type: ignore
-    
+    neigh_idx = neigh_idx.flatten()  # type: ignore
+
     return F[neigh_idx]
+
 
 def rand_F(P_ts: np.ndarray, F: np.ndarray):
     return np.random.rand(len(np.atleast_2d(P_ts)), F.shape[-1])
 
-def pick_F(P_ts: np.ndarray, F: np.ndarray) :
+
+def pick_F(P_ts: np.ndarray, F: np.ndarray):
     idx = np.random.randint(low=0, high=len(F), size=len(np.atleast_2d(P_ts)))
     return F[idx]
+
 
 def create_dataset(
     features: np.ndarray,
@@ -221,9 +232,10 @@ class CustomDataset(Dataset):
         return self.features[id], self.targets[id]
 
     def create_loader(self, shuffle, batch_size):
-        return DataLoader(self, 
-                          batch_size=batch_size, 
-                          shuffle=shuffle, 
-                          drop_last=True,
-                        #   generator=torch.Generator(device='cuda')
-                          )
+        return DataLoader(
+            self,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            drop_last=True,
+            #   generator=torch.Generator(device='cuda')
+        )

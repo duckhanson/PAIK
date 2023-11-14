@@ -13,8 +13,8 @@ from jrl.robot import Robot
 
 from utils.settings import config as cfg
 from utils.model import get_flow_model, get_knn, get_robot
-from utils.utils import data_preprocess_for_inference, nearest_neighbor_F, load_numpy, save_numpy
-from utils.dataset import load_all_data
+from utils.utils import load_numpy, save_numpy
+from utils.dataset import load_all_data, data_preprocess_for_inference, nearest_neighbor_F
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 
@@ -210,15 +210,14 @@ class Solver:
         errors_time = round((time() - time_begin), 3) - inference_time
         print(f"calculation errors time: {errors_time}")
         
-        l2_errs = l2_errs.flatten()
-        ang_errs = ang_errs.flatten()
-        
+        avg_l2_errs = l2_errs.mean()
+        avg_ang_errs = ang_errs.mean()
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
         if return_time:
-            return l2_errs.mean(), ang_errs.mean(), avg_inference_time
+            return avg_l2_errs, avg_ang_errs, avg_inference_time
         else:
-            return l2_errs.mean(), ang_errs.mean()
+            return avg_l2_errs, avg_ang_errs
     
     def __update_solver(self):
         self._solver = Flow(

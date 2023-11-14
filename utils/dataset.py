@@ -113,6 +113,40 @@ def get_train_loader(J: np.ndarray, P: np.ndarray, F: np.ndarray, batch_size: in
 
     return loader
 
+def data_preprocess_for_inference(P, F, knn, m: int, k: int=1, device: str = 'cuda'):
+    assert F is not None 
+    P = np.atleast_2d(P[:, :m])
+    F = np.atleast_2d(F)
+    
+    # Data Preprocessing: Posture Feature Extraction
+    ref_F = np.atleast_2d(nearest_neighbor_F(knn, P, F, n_neighbors=k)) # type: ignore
+    # ref_F = rand_F(P, F) # f_rand
+    # ref_F = pick_F(P, F) # f_pick
+    P = np.tile(P, (len(ref_F), 1)) if len(P) == 1 and k > 1 else P
+
+    # Add noise std and Project to Tensor(device)
+    C = torch.from_numpy(np.column_stack((P, ref_F, np.zeros((ref_F.shape[0], 1)))).astype(np.float32)).to(device=device) # type: ignore
+    return C
+
+def nearest_neighbor_F(knn: NearestNeighbors, P_ts: np.ndarray[float, float], F: np.ndarray[float, float], n_neighbors: int=1):
+    if F is None:
+        raise ValueError("F cannot be None")
+    
+    P_ts = np.atleast_2d(P_ts) # type: ignore
+    assert len(P_ts) < len(F)
+    # neigh_idx = knn.kneighbors(P_ts[:, :3], n_neighbors=n_neighbors, return_distance=False)
+    neigh_idx = knn.kneighbors(P_ts, n_neighbors=n_neighbors, return_distance=False)
+    neigh_idx = neigh_idx.flatten() # type: ignore
+    
+    return F[neigh_idx]
+
+def rand_F(P_ts: np.ndarray, F: np.ndarray):
+    return np.random.rand(len(np.atleast_2d(P_ts)), F.shape[-1])
+
+def pick_F(P_ts: np.ndarray, F: np.ndarray) :
+    idx = np.random.randint(low=0, high=len(F), size=len(np.atleast_2d(P_ts)))
+    return F[idx]
+
 def create_dataset(
     features: np.ndarray,
     targets: np.ndarray,

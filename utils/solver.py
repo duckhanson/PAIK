@@ -13,8 +13,8 @@ from jrl.evaluation import solution_pose_errors, evaluate_solutions
 
 from utils.settings import config as cfg
 from utils.model import get_flow_model, get_knn, get_robot
-from utils.utils import load_all_data, data_preprocess_for_inference, nearest_neighbor_F, load_numpy, save_numpy
-
+from utils.utils import data_preprocess_for_inference, nearest_neighbor_F, load_numpy, save_numpy
+from utils.dataset import load_all_data
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 

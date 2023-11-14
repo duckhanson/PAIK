@@ -10,7 +10,8 @@ from pprint import pprint
 import wandb
 from utils.model import get_robot
 from utils.settings import config as cfg
-from utils.utils import init_seeds, EarlyStopping, get_train_loader, add_noise
+from utils.utils import init_seeds, EarlyStopping, add_noise
+from utils.dataset import get_train_loader
 
 from utils.solver import Solver, DEFAULT_SOLVER_PARAM_M7, DEFAULT_SOLVER_PARAM_M3
 

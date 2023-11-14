@@ -1,17 +1,10 @@
 import os
-# from tqdm.auto import tqdm
-from tqdm import trange, tqdm
 import pickle
-import time
-from datetime import datetime
 
 import numpy as np
-import pandas as pd
 import torch
-from hnne import HNNE
 from sklearn.neighbors import NearestNeighbors
 from jrl.evaluation import solution_pose_errors
-from utils.dataset import create_dataset
 from utils.settings import config
 
 def init_seeds(seed=42):
@@ -22,110 +15,6 @@ def init_seeds(seed=42):
     if seed == 0:
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-
-def data_collection(robot, N: int, n: int, m: int, r: int):
-    """
-    collect data using uniform sampling
-
-    :param robot: the robot arm you pick up
-    :type robot: Robot
-    :param N: #data required
-    :type N: int
-    :return: J, P
-    :rtype: np.ndarray, np.ndarray
-    """
-    if N == config.N_train:
-        path_J, path_P = config.path_J_train(n, m, r), config.path_P_train(n, m, r)
-    else:
-        path_J, path_P = config.path_J_test(n, m, r), config.path_P_test(n, m, r)
-
-    J = load_numpy(file_path=path_J)
-    P = load_numpy(file_path=path_P)
-
-    if len(J) != N or len(P) != N:
-        J, P = robot.sample_joint_angles_and_poses(n=N, return_torch=False)
-        save_numpy(file_path=path_J, arr=J)
-        save_numpy(file_path=path_P, arr=P[:, :m])
-
-    return J, P
-
-def load_all_data(robot, n, m, r):
-    J_tr, P_tr = data_collection(robot=robot, N=config.N_train, n=n, m=m, r=r)
-    _, P_ts = data_collection(robot=robot, N=config.N_test, n=n, m=m, r=r)
-    F = posture_feature_extraction(J=J_tr, P=P_tr, n=n, m=m, r=r)
-    return J_tr, P_tr, P_ts, F
-
-
-def posture_feature_extraction(J: np.ndarray, P: np.ndarray, n: int, m: int, r: int):
-    """
-    generate posture feature from J (training data)
-
-    Parameters
-    ----------
-    J : np.ndarray
-        joint configurations
-    P : np.ndarray
-        poses of the robot
-
-    Returns
-    -------
-    F : np.ndarray
-        posture features
-    """
-    F = None
-    
-    if r == 0:
-        return F
-    
-    path = config.path_F(n, m, r)
-    if os.path.exists(path=path):
-        F = load_numpy(file_path=path)
-    
-    if F is None or F.shape[-1] != r or len(F) != len(J):
-        # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
-        hnne = HNNE(dim=r)
-        # maximum number of data for hnne (11M), we use max_num_data_hnne to test
-        num_data = min(config.max_num_data_hnne, len(J))
-        S = np.column_stack((J, P))
-        F = hnne.fit_transform(X=S[:num_data], dim=r, verbose=True)
-        # query nearest neighbors for the rest of J
-        if len(F) != len(J):
-            knn = NearestNeighbors(n_neighbors=1)
-            knn.fit(S[:num_data])
-            neigh_idx = knn.kneighbors(S[num_data:], n_neighbors=1, return_distance=False)
-            neigh_idx = neigh_idx.flatten() # type: ignore
-            F = np.row_stack((F, F[neigh_idx]))
-
-        save_numpy(file_path=path, arr=F)
-    print(f"F load successfully from {path}")
-
-    return F
-
-
-def get_train_loader(J: np.ndarray, P: np.ndarray, F: np.ndarray, batch_size: int, device: str):
-    """
-    a training loader
-
-    :param J: joint configurations
-    :type J: np.ndarray
-    :param P: end-effector positions
-    :type P: np.ndarray
-    :param F: posture features
-    :type F: np.ndarray
-    :return: torch dataloader
-    :rtype: dataloader
-    """
-    assert len(J) == len(P) and (F is None or len(P) == len(F))
-
-    if F is None:
-        C = P
-    else:
-        C = np.column_stack((P, F))
-
-    dataset = create_dataset(features=J, targets=C, device=device)
-    loader = dataset.create_loader(shuffle=True, batch_size=batch_size)
-
-    return loader
 
 def load_pickle(file_path: str):
     """

@@ -15,8 +15,9 @@ from zuko.flows.coupling import GeneralCouplingTransform
 from zuko.flows.neural import UNAF
 from zuko.flows.spline import NSF
 
+from jrl.robots import Panda
 from utils.settings import config
-from utils.utils import save_pickle, load_pickle
+from utils.utils import save_pickle, load_pickle, create_robot_dirs
 
 DEFAULT_ACTIVATION = LeakyReLU
 
@@ -190,3 +191,11 @@ def get_knn(P_tr: np.ndarray, n: int, m: int, r: int):
     # print(f"Create and save knn at {path}.")
     
     return knn
+
+def get_robot(robot_name: str = config.robot_name):
+    create_robot_dirs()
+    
+    if robot_name == 'panda':
+        return Panda()
+    else:
+        raise NotImplementedError()

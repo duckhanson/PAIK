@@ -2,11 +2,11 @@
 import torch
 from datetime import datetime
 import wandb
-from utils.robot import get_robot
+from utils.model import get_robot
 from train import Trainer
 from utils.utils import init_seeds
 
-USE_NSF_CONFIG = True # otherwise, use nf_config
+USE_NSF_CONFIG = True  # otherwise, use nf_config
 USE_WANDB = True
 PATIENCE = 4
 POSE_ERR_THRESH = 7.3e-3
@@ -57,7 +57,7 @@ nf_config = {
             'q': 1e-3,
             'min': 7e-2,
             'max': 9e-2,
-            # 'value': 9.79e-1 
+            # 'value': 9.79e-1
         },
         'batch_size': {
             'value': 128
@@ -119,7 +119,7 @@ nsf_config = {
             'q': 1e-3,
             'min': 8.4e-2,
             'max': 8.6e-2,
-            # 'value': 9.79e-1 
+            # 'value': 9.79e-1
         },
         'batch_size': {
             'value': 128
@@ -135,7 +135,7 @@ nsf_config = {
             'q': 1e-4,
             'min': 1.7e-3,
             'max': 3.3e-3,
-            # 'value': 9.79e-1 
+            # 'value': 9.79e-1
         },
         'noise_esp_decay': {
             'distribution': 'q_uniform',
@@ -166,13 +166,14 @@ nsf_config = {
 }
 
 sweep_config = nsf_config if USE_NSF_CONFIG else nf_config
-    
+
+
 def main() -> None:
     begin_time = datetime.now().strftime("%m%d-%H%M")
     # note that we define values from `wandb.config`
     # instead of defining hard values
     wandb.init(name=begin_time,
-                     notes=f'')
+               notes=f'')
 
     # note that we define values from `wandb.config`
     # instead of defining hard values
@@ -198,10 +199,10 @@ def main() -> None:
         'nmr': (7, 7, 1),
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
     }
-    
+
     trainer = Trainer(robot=get_robot(),
                       solver_param=solver_param)
-    
+
     trainer.mini_train(num_epochs=solver_param['num_epochs'],
                        batch_size=solver_param['batch_size'],
                        begin_time=begin_time,
@@ -215,11 +216,10 @@ def main() -> None:
 if __name__ == '__main__':
     init_seeds(seed=42)
     project_name = 'msik_ikflow_nsf' if USE_NSF_CONFIG else 'msik_ikflow_nf'
-    
+
     sweep_id = wandb.sweep(sweep=sweep_config,
                            project=project_name,
                            entity='luca_nthu')
     # Start sweep job.
     wandb.agent(sweep_id, function=main, count=EXPERMENT_COUNT)
     wandb.finish()
-    

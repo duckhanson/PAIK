@@ -12,7 +12,7 @@ from jrl.robot import Robot
 from jrl.evaluation import solution_pose_errors, evaluate_solutions
 
 from utils.settings import config as cfg
-from utils.model import get_flow_model, get_knn
+from utils.model import get_flow_model, get_knn, get_robot
 from utils.utils import load_all_data, data_preprocess_for_inference, nearest_neighbor_F, load_numpy, save_numpy
 
 from zuko.distributions import DiagNormal
@@ -65,7 +65,7 @@ DEFAULT_SOLVER_PARAM_M7 = {
     }
 
 class Solver:
-    def __init__(self, robot: Robot, solver_param: dict = DEFAULT_SOLVER_PARAM_M7) -> None:
+    def __init__(self, robot: Robot = get_robot(), solver_param: dict = DEFAULT_SOLVER_PARAM_M7) -> None:
         self._robot = robot
         self._solver_param = solver_param
         self._device = solver_param['device']

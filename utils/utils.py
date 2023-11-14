@@ -109,8 +109,8 @@ def add_noise(batch, esp: float, std_scale: float):
         C = torch.column_stack((C, std))
     else:
         # softflow implementation
-        s = esp * torch.rand((C.shape[0], 1)).to(C.device)
-        C = torch.column_stack((C, s * std_scale))
+        s = std_scale * esp * torch.rand((C.shape[0], 1)).to(C.device)
+        C = torch.column_stack((C, s))
         noise = torch.normal(
             mean=torch.zeros_like(input=J),
             std=torch.repeat_interleave(input=s, repeats=J.shape[1], dim=1),
@@ -129,29 +129,18 @@ def denormalize(norm: np.ndarray, arr_min: np.ndarray, arr_max: np.ndarray):
     return norm * (arr_max - arr_min) + arr_min
 
 def data_preprocess_for_inference(P, F, knn, m: int, k: int=1, device: str = 'cuda'):
-    P = np.atleast_2d(P)
+    assert F is not None 
+    P = np.atleast_2d(P[:, :m])
     F = np.atleast_2d(F)
     
-    if m == 3:
-        P = P[:, :3]
-    if F is not None:
-        # Data Preprocessing: Posture Feature Extraction
-        ref_F = nearest_neighbor_F(knn, P, F, n_neighbors=k) # knn
-        ref_F = np.atleast_2d(ref_F) # type: ignore
-        # ref_F = rand_F(P, F) # f_rand
-        # ref_F = pick_F(P, F) # f_pick
-        if len(P) == 1 and k > 1:
-            P = np.tile(P, (len(ref_F), 1))
-        C = np.column_stack((P, ref_F))
-    else:
-        C = P
-    
-    # add noise std
-    C = np.column_stack((C, np.zeros((C.shape[0], 1))))
-    # Project to Tensor(device)
-    C = torch.from_numpy(C.astype(np.float32))
-    C = C.to(device)
- 
+    # Data Preprocessing: Posture Feature Extraction
+    ref_F = np.atleast_2d(nearest_neighbor_F(knn, P, F, n_neighbors=k)) # type: ignore
+    # ref_F = rand_F(P, F) # f_rand
+    # ref_F = pick_F(P, F) # f_pick
+    P = np.tile(P, (len(ref_F), 1)) if len(P) == 1 and k > 1 else P
+
+    # Add noise std and Project to Tensor(device)
+    C = torch.from_numpy(np.column_stack((P, ref_F, np.zeros((ref_F.shape[0], 1)))).astype(np.float32)).to(device=device) # type: ignore
     return C
 
 def nearest_neighbor_F(knn: NearestNeighbors, P_ts: np.ndarray[float, float], F: np.ndarray[float, float], n_neighbors: int=1):

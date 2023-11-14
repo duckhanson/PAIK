@@ -401,15 +401,14 @@ class Solver:
         # print(df.describe())
         l2_err_arr = np.empty((num_traj, num_steps))
         ang_err_arr = np.empty((num_traj, num_steps))
-        mjac_arr = np.empty((num_traj, num_steps))
         
         Qs = self.__sample_n_J_traj(P_path, ref_F)
         Qs = Qs.detach().cpu().numpy()
         if enable_evaluation:
+            mjac_arr = np.array([self.__max_joint_angle_change(qs) for qs in Qs])
             for i in range(num_traj):
-                mjac_arr[i] = self.__max_joint_angle_change(Qs[i])
                 l2_err_arr[i], ang_err_arr[i] = solution_pose_errors(robot=self._robot, solutions=Qs[i], target_poses=P_path_7, device=self._device)
-            df = pd.DataFrame({'l2_err': l2_err_arr.flatten(), 'ang_err': ang_err_arr.flatten(), 'mjac': mjac_arr.flatten()})
+            df = pd.DataFrame({'l2_err': l2_err_arr.mean(axis=1), 'ang_err': ang_err_arr.mean(axis=1), 'mjac': mjac_arr})
             print(df.describe())
             print(f"avg_inference_time: {round((time() - time_begin) / num_traj, 3)}")
             

@@ -149,8 +149,8 @@ def add_noise(batch, esp: float, std_scale: float):
         C = torch.column_stack((C, std))
     else:
         # softflow implementation
-        s = std_scale * esp * torch.rand((C.shape[0], 1)).to(C.device)
-        C = torch.column_stack((C, s))
+        s = esp * torch.rand((C.shape[0], 1)).to(C.device)
+        C = torch.column_stack((C, std_scale * s))
         noise = torch.normal(
             mean=torch.zeros_like(input=J),
             std=torch.repeat_interleave(input=s, repeats=J.shape[1], dim=1),

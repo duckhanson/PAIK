@@ -196,7 +196,7 @@ class Solver:
 
         # Begin inference
         J_hat = self.sample(C, num_sols)
-        
+        J_hat = J_hat.detach().cpu()
         inference_time = round((time() - time_begin), 3)    
         print(f"model inference time: {inference_time}")
         
@@ -381,7 +381,7 @@ class Solver:
         old_shink_ratio = self._shink_ratio
         self.shrink_ratio = shrink_ratio
         
-        print(f'using shrink_ratio: {self.shrink_ratio}')
+        # print(f'using shrink_ratio: {self.shrink_ratio}')
         
         P_path = self._sample_P_path(load_time=load_time, num_steps=num_steps, seed=seed)
         if self._m == 3:

@@ -178,8 +178,15 @@ def get_knn(P_tr: np.ndarray, n: int, m: int, r: int):
         print(e)
         knn = NearestNeighbors(n_neighbors=1)  
         P_tr = np.atleast_2d(P_tr)
-        knn.fit(P_tr[:, :3])  
+        # knn.fit(P_tr[:, :3])
+        knn.fit(P_tr)  
         save_pickle(file_path=path, obj=knn)
         print(f"Create and save knn at {path}.")
+        
+    # knn = NearestNeighbors(n_neighbors=1)  
+    # P_tr = np.atleast_2d(P_tr)
+    # knn.fit(P_tr)  
+    # save_pickle(file_path=path, obj=knn)
+    # print(f"Create and save knn at {path}.")
     
     return knn

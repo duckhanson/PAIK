@@ -256,13 +256,13 @@ def data_preprocess_for_inference(P, F, knn, m: int, k: int=1, device: str = 'cu
         C = np.column_stack((P, ref_F))
     else:
         C = P
-        
-    C = C.astype(np.float32)
-
+    
+    # add noise std
+    C = np.column_stack((C, np.zeros((C.shape[0], 1))))
     # Project to Tensor(device)
-    C = torch.from_numpy(C).to(device)
-    _, C = add_noise((torch.zeros_like(C), C), esp=0, std_scale=0)
-
+    C = torch.from_numpy(C.astype(np.float32))
+    C = C.to(device)
+ 
     return C
 
 def nearest_neighbor_F(knn: NearestNeighbors, P_ts: np.ndarray[float, float], F: np.ndarray[float, float], n_neighbors: int=1):
@@ -271,7 +271,8 @@ def nearest_neighbor_F(knn: NearestNeighbors, P_ts: np.ndarray[float, float], F:
     
     P_ts = np.atleast_2d(P_ts) # type: ignore
     assert len(P_ts) < len(F)
-    neigh_idx = knn.kneighbors(P_ts[:, :3], n_neighbors=n_neighbors, return_distance=False)
+    # neigh_idx = knn.kneighbors(P_ts[:, :3], n_neighbors=n_neighbors, return_distance=False)
+    neigh_idx = knn.kneighbors(P_ts, n_neighbors=n_neighbors, return_distance=False)
     neigh_idx = neigh_idx.flatten() # type: ignore
     
     return F[neigh_idx]
@@ -282,6 +283,20 @@ def rand_F(P_ts: np.ndarray, F: np.ndarray):
 def pick_F(P_ts: np.ndarray, F: np.ndarray) :
     idx = np.random.randint(low=0, high=len(F), size=len(np.atleast_2d(P_ts)))
     return F[idx]
+
+def model_size(model):
+    param_size = 0
+    for param in model.parameters():
+        param_size += param.nelement() * param.element_size()
+    buffer_size = 0
+    for buffer in model.buffers():
+        buffer_size += buffer.nelement() * buffer.element_size()
+
+    size_all_mb = (param_size + buffer_size) / 1024**2
+    print('model size: {:.3f}MB'.format(size_all_mb))
+    
+    pytorch_total_params = sum(p.numel() for p in model.parameters())
+    print(f'model parameters: {pytorch_total_params}')
 
 
 def evaluate_solver(robot, solver, P_ts, F, knn, K=10):

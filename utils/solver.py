@@ -9,7 +9,7 @@ import torch
 
 from klampt.model import trajectory
 from jrl.robot import Robot
-from jrl.evaluation import solution_pose_errors, evaluate_solutions
+# from jrl.evaluation import solution_pose_errors, evaluate_solutions
 
 from utils.settings import config as cfg
 from utils.model import get_flow_model, get_knn, get_robot
@@ -122,13 +122,13 @@ class Solver:
     def shrink_ratio(self, value: float):
         assert value >= 0 and value < 1
         self._shink_ratio = value
-        self._update_solver()
+        self.__update_solver()
         
     @latent.setter
     def latent(self, value: torch.Tensor):
         assert value.shape == (1, self._robot.n_dofs)
         self._init_latent = value
-        self._update_solver()
+        self.__update_solver()
         
     
     def sample(self, C, K):
@@ -181,7 +181,7 @@ class Solver:
             
         return J_hat
     
-    def _random_sample_poses(self, num_poses: int):
+    def __random_sample_poses(self, num_poses: int):
         # Randomly sample poses from test set
         idx = np.random.choice(self._P_ts.shape[0], num_poses, replace=False)
         P = self._P_ts[idx]
@@ -189,24 +189,23 @@ class Solver:
     
     def random_evaluation(self, num_poses: int, num_sols: int, return_time: bool=False):
         # Randomly sample poses from test set
-        P = self._random_sample_poses(num_poses=num_poses)
+        P = self.__random_sample_poses(num_poses=num_poses)
         time_begin = time()
         # Data Preprocessing
         C = data_preprocess_for_inference(P=P, F=self._F, knn=self._knn, m=self._m)
 
         # Begin inference
         J_hat = self.sample(C, num_sols)
-        J_hat = J_hat.detach().cpu()
+        J_hat = J_hat.detach().cpu().numpy()
         inference_time = round((time() - time_begin), 3)    
         print(f"model inference time: {inference_time}")
         
+        P = P if self._m == 7 else np.column_stack((P, np.ones(shape=(len(P), 4))))
+         
         l2_errs = np.empty((num_poses, num_sols))
         ang_errs = np.empty((num_poses, num_sols))
-        if self._m == 3:
-            P = np.column_stack((P, np.ones(shape=(len(P), 4))))
-        
         for i in range(num_poses):
-            l2_errs[i], ang_errs[i] = solution_pose_errors(robot=self._robot, solutions=J_hat[:, i, :], target_poses=P[i])
+            l2_errs[i], ang_errs[i] = solution_pose_errors(robot=self._robot, solutions=J_hat[:, i, :], target_poses=P[i], device=self._device)
             
         errors_time = round((time() - time_begin), 3) - inference_time
         print(f"calculation errors time: {errors_time}")
@@ -216,16 +215,12 @@ class Solver:
         
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
-        # # df = pd.DataFrame()
-        # # df['l2_errs'] = l2_errs
-        # # df['ang_errs'] = ang_errs
-        # # print(df.describe())
         if return_time:
             return l2_errs.mean(), ang_errs.mean(), avg_inference_time
         else:
             return l2_errs.mean(), ang_errs.mean()
     
-    def _update_solver(self):
+    def __update_solver(self):
         self._solver = Flow(
             transforms=self._solver.transforms, # type: ignore
             base=Unconditional(
@@ -236,7 +231,7 @@ class Solver:
             ), # type: ignore
         )
         
-    def _sample_P_path(self, load_time: str = "", num_steps=20, seed=47) -> np.ndarray:
+    def sample_P_path(self, load_time: str = "", num_steps=20, seed=47) -> np.ndarray:
         """
         sample a path from P_ts
 
@@ -281,7 +276,7 @@ class Solver:
         
         return P_path
     
-    def _sample_J_traj(self, P_path: np.ndarray, ref_F: np.ndarray):
+    def __sample_J_traj(self, P_path: np.ndarray, ref_F: np.ndarray):
         """
         sample a trajectory from IK solver that fit P_path
 
@@ -311,7 +306,7 @@ class Solver:
         J_hat = torch.reshape(J_hat, (-1, self._robot.n_dofs))
         return J_hat
     
-    def _sample_n_J_traj(self, P_path: np.ndarray, ref_F: np.ndarray):
+    def __sample_n_J_traj(self, P_path: np.ndarray, ref_F: np.ndarray):
         """
         sample a trajectory from IK solver that fit P_path
 
@@ -345,7 +340,7 @@ class Solver:
         J_hat = torch.reshape(J_hat, (num_traj, num_steps, self._robot.n_dofs))
         return J_hat
     
-    def max_joint_angle_change(self, qs: torch.Tensor | np.ndarray):
+    def __max_joint_angle_change(self, qs: torch.Tensor | np.ndarray):
         if isinstance(qs, torch.Tensor):
             qs = qs.detach().cpu().numpy()
         return np.rad2deg(np.max(np.abs(np.diff(qs, axis=0))))
@@ -383,11 +378,9 @@ class Solver:
         
         # print(f'using shrink_ratio: {self.shrink_ratio}')
         
-        P_path = self._sample_P_path(load_time=load_time, num_steps=num_steps, seed=seed)
-        if self._m == 3:
-            P_path_7 = np.column_stack((P_path, np.ones((len(P_path), 4)))) # type: ignore
-        else:
-            P_path_7 = P_path
+        P_path = self.sample_P_path(load_time=load_time, num_steps=num_steps, seed=seed)
+        P_path_7 = P_path if self._m == 7 else np.column_stack((P_path, np.ones((len(P_path), 4)))) # type: ignore
+        
         # ref_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path[0]), self._F, n_neighbors=300) # type: ignore # knn
         # nn1_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path), self._F, n_neighbors=1) # type: ignore # knn
         time_begin = time()
@@ -400,7 +393,7 @@ class Solver:
         # ref_F = rand_F(Path[0], F)
         
         # rand_idxs = list(range(num_traj))
-        # qs = self._sample_J_traj(P_path, nn1_F)
+        # qs = self.__sample_J_traj(P_path, nn1_F)
         # print("="*6 + f"=(use nearest)" + "="*6)
         # print(P_path_7.shape)
         # l2_err, ang_err = solution_pose_errors(robot=self._robot, solutions=qs, target_poses=P_path_7)
@@ -410,24 +403,61 @@ class Solver:
         ang_err_arr = np.empty((num_traj, num_steps))
         mjac_arr = np.empty((num_traj, num_steps))
         
-        Qs = self._sample_n_J_traj(P_path, ref_F)
-        
-        avg_inference_time = round((time() - time_begin) / num_traj, 3)
-        
+        Qs = self.__sample_n_J_traj(P_path, ref_F)
+        Qs = Qs.detach().cpu().numpy()
         if enable_evaluation:
-            Qs_np = Qs.detach().cpu().numpy()
             for i in range(num_traj):
-                mjac_arr[i] = self.max_joint_angle_change(Qs_np[i])
-                l2_err_arr[i], ang_err_arr[i] = solution_pose_errors(robot=self._robot, solutions=Qs[i], target_poses=P_path_7)
+                mjac_arr[i] = self.__max_joint_angle_change(Qs[i])
+                l2_err_arr[i], ang_err_arr[i] = solution_pose_errors(robot=self._robot, solutions=Qs[i], target_poses=P_path_7, device=self._device)
             df = pd.DataFrame({'l2_err': l2_err_arr.flatten(), 'ang_err': ang_err_arr.flatten(), 'mjac': mjac_arr.flatten()})
             print(df.describe())
-            print(f"avg_inference_time: {avg_inference_time}")
+            print(f"avg_inference_time: {round((time() - time_begin) / num_traj, 3)}")
             
             
         if enable_plot:
-            return P_path_7, Qs, ref_F[rand_idxs]
+            return P_path_7, Qs, ref_F
 
         self.shrink_ratio = old_shink_ratio
-        
+
+from jrl.evaluation import _get_target_pose_batch
+from jrl.conversions import geodesic_distance_between_quaternions
+
+def solution_pose_errors(
+    robot: Robot, solutions: np.ndarray, target_poses: torch.Tensor | np.ndarray, device: str
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return the L2 and angular errors of calculated ik solutions for a given target_pose. Note: this function expects
+    multiple solutions but only a single target_pose. All of the solutions are assumed to be for the given target_pose
+
+    Args:
+        robot (Robot): The Robot which contains the FK function we will use
+        solutions (Union[np.ndarray]): [n x 7] IK solutions for the given target pose
+        target_pose (np.ndarray): [7] the target pose the IK solutions were generated for
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: The L2, and angular (rad) errors of IK solutions for the given target_pose
+    """
+    assert isinstance(
+        target_poses, (np.ndarray, torch.Tensor)
+    ), f"target_poses must be a torch.Tensor or np.ndarray (got {type(target_poses)})"
+
+    if isinstance(target_poses, torch.Tensor):
+        target_poses = target_poses.detach().cpu().numpy()
+    target_poses = _get_target_pose_batch(target_poses, solutions.shape[0])
+
+    ee_pose_ikflow = robot.forward_kinematics(solutions[:, 0 : robot.n_dofs])
+    rot_output = ee_pose_ikflow[:, 3:]
+
+    # Positional Error
+    l2_errors = np.linalg.norm(ee_pose_ikflow[:, 0:3] - target_poses[:, 0:3], axis=1)
+    rot_target = target_poses[:, 3:]
+    assert rot_target.shape == rot_output.shape
+    
+
+    # Surprisingly, this is almost always faster to calculate on the gpu than on the cpu. I would expect the opposite
+    # for low number of solutions (< 200).
+    q_target_pt = torch.tensor(rot_target, device=device, dtype=torch.float32)
+    q_current_pt = torch.tensor(rot_output, device=device, dtype=torch.float32)
+    ang_errors = geodesic_distance_between_quaternions(q_target_pt, q_current_pt).detach().cpu().numpy()
+    return l2_errors, ang_errors
     
     

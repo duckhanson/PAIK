@@ -4,7 +4,6 @@ import pickle
 import numpy as np
 import torch
 from sklearn.neighbors import NearestNeighbors
-from jrl.evaluation import solution_pose_errors
 from utils.settings import config
 
 def init_seeds(seed=42):

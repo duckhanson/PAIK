@@ -1,1 +1,1 @@
-# ikpflow
+# PAIK: Posture-Aware Inverse Kinematics

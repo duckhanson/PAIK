@@ -1,9 +1,7 @@
 import os
 import pickle
-
 import numpy as np
 import torch
-from sklearn.neighbors import NearestNeighbors
 from utils.settings import config
 
 def init_seeds(seed=42):
@@ -125,7 +123,6 @@ def model_size(model):
     
     pytorch_total_params = sum(p.numel() for p in model.parameters())
     print(f'model parameters: {pytorch_total_params}')
-
 
 def create_robot_dirs() -> None:
     """

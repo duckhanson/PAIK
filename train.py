@@ -4,7 +4,6 @@ from jrl.robot import Robot
 import torch
 import numpy as np
 
-import math
 from tqdm import tqdm
 from pprint import pprint
 import wandb

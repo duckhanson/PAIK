@@ -21,11 +21,13 @@ def _data_collection(robot, N: int, n: int, m: int, r: int):
     :rtype: np.ndarray, np.ndarray
     """
     if N == config.N_train:
-        path_J, path_P = config.path_J_train(
-            n, m, r), config.path_P_train(n, m, r)
+        path_J, path_P = config.path_J_train(n, m, r), config.path_P_train(
+            n, m, r
+        )  # type: ignore
     else:
-        path_J, path_P = config.path_J_test(
-            n, m, r), config.path_P_test(n, m, r)
+        path_J, path_P = config.path_J_test(n, m, r), config.path_P_test(
+            n, m, r
+        )  # type: ignore
 
     J = load_numpy(file_path=path_J)
     P = load_numpy(file_path=path_P)
@@ -63,7 +65,7 @@ def _posture_feature_extraction(J: np.ndarray, P: np.ndarray, n: int, m: int, r:
     """
     assert r > 0
 
-    path = config.path_F(n, m, r)
+    path = config.path_F(n, m, r)  # type: ignore
     F = load_numpy(file_path=path) if os.path.exists(path=path) else None
 
     if F is None or F.shape[-1] != r or len(F) != len(J):
@@ -123,15 +125,17 @@ def data_preprocess_for_inference(P, F, knn, m: int, k: int = 1, device: str = "
     F = np.atleast_2d(F)
 
     # Data Preprocessing: Posture Feature Extraction
-    ref_F = np.atleast_2d(nearest_neighbor_F(
-        knn, P, F, n_neighbors=k))  # type: ignore
+    ref_F = np.atleast_2d(nearest_neighbor_F(knn, P, F, n_neighbors=k))  # type: ignore
     # ref_F = rand_F(P, F) # f_rand
     # ref_F = pick_F(P, F) # f_pick
     P = np.tile(P, (len(ref_F), 1)) if len(P) == 1 and k > 1 else P
 
     # Add noise std and Project to Tensor(device)
-    C = torch.from_numpy(np.column_stack((P, ref_F, np.zeros(
-        (ref_F.shape[0], 1)))).astype(np.float32)).to(device=device)  # type: ignore
+    C = torch.from_numpy(
+        np.column_stack((P, ref_F, np.zeros((ref_F.shape[0], 1)))).astype(np.float32)
+    ).to(
+        device=device
+    )  # type: ignore
     return C
 
 
@@ -147,8 +151,7 @@ def nearest_neighbor_F(
     P_ts = np.atleast_2d(P_ts)  # type: ignore
     assert len(P_ts) < len(F)
     # neigh_idx = knn.kneighbors(P_ts[:, :3], n_neighbors=n_neighbors, return_distance=False)
-    neigh_idx = knn.kneighbors(
-        P_ts, n_neighbors=n_neighbors, return_distance=False)
+    neigh_idx = knn.kneighbors(P_ts, n_neighbors=n_neighbors, return_distance=False)
     neigh_idx = neigh_idx.flatten()  # type: ignore
 
     return F[neigh_idx]
@@ -194,17 +197,14 @@ def create_dataset(
 class CustomDataset(Dataset):
     def __init__(self, features, targets, device, enable_normalize):
         if len(features) != len(targets):
-            raise ValueError(
-                "features and targets should have the same shape[0].")
+            raise ValueError("features and targets should have the same shape[0].")
 
         features = np.array(features)
         targets = np.array(targets)
         self.df = pd.DataFrame(data=np.column_stack((features, targets)))
         self.device = device
-        self.features = torch.tensor(
-            features, device=device, dtype=torch.float32)
-        self.targets = torch.tensor(
-            targets, device=device, dtype=torch.float32)
+        self.features = torch.tensor(features, device=device, dtype=torch.float32)
+        self.targets = torch.tensor(targets, device=device, dtype=torch.float32)
         if enable_normalize:
             self.normalize()
 
@@ -214,20 +214,16 @@ class CustomDataset(Dataset):
 
         # use min max normalize
         self.features_min = torch.tensor(
-            r_min[: self.features.shape[-1]
-                  ], device=self.device, dtype=torch.float32
+            r_min[: self.features.shape[-1]], device=self.device, dtype=torch.float32
         )
         self.features_max = torch.tensor(
-            r_max[: self.features.shape[-1]
-                  ], device=self.device, dtype=torch.float32
+            r_max[: self.features.shape[-1]], device=self.device, dtype=torch.float32
         )
         self.targets_min = torch.tensor(
-            r_min[self.features.shape[-1]
-                :], device=self.device, dtype=torch.float32
+            r_min[self.features.shape[-1] :], device=self.device, dtype=torch.float32
         )
         self.targets_max = torch.tensor(
-            r_max[self.features.shape[-1]
-                :], device=self.device, dtype=torch.float32
+            r_max[self.features.shape[-1] :], device=self.device, dtype=torch.float32
         )
 
         self.features = (self.features - self.features_min) / (

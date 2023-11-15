@@ -45,8 +45,7 @@ def load_pickle(file_path: str):
             data = pickle.load(f)
         return data
     else:
-        raise FileNotFoundError(
-            f"{file_path}: file not exist and return None.")
+        raise FileNotFoundError(f"{file_path}: file not exist and return None.")
 
 
 def save_pickle(file_path: str, obj):

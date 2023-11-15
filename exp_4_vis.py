@@ -28,8 +28,7 @@ class Visualizer(Solver):
         vis.add(
             name,
             coordinates.Frame(
-                name=name, worldCoordinates=(
-                    so3.from_quaternion(pose[3:]), pose[0:3])
+                name=name, worldCoordinates=(so3.from_quaternion(pose[3:]), pose[0:3])
             ),  # type: ignore
             hide_label=hide_label,
         )
@@ -48,8 +47,7 @@ class Visualizer(Solver):
     ):
         """Internal function for running a demo."""
 
-        worlds = [self.robot.klampt_world_model.copy()
-                  for _ in range(n_worlds)]
+        worlds = [self.robot.klampt_world_model.copy() for _ in range(n_worlds)]
 
         # TODO: Adjust terrain height for each robot
         if load_terrain:
@@ -109,8 +107,7 @@ class Visualizer(Solver):
                 vis.add(f"robot_{i}", worlds[i].robot(0))
                 vis.setColor(f"robot_{i}", 1, 1, 1, 1)
                 vis.setColor(
-                    (f"robot_{i}",
-                     self.robot.end_effector_link_name), 1, 1, 1, 0.71
+                    (f"robot_{i}", self.robot.end_effector_link_name), 1, 1, 1, 0.71
                 )
 
         def loop_fn(worlds, _demo_state):
@@ -118,12 +115,10 @@ class Visualizer(Solver):
             random_sample = self.robot.sample_joint_angles(1)
             random_sample_q = self.robot._x_to_qs(random_sample)
             worlds[0].robot(0).setConfig(random_sample_q[0])
-            target_pose = self.robot.forward_kinematics_klampt(random_sample)[
-                0]
+            target_pose = self.robot.forward_kinematics_klampt(random_sample)[0]
 
             # Get solutions to pose of random sample
-            ik_solutions = self.solve(
-                target_pose, num_samples, k=k, return_numpy=True)
+            ik_solutions = self.solve(target_pose, num_samples, k=k, return_numpy=True)
             qs = self.robot._x_to_qs(ik_solutions)  # type: ignore
             for i in range(nb_sols):
                 worlds[i + 1].robot(0).setConfig(qs[i])
@@ -188,8 +183,7 @@ class Visualizer(Solver):
                 vis.add(f"robot_{i}", worlds[i].robot(0))
                 vis.setColor(f"robot_{i}", 1, 1, 1, 1)
                 vis.setColor(
-                    (f"robot_{i}",
-                     self.robot.end_effector_link_name), 1, 1, 1, 0.71
+                    (f"robot_{i}", self.robot.end_effector_link_name), 1, 1, 1, 0.71
                 )
 
             # # Axis
@@ -249,8 +243,7 @@ class Visualizer(Solver):
             # vis.logPlot("solution_error", "angular (deg)", _demo_state.ave_ang_error)
             pass
 
-        demo_state = DemoState(
-            counter=0, target_pose=target_pose_fn(0), direction=True)
+        demo_state = DemoState(counter=0, target_pose=target_pose_fn(0), direction=True)
 
         self._run_demo(
             1,
@@ -275,8 +268,7 @@ class Visualizer(Solver):
                 vis.add(f"robot_{i}", worlds[i].robot(0))
                 vis.setColor(f"robot_{i}", 1, 1, 1, 1)
                 vis.setColor(
-                    (f"robot_{i}",
-                     self.robot.end_effector_link_name), 1, 1, 1, 0.71
+                    (f"robot_{i}", self.robot.end_effector_link_name), 1, 1, 1, 0.71
                 )
 
                 vis.add(f"box_{i}", worlds[i].rigidObject(0))
@@ -317,8 +309,7 @@ class Visualizer(Solver):
         def viz_update_fn(worlds, _demo_state):
             self._plot_pose("target_pose.", _demo_state.target_pose)
 
-        demo_state = DemoState(
-            counter=0, target_pose=target_pose_fn(0), direction=True)
+        demo_state = DemoState(counter=0, target_pose=target_pose_fn(0), direction=True)
         time_p_loop = 0.01
         title = "Solutions for randomly drawn poses - Green link is the target pose"
 
@@ -341,8 +332,7 @@ class Visualizer(Solver):
 
 
 def main():
-    visualizer = Visualizer(
-        robot=get_robot(), solver_param=DEFAULT_SOLVER_PARAM_M7)
+    visualizer = Visualizer(robot=get_robot(), solver_param=DEFAULT_SOLVER_PARAM_M7)
     # visualizer.sample_latent_space(num_samples=5)
     # visualizer.sample_posture_space(k=5)
     visualizer.visualize_path_following(

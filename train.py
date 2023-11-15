@@ -53,8 +53,7 @@ class Trainer(Solver):
         self.__std_scale = 1 / self.__noise_esp
 
     def __update_noise_esp(self, epoch: int):
-        self.__noise_esp = self.param["noise_esp"] * \
-            (self.__noise_esp_decay**epoch)
+        self.__noise_esp = self.param["noise_esp"] * (self.__noise_esp_decay**epoch)
 
     def mini_train(
         self,

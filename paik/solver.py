@@ -103,8 +103,7 @@ class Solver:
         self._optimizer = optimizer
         self._scheduler = scheduler
         self._shink_ratio = solver_param["shrink_ratio"]
-        self._init_latent = torch.zeros(
-            (1, self.robot.n_dofs)).to(self._device)
+        self._init_latent = torch.zeros((1, self.robot.n_dofs)).to(self._device)
 
         # load inference data
         assert n == self._robot.n_dofs, f"n should be {self._robot.n_dofs} as the robot"
@@ -152,8 +151,7 @@ class Solver:
         batch_size = 100
         C = C.view(1, *C.shape).tile(K, 1, 1)
         C = C.reshape(-1, batch_size, C.shape[-1])
-        S = torch.empty(
-            (num_sols * num_poses, self._robot.n_dofs), device=self._device)
+        S = torch.empty((num_sols * num_poses, self._robot.n_dofs), device=self._device)
         S = S.reshape(-1, batch_size, S.shape[-1])
         for i, c in enumerate(C):
             with torch.inference_mode():
@@ -213,8 +211,7 @@ class Solver:
         P = self.__random_sample_poses(num_poses=num_poses)
         time_begin = time()
         # Data Preprocessing
-        C = data_preprocess_for_inference(
-            P=P, F=self._F, knn=self._knn, m=self._m)
+        C = data_preprocess_for_inference(P=P, F=self._F, knn=self._knn, m=self._m)
 
         # Begin inference
         J_hat = self.sample(C, num_sols)
@@ -222,8 +219,7 @@ class Solver:
         inference_time = round((time() - time_begin), 3)
         print(f"model inference time: {inference_time}")
 
-        P = P if self._m == 7 else np.column_stack(
-            (P, np.ones(shape=(len(P), 4))))
+        P = P if self._m == 7 else np.column_stack((P, np.ones(shape=(len(P), 4))))
 
         l2_errs = np.empty((num_poses, num_sols))
         ang_errs = np.empty((num_poses, num_sols))
@@ -328,8 +324,7 @@ class Solver:
         if len(P_path) != len(ref_F):
             ref_F = np.tile(ref_F, (len(P_path), 1))  # type: ignore
 
-        C = np.column_stack(
-            (P_path, ref_F, np.zeros((len(P_path),))))  # type: ignore
+        C = np.column_stack((P_path, ref_F, np.zeros((len(P_path),))))  # type: ignore
         C = torch.from_numpy(C).float().to(self._device)  # type: ignore
 
         J_hat = self.sample(C, 1)
@@ -362,8 +357,7 @@ class Solver:
         C = np.empty((num_traj, num_steps, self._m + ref_F.shape[-1] + 1))
         for i, f in enumerate(ref_F):
             f = np.tile(np.atleast_2d(f), (num_steps, 1))  # type: ignore
-            C[i] = np.column_stack(
-                (P_path, f, np.zeros((num_steps,))))  # type: ignore
+            C[i] = np.column_stack((P_path, f, np.zeros((num_steps,))))  # type: ignore
         C = C.reshape(-1, self._m + ref_F.shape[-1] + 1)
         C = torch.from_numpy(C).float().to(self._device)  # type: ignore
 
@@ -409,17 +403,20 @@ class Solver:
 
         # print(f'using shrink_ratio: {self.shrink_ratio}')
 
-        P_path = self.sample_P_path(
-            load_time=load_time, num_steps=num_steps, seed=seed)
-        P_path_7 = P_path if self._m == 7 else np.column_stack(
-            (P_path, np.ones((len(P_path), 4))))  # type: ignore
+        P_path = self.sample_P_path(load_time=load_time, num_steps=num_steps, seed=seed)
+        P_path_7 = (
+            P_path
+            if self._m == 7
+            else np.column_stack((P_path, np.ones((len(P_path), 4))))
+        )  # type: ignore
 
         # ref_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path[0]), self._F, n_neighbors=300) # type: ignore # knn
         # nn1_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path), self._F, n_neighbors=1) # type: ignore # knn
         time_begin = time()
 
-        ref_F = nearest_neighbor_F(self._knn, np.atleast_2d(
-            P_path), self._F, n_neighbors=30)  # type: ignore # knn
+        ref_F = nearest_neighbor_F(
+            self._knn, np.atleast_2d(P_path), self._F, n_neighbors=30
+        )  # type: ignore # knn
         ref_F = ref_F.flatten()
         rand_idxs = np.random.randint(low=0, high=len(ref_F), size=num_traj)
         ref_F = ref_F[rand_idxs].reshape(num_traj, -1)
@@ -439,8 +436,7 @@ class Solver:
         Qs = self.__sample_n_J_traj(P_path, ref_F)
         Qs = Qs.detach().cpu().numpy()
         if enable_evaluation:
-            mjac_arr = np.array(
-                [self.__max_joint_angle_change(qs) for qs in Qs])
+            mjac_arr = np.array([self.__max_joint_angle_change(qs) for qs in Qs])
             for i in range(num_traj):
                 l2_err_arr[i], ang_err_arr[i] = solution_pose_errors(
                     robot=self._robot,
@@ -456,8 +452,7 @@ class Solver:
                 }
             )
             print(df.describe())
-            print(
-                f"avg_inference_time: {round((time() - time_begin) / num_traj, 3)}")
+            print(f"avg_inference_time: {round((time() - time_begin) / num_traj, 3)}")
 
         if enable_plot:
             return P_path_7, Qs, ref_F
@@ -490,12 +485,11 @@ def solution_pose_errors(
         target_poses = target_poses.detach().cpu().numpy()
     target_poses = _get_target_pose_batch(target_poses, solutions.shape[0])
 
-    ee_pose_ikflow = robot.forward_kinematics(solutions[:, 0: robot.n_dofs])
+    ee_pose_ikflow = robot.forward_kinematics(solutions[:, 0 : robot.n_dofs])
     rot_output = ee_pose_ikflow[:, 3:]
 
     # Positional Error
-    l2_errors = np.linalg.norm(
-        ee_pose_ikflow[:, 0:3] - target_poses[:, 0:3], axis=1)
+    l2_errors = np.linalg.norm(ee_pose_ikflow[:, 0:3] - target_poses[:, 0:3], axis=1)
     rot_target = target_poses[:, 3:]
     assert rot_target.shape == rot_output.shape
 

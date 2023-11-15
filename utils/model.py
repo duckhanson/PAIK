@@ -104,7 +104,7 @@ def get_flow_model(
     optimizer = get_optimizer(
         flow.parameters(), optimizer_type, lr, weight_decay=lr_weight_decay
     )
-    path_solver = config.weight_dir + f"{ckpt_name}.pth"
+    path_solver = f"{config.weight_dir}/{ckpt_name}.pth"
     if enable_load_model and path.exists(path=path_solver):
         try:
             state = torch.load(path_solver)

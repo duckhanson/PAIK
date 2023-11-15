@@ -16,8 +16,8 @@ from zuko.flows.neural import UNAF
 from zuko.flows.spline import NSF
 
 from jrl.robots import Panda
-from utils.settings import config
-from utils.utils import save_pickle, load_pickle, create_robot_dirs
+from paik.settings import config
+from paik.utils import save_pickle, load_pickle, create_robot_dirs
 
 DEFAULT_ACTIVATION = LeakyReLU
 

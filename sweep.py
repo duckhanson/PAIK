@@ -2,9 +2,9 @@
 import torch
 from datetime import datetime
 import wandb
-from utils.model import get_robot
+from paik.model import get_robot
 from train import Trainer
-from utils.utils import init_seeds
+from paik.utils import init_seeds
 
 USE_WANDB = True
 PATIENCE = 4
@@ -144,7 +144,8 @@ if __name__ == "__main__":
     init_seeds(seed=42)
     project_name = "msik_ikflow_nsf"
 
-    sweep_id = wandb.sweep(sweep=sweep_config, project=project_name, entity="luca_nthu")
+    sweep_id = wandb.sweep(
+        sweep=sweep_config, project=project_name, entity="luca_nthu")
     # Start sweep job.
     wandb.agent(sweep_id, function=main, count=EXPERMENT_COUNT)
     wandb.finish()

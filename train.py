@@ -7,12 +7,12 @@ import numpy as np
 from tqdm import tqdm
 from pprint import pprint
 import wandb
-from utils.model import get_robot
-from utils.settings import config as cfg
-from utils.utils import init_seeds
-from utils.dataset import get_train_loader
+from paik.model import get_robot
+from paik.settings import config as cfg
+from paik.utils import init_seeds
+from paik.dataset import get_train_loader
 
-from utils.solver import Solver, DEFAULT_SOLVER_PARAM_M7, DEFAULT_SOLVER_PARAM_M3
+from paik.solver import Solver, DEFAULT_SOLVER_PARAM_M7, DEFAULT_SOLVER_PARAM_M3
 
 USE_WANDB = False
 # NUM_RECORD_STEPS = 14e3
@@ -53,7 +53,8 @@ class Trainer(Solver):
         self.__std_scale = 1 / self.__noise_esp
 
     def __update_noise_esp(self, epoch: int):
-        self.__noise_esp = self.param["noise_esp"] * (self.__noise_esp_decay**epoch)
+        self.__noise_esp = self.param["noise_esp"] * \
+            (self.__noise_esp_decay**epoch)
 
     def mini_train(
         self,

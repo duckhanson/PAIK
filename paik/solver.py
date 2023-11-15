@@ -188,13 +188,13 @@ class Solver:
 
         return J_hat
 
-    def solve(self, P: np.ndarray, F: np.ndarray, num_sols: int):
+    def solve(self, P: np.ndarray, F: np.ndarray, num_sols: int, return_numpy: bool = False):
         C = torch.from_numpy(
             np.column_stack((P, F, np.zeros((len(F), 1)))).astype(np.float32)
         ).to(self._device)
         # Begin inference
         J_hat = self.sample(C, num_sols)
-        return J_hat
+        return J_hat.numpy() if return_numpy else J_hat
 
     def __random_sample_poses(self, num_poses: int):
         # Randomly sample poses from test set

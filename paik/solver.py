@@ -148,58 +148,45 @@ class Solver:
         with torch.inference_mode():
             return self._solver(C).sample((K,)).detach().cpu()
 
-    def sample_n(self, C, K):
-        num_poses = C.shape[0]
-        num_sols = K
-        batch_size = 100
-        C = C.view(1, *C.shape).tile(K, 1, 1)
-        C = C.reshape(-1, batch_size, C.shape[-1])
-        S = torch.empty((num_sols * num_poses, self._robot.n_dofs), device=self._device)
-        S = S.reshape(-1, batch_size, S.shape[-1])
-        for i, c in enumerate(C):
-            with torch.inference_mode():
-                S[i] = self._solver(c).sample()
-        return S.reshape(num_sols, num_poses, -1)
+    def solve_set_k(
+        self,
+        single_pose: np.ndarray,
+        num_sols: int,
+        k: int = 1,
+        return_numpy: bool = False,
+    ):
+        """
+        _summary_
 
-    # def solve(
-    #     self,
-    #     single_pose: np.ndarray,
-    #     num_sols: int,
-    #     k: int = 1,
-    #     return_numpy: bool = False,
-    # ):
-    #     """
-    #     _summary_
+        Parameters
+        ----------
+        single_pose : np.ndarray
+            a single task point, m=3 or m=7
+        num_sols : int
+            number of solutions to be sampled from base distribution
+        k : int, optional
+            number of posture features to be sampled from knn, by default 1
+        return_numpy : bool, optional
+            return numpy array type or torch cuda tensor type, by default False
 
-    #     Parameters
-    #     ----------
-    #     single_pose : np.ndarray
-    #         a single task point, m=3 or m=7
-    #     num_sols : int
-    #         number of solutions to be sampled from base distribution
-    #     k : int, optional
-    #         number of posture features to be sampled from knn, by default 1
-    #     return_numpy : bool, optional
-    #         return numpy array type or torch cuda tensor type, by default False
+        Returns
+        -------
+        array_like
+            array_like(num_sols * k, n_dofs)
+        """
+        C = data_preprocess_for_inference(
+            P=single_pose, F=self._F, knn=self._knn, m=self._m, k=k
+        )
 
-    #     Returns
-    #     -------
-    #     array_like
-    #         array_like(num_sols * k, n_dofs)
-    #     """
-    #     C = data_preprocess_for_inference(
-    #         P=single_pose, F=self._F, knn=self._knn, m=self._m, k=k
-    #     )
+        # Begin inference
+        J_hat = self.sample(C, num_sols)
 
-    #     # Begin inference
-    #     J_hat = self.sample(C, num_sols)
+        J_hat = torch.reshape(J_hat, (num_sols * k, -1))
 
-    #     J_hat = torch.reshape(J_hat, (num_sols * k, -1))
+        if return_numpy:
+            J_hat = J_hat.numpy()
 
-    #     if return_numpy:
-    #         J_hat = J_hat.detach().cpu().numpy()
-
-    #     return J_hat
+        return J_hat
 
     def solve(self, P: np.ndarray, F: np.ndarray, num_sols: int):
         C = torch.from_numpy(

@@ -365,11 +365,6 @@ class Solver:
         J_hat = torch.reshape(J_hat, (num_traj, num_steps, self._robot.n_dofs))
         return J_hat
 
-    def __max_joint_angle_change(self, qs: torch.Tensor | np.ndarray):
-        if isinstance(qs, torch.Tensor):
-            qs = qs.detach().cpu().numpy()
-        return np.rad2deg(np.max(np.abs(np.diff(qs, axis=0))))
-
     def path_following(
         self,
         load_time: str = "",
@@ -436,7 +431,7 @@ class Solver:
         Qs = self.__sample_n_J_traj(P_path, ref_F)
         Qs = Qs.detach().cpu().numpy()
         if enable_evaluation:
-            mjac_arr = np.array([self.__max_joint_angle_change(qs) for qs in Qs])
+            mjac_arr = np.array([max_joint_angle_change(qs) for qs in Qs])
             for i in range(num_traj):
                 l2_err_arr[i], ang_err_arr[i] = solution_pose_errors(
                     robot=self._robot,
@@ -504,3 +499,9 @@ def solution_pose_errors(
         .numpy()
     )
     return l2_errors, ang_errors
+
+
+def max_joint_angle_change(qs: torch.Tensor | np.ndarray):
+    if isinstance(qs, torch.Tensor):
+        qs = qs.detach().cpu().numpy()
+    return np.rad2deg(np.max(np.abs(np.diff(qs, axis=0))))

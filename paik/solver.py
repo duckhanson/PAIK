@@ -19,6 +19,7 @@ from paik.dataset import (
     load_all_data,
     data_preprocess_for_inference,
     nearest_neighbor_F,
+    _data_collection,
 )
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
@@ -111,7 +112,9 @@ class Solver:
             self._robot, n=n, m=m, r=r
         )
         self._knn = get_knn(P_tr=self._P_tr, n=n, m=m, r=r)
+        self._n = n
         self._m = m
+        self._r = r
 
     @property
     def latent(self):
@@ -158,44 +161,52 @@ class Solver:
                 S[i] = self._solver(c).sample()
         return S.reshape(num_sols, num_poses, -1)
 
-    def solve(
-        self,
-        single_pose: np.ndarray,
-        num_sols: int,
-        k: int = 1,
-        return_numpy: bool = False,
-    ):
-        """
-        _summary_
+    # def solve(
+    #     self,
+    #     single_pose: np.ndarray,
+    #     num_sols: int,
+    #     k: int = 1,
+    #     return_numpy: bool = False,
+    # ):
+    #     """
+    #     _summary_
 
-        Parameters
-        ----------
-        single_pose : np.ndarray
-            a single task point, m=3 or m=7
-        num_sols : int
-            number of solutions to be sampled from base distribution
-        k : int, optional
-            number of posture features to be sampled from knn, by default 1
-        return_numpy : bool, optional
-            return numpy array type or torch cuda tensor type, by default False
+    #     Parameters
+    #     ----------
+    #     single_pose : np.ndarray
+    #         a single task point, m=3 or m=7
+    #     num_sols : int
+    #         number of solutions to be sampled from base distribution
+    #     k : int, optional
+    #         number of posture features to be sampled from knn, by default 1
+    #     return_numpy : bool, optional
+    #         return numpy array type or torch cuda tensor type, by default False
 
-        Returns
-        -------
-        array_like
-            array_like(num_sols * k, n_dofs)
-        """
-        C = data_preprocess_for_inference(
-            P=single_pose, F=self._F, knn=self._knn, m=self._m, k=k
-        )
+    #     Returns
+    #     -------
+    #     array_like
+    #         array_like(num_sols * k, n_dofs)
+    #     """
+    #     C = data_preprocess_for_inference(
+    #         P=single_pose, F=self._F, knn=self._knn, m=self._m, k=k
+    #     )
 
+    #     # Begin inference
+    #     J_hat = self.sample(C, num_sols)
+
+    #     J_hat = torch.reshape(J_hat, (num_sols * k, -1))
+
+    #     if return_numpy:
+    #         J_hat = J_hat.detach().cpu().numpy()
+
+    #     return J_hat
+
+    def solve(self, P: np.ndarray, F: np.ndarray, num_sols: int):
+        C = torch.from_numpy(
+            np.column_stack((P, F, np.zeros((len(F), 1)))).astype(np.float32)
+        ).to(self._device)
         # Begin inference
         J_hat = self.sample(C, num_sols)
-
-        J_hat = torch.reshape(J_hat, (num_sols * k, -1))
-
-        if return_numpy:
-            J_hat = J_hat.detach().cpu().numpy()
-
         return J_hat
 
     def __random_sample_poses(self, num_poses: int):
@@ -203,6 +214,37 @@ class Solver:
         idx = np.random.choice(self._P_ts.shape[0], num_poses, replace=False)
         P = self._P_ts[idx]
         return P
+
+    def random_sample_JPF(self, num_samples: int):
+        # Randomly sample poses from train set
+        J, P = _data_collection(self._robot, num_samples, self._n, self._m, self._r)
+        F = nearest_neighbor_F(self._knn, P, self._F, n_neighbors=1)
+        return J, P, F
+
+    def evaluate_solutions(
+        self, J: np.ndarray | torch.Tensor, P: np.ndarray, return_row: bool = False
+    ):
+        if isinstance(J, torch.Tensor):
+            J = J.detach().cpu().numpy()
+
+        num_poses = len(P)
+        num_sols = len(J)
+        J = np.expand_dims(J, axis=1) if len(J.shape) == 2 else J
+        print(f"expanded J.shape: {J.shape}")
+        assert J.shape == (num_sols, num_poses, self._robot.n_dofs)
+
+        l2_errs = np.empty((num_poses, num_sols))
+        ang_errs = np.empty((num_poses, num_sols))
+        for i in range(num_poses):
+            l2_errs[i], ang_errs[i] = solution_pose_errors(
+                robot=self._robot,
+                solutions=J[:, i, :],  # type: ignore
+                target_poses=P[i],
+                device=self._device,
+            )
+        if return_row:
+            return l2_errs.mean(axis=0), ang_errs.mean(axis=0)
+        return l2_errs.mean(), ang_errs.mean()
 
     def random_evaluation(
         self, num_poses: int, num_sols: int, return_time: bool = False
@@ -221,21 +263,11 @@ class Solver:
 
         P = P if self._m == 7 else np.column_stack((P, np.ones(shape=(len(P), 4))))
 
-        l2_errs = np.empty((num_poses, num_sols))
-        ang_errs = np.empty((num_poses, num_sols))
-        for i in range(num_poses):
-            l2_errs[i], ang_errs[i] = solution_pose_errors(
-                robot=self._robot,
-                solutions=J_hat[:, i, :],
-                target_poses=P[i],
-                device=self._device,
-            )
+        avg_l2_errs, avg_ang_errs = self.evaluate_solutions(J_hat, P)
 
         errors_time = round((time() - time_begin), 3) - inference_time
         print(f"calculation errors time: {errors_time}")
 
-        avg_l2_errs = l2_errs.mean()
-        avg_ang_errs = ang_errs.mean()
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
         if return_time:
@@ -425,24 +457,18 @@ class Solver:
         # l2_err, ang_err = solution_pose_errors(robot=self._robot, solutions=qs, target_poses=P_path_7)
         # df = pd.DataFrame({'l2_err': l2_err, 'ang_err': ang_err})
         # print(df.describe())
-        l2_err_arr = np.empty((num_traj, num_steps))
-        ang_err_arr = np.empty((num_traj, num_steps))
-
-        Qs = self.__sample_n_J_traj(P_path, ref_F)
-        Qs = Qs.detach().cpu().numpy()
+        Qs = self.__sample_n_J_traj(P_path, ref_F).detach().cpu().numpy()
         if enable_evaluation:
             mjac_arr = np.array([max_joint_angle_change(qs) for qs in Qs])
-            for i in range(num_traj):
-                l2_err_arr[i], ang_err_arr[i] = solution_pose_errors(
-                    robot=self._robot,
-                    solutions=Qs[i],
-                    target_poses=P_path_7,
-                    device=self._device,
-                )
+            # Qs = (num_traj, num_steps, n_dofs)
+            # evaluate = (num_sols, num_poses, n_dofs)
+            l2_err_arr, ang_err_arr = self.evaluate_solutions(
+                Qs, P_path_7, return_row=True
+            )
             df = pd.DataFrame(
                 {
-                    "l2_err": l2_err_arr.mean(axis=1),
-                    "ang_err": ang_err_arr.mean(axis=1),
+                    "l2_err": l2_err_arr,
+                    "ang_err": ang_err_arr,
                     "mjac": mjac_arr,
                 }
             )

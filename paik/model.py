@@ -114,7 +114,7 @@ def get_flow_model(
             print(f"Model load successfully from {path_solver}")
         except Exception:
             print(
-                f"Load err from {path_solver}, assuming you use different architecture."
+                f"[Error] load error from {path_solver}, assuming you use different architecture."
             )
     else:
         print("Create a new model and start training.")

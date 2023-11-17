@@ -86,7 +86,7 @@ def load_numpy(file_path: str):
     if os.path.exists(path=file_path):
         return np.load(file_path)
     else:
-        print(f"{file_path}: file not exist and return empty np array.")
+        print(f"[ERROR] {file_path}: file not exist and return empty np array.")
         return np.array([])
 
 

@@ -8,7 +8,7 @@ from tqdm import tqdm
 from pprint import pprint
 import wandb
 from paik.model import get_robot
-from paik.settings import config as cfg
+from paik.settings import config as cfg, SolverConfig
 from paik.utils import init_seeds
 from paik.dataset import get_train_loader
 
@@ -46,14 +46,14 @@ def train_step(model, batch, optimizer, noise_esp: float, std_scale: float):
 
 
 class Trainer(Solver):
-    def __init__(self, robot: Robot, solver_param: dict) -> None:
+    def __init__(self, robot: Robot, solver_param: SolverConfig) -> None:
         super().__init__(robot, solver_param)
-        self.__noise_esp = self.param["noise_esp"]
-        self.__noise_esp_decay = self.param["noise_esp_decay"]  # 0.8 - 0.9
+        self.__noise_esp = self.param.noise_esp
+        self.__noise_esp_decay = self.param.noise_esp_decay  # 0.8 - 0.9
         self.__std_scale = 1 / self.__noise_esp
 
     def __update_noise_esp(self, epoch: int):
-        self.__noise_esp = self.param["noise_esp"] * (self.__noise_esp_decay**epoch)
+        self.__noise_esp = self.param.noise_esp * (self.__noise_esp_decay**epoch)
 
     def mini_train(
         self,
@@ -101,22 +101,22 @@ class Trainer(Solver):
                     break
                 step += 1
 
-                if self.param["sche_type"] == "step":
+                if self.param.sche_type == "step":
                     self._scheduler.step()  # type: ignore
             self.__update_noise_esp(ep)
 
             self.shrink_ratio = 0.25
             print(
-                f"using shrink_ratio: {self.shrink_ratio} (fixed), where original shrink_ratio: {self.param['shrink_ratio']} (training)"
+                f"using shrink_ratio: {self.shrink_ratio} (fixed), where original shrink_ratio: {self.param.shrink_ratio} (training)"
             )
             avg_position_error, avg_orientation_error = self.random_evaluation(
                 num_poses=num_eval_poses, num_sols=num_eval_sols
             )  # type: ignore
-            self.shrink_ratio = self.param["shrink_ratio"]  # type: ignore
+            self.shrink_ratio = self.param.shrink_ratio  # type: ignore
 
-            if self.param["sche_type"] == "plateau":
+            if self.param.sche_type == "plateau":
                 self._scheduler.step(avg_position_error)  # type: ignore
-            elif self.param["sche_type"] == "cos":
+            elif self.param.sche_type == "cos":
                 self._scheduler.step()  # type: ignore
 
             log_info = {
@@ -261,8 +261,8 @@ def main() -> None:
     trainer = Trainer(robot=get_robot(), solver_param=solver_param)
 
     trainer.mini_train(
-        num_epochs=solver_param["num_epochs"],
-        batch_size=solver_param["batch_size"],
+        num_epochs=solver_param.num_epochs,
+        batch_size=solver_param.batch_size,
         begin_time=begin_time,
         use_wandb=USE_WANDB,
         patience=PATIENCE,

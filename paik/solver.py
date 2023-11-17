@@ -12,7 +12,7 @@ from jrl.robot import Robot
 from jrl.evaluation import _get_target_pose_batch
 from jrl.conversions import geodesic_distance_between_quaternions
 
-from paik.settings import config as cfg
+from paik.settings import config as cfg, SolverConfig
 from paik.model import get_flow_model, get_knn, get_robot
 from paik.utils import load_numpy, save_numpy
 from paik.dataset import (
@@ -24,78 +24,79 @@ from paik.dataset import (
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 
-DEFAULT_SOLVER_PARAM_M3 = {
-    "subnet_width": 1024,
-    "subnet_num_layers": 3,
-    "num_transforms": 10,
-    "lr": 3.3e-4,
-    "lr_weight_decay": 1.3e-2,
-    "decay_step_size": 7e4,
-    "gamma": 9.4e-2,
-    "shrink_ratio": 0.61,
-    "batch_size": 128,
-    "num_epochs": 10,
-    "model_architecture": "nsf",
-    "noise_esp": 1e-3,
-    "noise_esp_decay": 0.8,
-    "opt_type": "adamw",
-    "sche_type": "steplr",
-    "ckpt_name": "0930-0346",
-    "nmr": (7, 3, 4),
-    "random_perm": True,
-    "enable_load_model": True,
-    "device": "cuda" if torch.cuda.is_available() else "cpu",
-}
-
-DEFAULT_SOLVER_PARAM_M7 = {
-    "lr": 3.6e-4,
-    "gamma": 8.4e-2,
-    "opt_type": "adamw",
-    "noise_esp": 1.9e-3,
-    "sche_type": "plateau",
-    "batch_size": 128,
-    "num_epochs": 15,
-    "random_perm": True,
-    "subnet_width": 1150,
-    "num_transforms": 8,
-    "decay_step_size": 5e4,
-    "lr_weight_decay": 1.8e-2,
-    "noise_esp_decay": 0.92,
-    "subnet_num_layers": 3,
-    "model_architecture": "nsf",
-    "shrink_ratio": 0.61,
-    "ckpt_name": "1107-1013",
-    "nmr": (7, 7, 1),
-    "enable_load_model": True,
-    "device": "cuda" if torch.cuda.is_available() else "cpu",
-}
+DEFAULT_SOLVER_PARAM_M3 = SolverConfig(
+    lr=0.00033,
+    gamma=0.094,
+    opt_type="adamw",
+    noise_esp=0.001,
+    sche_type="steplr",
+    batch_size=128,
+    num_epochs=10,
+    random_perm=True,
+    subnet_width=1024,
+    num_transforms=10,
+    decay_step_size=70000,
+    lr_weight_decay=0.013,
+    noise_esp_decay=0.8,
+    subnet_num_layers=3,
+    model_architecture="nsf",
+    shrink_ratio=0.61,
+    ckpt_name="0930-0346",
+    nmr=(7, 3, 4),
+    enable_load_model=True,
+    device="cuda",
+)
+DEFAULT_SOLVER_PARAM_M7 = SolverConfig(
+    lr=0.00036,
+    gamma=0.084,
+    opt_type="adamw",
+    noise_esp=0.0019,
+    sche_type="plateau",
+    batch_size=128,
+    num_epochs=15,
+    random_perm=True,
+    subnet_width=1150,
+    num_transforms=8,
+    decay_step_size=50000,
+    lr_weight_decay=0.018,
+    noise_esp_decay=0.92,
+    subnet_num_layers=3,
+    model_architecture="nsf",
+    shrink_ratio=0.61,
+    ckpt_name="1107-1013",
+    nmr=(7, 7, 1),
+    enable_load_model=True,
+    device="cuda",
+)
 
 
 class Solver:
     def __init__(
-        self, robot: Robot = get_robot(), solver_param: dict = DEFAULT_SOLVER_PARAM_M7
+        self,
+        robot: Robot = get_robot(),
+        solver_param: SolverConfig = DEFAULT_SOLVER_PARAM_M7,
     ) -> None:
         self._robot = robot
         self._solver_param = solver_param
-        self._device = solver_param["device"]
+        self._device = solver_param.device
         # Neural spline flow (NSF) with 3 sample features and 5 context features
-        n, m, r = solver_param["nmr"]
+        n, m, r = solver_param.nmr
         flow, optimizer, scheduler = get_flow_model(
             enable_load_model=True,
-            num_transforms=solver_param["num_transforms"],
-            subnet_width=solver_param["subnet_width"],
-            subnet_num_layers=solver_param["subnet_num_layers"],
-            shrink_ratio=solver_param["shrink_ratio"],
-            lr=solver_param["lr"],
-            lr_weight_decay=solver_param["lr_weight_decay"],
-            decay_step_size=solver_param["decay_step_size"],
-            gamma=solver_param["gamma"],
-            optimizer_type=solver_param["opt_type"],
-            scheduler_type=solver_param["sche_type"],
+            num_transforms=solver_param.num_transforms,
+            subnet_width=solver_param.subnet_width,
+            subnet_num_layers=solver_param.subnet_num_layers,
+            shrink_ratio=solver_param.shrink_ratio,
+            lr=solver_param.lr,
+            lr_weight_decay=solver_param.lr_weight_decay,
+            decay_step_size=solver_param.decay_step_size,
+            gamma=solver_param.gamma,
+            optimizer_type=solver_param.opt_type,
+            scheduler_type=solver_param.sche_type,
             device=self._device,
-            model_architecture=solver_param["model_architecture"],
-            ckpt_name=solver_param["ckpt_name"],
-            random_perm=solver_param["random_perm"],
+            model_architecture=solver_param.model_architecture,
+            ckpt_name=solver_param.ckpt_name,
+            random_perm=solver_param.random_perm,
             n=n,
             m=m,
             r=r,
@@ -103,7 +104,7 @@ class Solver:
         self._solver = flow
         self._optimizer = optimizer
         self._scheduler = scheduler
-        self._shink_ratio = solver_param["shrink_ratio"]
+        self._shrink_ratio = solver_param.shrink_ratio
         self._init_latent = torch.zeros((1, self.robot.n_dofs)).to(self._device)
 
         # load inference data
@@ -122,7 +123,7 @@ class Solver:
 
     @property
     def shrink_ratio(self):
-        return self._shink_ratio
+        return self._shrink_ratio
 
     @property
     def robot(self):
@@ -135,7 +136,7 @@ class Solver:
     @shrink_ratio.setter
     def shrink_ratio(self, value: float):
         assert value >= 0 and value < 1
-        self._shink_ratio = value
+        self._shrink_ratio = value
         self.__update_solver()
 
     @latent.setter
@@ -188,7 +189,9 @@ class Solver:
 
         return J_hat
 
-    def solve(self, P: np.ndarray, F: np.ndarray, num_sols: int, return_numpy: bool = False):
+    def solve(
+        self, P: np.ndarray, F: np.ndarray, num_sols: int, return_numpy: bool = False
+    ):
         C = torch.from_numpy(
             np.column_stack((P, F, np.zeros((len(F), 1)))).astype(np.float32)
         ).to(self._device)
@@ -270,7 +273,7 @@ class Solver:
                 torch.zeros((self._robot.n_dofs,), device=self._device)
                 + self._init_latent,
                 torch.ones((self._robot.n_dofs,), device=self._device)
-                * self._shink_ratio,
+                * self._shrink_ratio,
                 buffer=True,
             ),  # type: ignore
         )
@@ -336,7 +339,7 @@ class Solver:
         torch.Tensor
             array_like(num_steps, n_dofs)
         """
-        assert self._shink_ratio < 0.2, "shrink_ratio should be less than 0.2"
+        assert self._shrink_ratio < 0.2, "shrink_ratio should be less than 0.2"
 
         P_path = P_path[:, : self._m]
         ref_F = np.atleast_2d(ref_F)
@@ -366,7 +369,7 @@ class Solver:
         torch.Tensor
             array_like(num_steps, n_dofs)
         """
-        assert self._shink_ratio < 0.2, "shrink_ratio should be less than 0.2"
+        assert self._shrink_ratio < 0.2, "shrink_ratio should be less than 0.2"
         num_traj = len(ref_F)
         num_steps = len(P_path)
 
@@ -412,7 +415,7 @@ class Solver:
         enable_plot : bool, optional
             use plot or not, by default False
         """
-        old_shink_ratio = self._shink_ratio
+        old_shrink_ratio = self._shrink_ratio
         self.shrink_ratio = shrink_ratio
 
         # print(f'using shrink_ratio: {self.shrink_ratio}')
@@ -465,7 +468,7 @@ class Solver:
         if enable_plot:
             return P_path_7, Qs, ref_F
 
-        self.shrink_ratio = old_shink_ratio
+        self.shrink_ratio = old_shrink_ratio
 
 
 def solution_pose_errors(

@@ -9,7 +9,7 @@ from paik.utils import init_seeds
 
 USE_WANDB = True
 PATIENCE = 4
-POSE_ERR_THRESH = 7.3e-3
+POSE_ERR_THRESH = 8.3e-3
 EXPERMENT_COUNT = 20
 
 
@@ -35,7 +35,7 @@ sweep_config = {
             "distribution": "q_uniform",
             "q": 1e-5,
             "min": 3.0e-4,
-            "max": 4.8e-4,
+            "max": 6.8e-4,
             # 'value': 5e-4,
         },
         "lr_weight_decay": {
@@ -57,9 +57,6 @@ sweep_config = {
             "max": 8.6e-2,
             # 'value': 9.79e-1
         },
-        "batch_size": {"value": 128},
-        "num_epochs": {"value": 20},
-        "model_architecture": {"value": "nsf"},
         "noise_esp": {
             "distribution": "q_uniform",
             "q": 1e-4,
@@ -83,14 +80,18 @@ sweep_config = {
             "value": "plateau"
         },
         "random_perm": {
-            "values": [False, True]
-            # 'value': False
+            # "values": [False, True]
+            'value': False
         },
         "shrink_ratio": {
             "distribution": "q_uniform",
             "q": 1e-2,
-            "min": 3.1e-1,
-            "max": 6.0e-1,
+            "min": 5.1e-1,
+            "max": 8.0e-1,
+        },
+        "enable_normalize": {
+            # "values": [True, False]
+            'value': True
         },
     },
 }
@@ -112,20 +113,20 @@ def main() -> None:
         "lr_weight_decay": wandb.config.lr_weight_decay,
         "decay_step_size": wandb.config.decay_step_size,
         "gamma": wandb.config.gamma,
-        "batch_size": wandb.config.batch_size,
-        "num_epochs": wandb.config.num_epochs,
         "shrink_ratio": wandb.config.shrink_ratio,
-        "model_architecture": wandb.config.model_architecture,
         "random_perm": wandb.config.random_perm,
-        "enable_load_model": False,
         "noise_esp": wandb.config.noise_esp,
         "noise_esp_decay": wandb.config.noise_esp_decay,
         "opt_type": wandb.config.opt_type,
         "sche_type": wandb.config.sche_type,
         "ckpt_name": "",
-        "nmr": (7, 7, 1),
+        "enable_normalize": wandb.config.enable_normalize,
+        "enable_load_model": False,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "enable_normalize": True,
+        "nmr": (7, 7, 1),
+        "batch_size": 128,
+        "num_epochs": 20,
+        "model_architecture": "nsf",
     }
 
     solver_param = SolverConfig(**solver_param)
@@ -146,7 +147,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     init_seeds(seed=42)
-    project_name = "msik_ikflow_nsf"
+    project_name = "msik_ikflow_nsf_norm"
 
     sweep_id = wandb.sweep(sweep=sweep_config, project=project_name, entity="luca_nthu")
     # Start sweep job.

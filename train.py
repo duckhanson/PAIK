@@ -20,31 +20,6 @@ PATIENCE = 4
 POSE_ERR_THRESH = 7e-3
 
 
-def train_step(model, batch, optimizer, noise_esp: float, std_scale: float):
-    """
-    _summary_
-
-    Args:
-        model (_type_): _description_
-        batch (_type_): _description_
-        optimizer (_type_): _description_
-        scheduler (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    x, y = add_noise(batch, esp=noise_esp, std_scale=std_scale)
-
-    loss = -model(y).log_prob(x)  # -log p(x | y)
-    loss = loss.mean()
-
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-
-    return loss.item()
-
-
 class Trainer(Solver):
     def __init__(self, robot: Robot, solver_param: SolverConfig) -> None:
         super().__init__(robot, solver_param)
@@ -86,13 +61,7 @@ class Trainer(Solver):
             batch_loss = np.zeros((len(train_loader)))
             step = 0
             for batch in t:
-                loss = train_step(
-                    model=self._solver,
-                    batch=batch,
-                    optimizer=self._optimizer,
-                    noise_esp=self.__noise_esp,
-                    std_scale=self.__std_scale,
-                )
+                loss = self.train_step(batch=batch)
                 batch_loss[step] = loss
                 bar = {"loss": f"{np.round(loss, 3)}"}
                 t.set_postfix(bar, refresh=True)
@@ -159,6 +128,32 @@ class Trainer(Solver):
 
         del train_loader
         print("Finished Training")
+
+    def train_step(self, batch):
+        """
+        _summary_
+
+        Args:
+            model (_type_): _description_
+            batch (_type_): _description_
+            optimizer (_type_): _description_
+            scheduler (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        x, y = add_noise(batch, esp=self.__noise_esp, std_scale=self.__std_scale)
+
+        if self.param.enable_normalize:
+            x, y = self.norm_J(x), self.norm_C(y)
+        loss = -self._solver(y).log_prob(x)  # -log p(x | y)
+        loss = loss.mean()
+
+        self._optimizer.zero_grad()
+        loss.backward()
+        self._optimizer.step()
+
+        return loss.item()
 
 
 def add_noise(batch, esp: float, std_scale: float):

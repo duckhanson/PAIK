@@ -5,25 +5,34 @@ from typing import List, Tuple, Callable
 
 @dataclass()
 class SolverConfig:
-    lr: float = 3.6e-4
-    gamma: float = 8.4e-2
-    opt_type: str = "adamw"
-    noise_esp: float = 1.9e-3
-    sche_type: str = "plateau"
-    batch_size: int = 128
-    num_epochs: int = 15
-    random_perm: bool = True
-    subnet_width: int = 1150
-    num_transforms: int = 8
-    decay_step_size: int = int(5e4)
-    lr_weight_decay: float = 1.8e-2
-    noise_esp_decay: float = 0.92
+    # model
     subnet_num_layers: int = 3
     model_architecture: str = "nsf"
+    random_perm: bool = True
     shrink_ratio: float = 0.61
-    ckpt_name: str = "1107-1013"
+    subnet_width: int = 1150
+    num_transforms: int = 8
     nmr: Tuple[int, int, int] = (7, 7, 1)
+
+    # training
+    opt_type: str = "adamw"
+    lr: float = 3.6e-4
+    lr_weight_decay: float = 1.8e-2
+    decay_step_size: int = int(5e4)
+
+    noise_esp: float = 1.9e-3
+    noise_esp_decay: float = 0.92
+
+    sche_type: str = "plateau"
+    gamma: float = 8.4e-2
+
+    batch_size: int = 128
+    num_epochs: int = 15
+
+    # inference
+    ckpt_name: str = "1107-1013"
     enable_load_model: bool = True
+    enable_normalize: bool = False
     device: str = "cuda"
 
 

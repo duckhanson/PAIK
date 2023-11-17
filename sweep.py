@@ -3,6 +3,7 @@ import torch
 from datetime import datetime
 import wandb
 from paik.model import get_robot
+from paik.settings import SolverConfig
 from train import Trainer
 from paik.utils import init_seeds
 
@@ -124,13 +125,16 @@ def main() -> None:
         "ckpt_name": "",
         "nmr": (7, 7, 1),
         "device": "cuda" if torch.cuda.is_available() else "cpu",
+        "enable_normalize": True,
     }
+
+    solver_param = SolverConfig(**solver_param)
 
     trainer = Trainer(robot=get_robot(), solver_param=solver_param)
 
     trainer.mini_train(
-        num_epochs=solver_param["num_epochs"],
-        batch_size=solver_param["batch_size"],
+        num_epochs=solver_param.num_epochs,
+        batch_size=solver_param.batch_size,
         begin_time=begin_time,
         use_wandb=USE_WANDB,
         patience=PATIENCE,

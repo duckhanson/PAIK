@@ -112,6 +112,16 @@ class Solver:
         self._J_tr, self._P_tr, self._P_ts, self._F = load_all_data(
             self._robot, n=n, m=m, r=r
         )
+
+        self._enable_normalize = solver_param.enable_normalize
+        if self._enable_normalize:
+            self.__mean_J = self._J_tr.mean(axis=0)
+            self.__std_J = self._J_tr.std(axis=0)
+            self.__mean_P = self._P_tr.mean(axis=0)
+            self.__std_P = self._P_tr.std(axis=0)
+            self.__mean_F = self._F.mean(axis=0)
+            self.__std_F = self._F.std(axis=0)
+
         self._knn = get_knn(P_tr=self._P_tr, n=n, m=m, r=r)
         self._n = n
         self._m = m
@@ -145,9 +155,55 @@ class Solver:
         self._init_latent = value
         self.__update_solver()
 
+    def norm_J(self, J: np.ndarray | torch.Tensor):
+        if isinstance(J, torch.Tensor):
+            J = J.detach().cpu().numpy()
+        return torch.from_numpy(
+            ((J - self.__mean_J) / self.__std_J).astype(np.float32)
+        ).to(self._device)
+
+    def norm_C(self, C: np.ndarray | torch.Tensor):
+        assert self._enable_normalize
+        if isinstance(C, torch.Tensor):
+            C = C.detach().cpu().numpy()
+        P = (C[:, : self._m] - self.__mean_P) / self.__std_P
+        F = (C[:, self._m : self._m + self._r] - self.__mean_F) / self.__std_F
+        noise = C[:, -1]
+
+        return torch.from_numpy(np.column_stack((P, F, noise)).astype(np.float32)).to(
+            self._device
+        )
+
+    def denorm_J(self, J: np.ndarray | torch.Tensor):
+        assert self._enable_normalize
+        if isinstance(J, torch.Tensor):
+            J = J.detach().cpu().numpy()
+        return torch.from_numpy(
+            (J * self.__std_J + self.__mean_J).astype(np.float32)
+        ).to(self._device)
+
+    def denorm_C(self, C: np.ndarray | torch.Tensor):
+        assert self._enable_normalize
+        if isinstance(C, torch.Tensor):
+            C = C.detach().cpu().numpy()
+        P = C[:, : self._m] * self.__std_P + self.__mean_P
+        F = C[:, self._m : self._m + self._r] * self.__std_F + self.__mean_F
+        noise = C[:, -1]
+
+        return torch.from_numpy(np.column_stack((P, F, noise)).astype(np.float32)).to(
+            self._device
+        )
+
     def sample(self, C, K):
+        if self._enable_normalize:
+            C = self.norm_C(C)
+
         with torch.inference_mode():
-            return self._solver(C).sample((K,)).detach().cpu()
+            J = self._solver(C).sample((K,)).detach().cpu()
+
+        if self._enable_normalize:
+            J = self.denorm_J(J)
+        return J
 
     def solve_set_k(
         self,

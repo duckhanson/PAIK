@@ -16,8 +16,9 @@ from paik.settings import config as cfg, SolverConfig
 from paik.model import get_flow_model, get_knn, get_robot
 from paik.utils import load_numpy, save_numpy
 from paik.dataset import (
-    load_all_data,
+    # load_all_data,
     data_preprocess_for_inference,
+    _posture_feature_extraction,
     nearest_neighbor_F,
     _data_collection,
 )
@@ -126,9 +127,7 @@ class Solver:
 
         # load inference data
         assert n == self._robot.n_dofs, f"n should be {self._robot.n_dofs} as the robot"
-        self._J_tr, self._P_tr, self._P_ts, self._F = load_all_data(
-            self._robot, n=n, m=m, r=r
-        )
+        self._J_tr, self._P_tr, self._P_ts, self._F = self.__load_all_data()
 
         self._enable_normalize = solver_param.enable_normalize
         if self._enable_normalize:
@@ -172,6 +171,17 @@ class Solver:
         self._init_latent = value
         self.__update_solver()
 
+    def __load_all_data(self):
+        n, m, r = self.param.nmr
+        J_tr, P_tr = _data_collection(
+            robot=self._robot, N=self.param.N_train, n=n, m=m, r=r, return_new=False
+        )
+        _, P_ts = _data_collection(
+            robot=self._robot, N=self.param.N_test, n=n, m=m, r=r, return_new=False
+        )
+        F = _posture_feature_extraction(J=J_tr, P=P_tr, n=n, m=m, r=r)
+        return J_tr, P_tr, P_ts, F
+
     def norm_J(self, J: np.ndarray | torch.Tensor):
         if isinstance(J, torch.Tensor):
             J = J.detach().cpu().numpy()
@@ -193,7 +203,7 @@ class Solver:
 
     def denorm_J(self, J: np.ndarray | torch.Tensor):
         assert self._enable_normalize
-        device = J.device
+        device = J.device if isinstance(J, torch.Tensor) else 'cpu'
         if isinstance(J, torch.Tensor):
             J = J.detach().cpu().numpy()
         return torch.from_numpy(

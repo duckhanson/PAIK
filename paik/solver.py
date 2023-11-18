@@ -44,6 +44,7 @@ DEFAULT_SOLVER_PARAM_M3 = SolverConfig(
     enable_load_model=True,
     device="cuda",
 )
+
 DEFAULT_SOLVER_PARAM_M7 = SolverConfig(
     lr=0.00036,
     gamma=0.084,
@@ -171,6 +172,7 @@ class Solver:
         self._init_latent = value
         self.__update_solver()
 
+    # private methods
     def __posture_feature_extraction(self, J: np.ndarray, P: np.ndarray):
         """
         generate posture feature from J (training data)
@@ -242,6 +244,90 @@ class Solver:
         F = self.__posture_feature_extraction(J=J_tr, P=P_tr)
         return J_tr, P_tr, P_ts, F
 
+    def __update_solver(self):
+        self._solver = Flow(
+            transforms=self._solver.transforms,  # type: ignore
+            base=Unconditional(
+                DiagNormal,
+                torch.zeros((self._robot.n_dofs,), device=self._device)
+                + self._init_latent,
+                torch.ones((self._robot.n_dofs,), device=self._device)
+                * self._shrink_ratio,
+                buffer=True,
+            ),  # type: ignore
+        )
+
+    def __sample_J_traj(self, P_path: np.ndarray, ref_F: np.ndarray):
+        """
+        sample a trajectory from IK solver that fit P_path
+
+        Parameters
+        ----------
+        P_path : np.ndarray
+            a sequence of target end-effector poses
+        ref_F : np.ndarray
+            posture features
+
+        Returns
+        -------
+        torch.Tensor
+            array_like(num_steps, n_dofs)
+        """
+        assert self._shrink_ratio < 0.2, "shrink_ratio should be less than 0.2"
+
+        P_path = P_path[:, : self._m]
+        ref_F = np.atleast_2d(ref_F)
+        if len(P_path) != len(ref_F):
+            ref_F = np.tile(ref_F, (len(P_path), 1))  # type: ignore
+
+        C = np.column_stack((P_path, ref_F, np.zeros((len(P_path),))))  # type: ignore
+        C = torch.from_numpy(C).float().to(self._device)  # type: ignore
+
+        J_hat = self.sample(C, 1)
+        J_hat = torch.reshape(J_hat, (-1, self._robot.n_dofs))
+        return J_hat
+
+    def __sample_n_J_traj(self, P_path: np.ndarray, ref_F: np.ndarray):
+        """
+        sample a trajectory from IK solver that fit P_path
+
+        Parameters
+        ----------
+        P_path : np.ndarray
+            a sequence of target end-effector poses
+        ref_F : np.ndarray
+            posture features
+
+        Returns
+        -------
+        torch.Tensor
+            array_like(num_steps, n_dofs)
+        """
+        assert self._shrink_ratio < 0.2, "shrink_ratio should be less than 0.2"
+        num_traj = len(ref_F)
+        num_steps = len(P_path)
+
+        if self._m == 3:
+            P_path = P_path[:, : self._m]
+
+        C = np.empty((num_traj, num_steps, self._m + ref_F.shape[-1] + 1))
+        for i, f in enumerate(ref_F):
+            f = np.tile(np.atleast_2d(f), (num_steps, 1))  # type: ignore
+            C[i] = np.column_stack((P_path, f, np.zeros((num_steps,))))  # type: ignore
+        C = C.reshape(-1, self._m + ref_F.shape[-1] + 1)
+        C = torch.from_numpy(C).float().to(self._device)  # type: ignore
+
+        J_hat = self.sample(C, 1)
+        J_hat = torch.reshape(J_hat, (num_traj, num_steps, self._robot.n_dofs))
+        return J_hat
+
+    def __random_sample_poses(self, num_poses: int):
+        # Randomly sample poses from test set
+        idx = np.random.choice(self._P_ts.shape[0], num_poses, replace=False)
+        P = self._P_ts[idx]
+        return P
+
+    # public methods
     def norm_J(self, J: np.ndarray | torch.Tensor):
         if isinstance(J, torch.Tensor):
             J = J.detach().cpu().numpy()
@@ -343,12 +429,6 @@ class Solver:
         J_hat = self.sample(C, num_sols)
         return J_hat.numpy() if return_numpy else J_hat
 
-    def __random_sample_poses(self, num_poses: int):
-        # Randomly sample poses from test set
-        idx = np.random.choice(self._P_ts.shape[0], num_poses, replace=False)
-        P = self._P_ts[idx]
-        return P
-
     def random_sample_JPF(self, num_samples: int):
         # Randomly sample poses from train set
         J, P = self._robot.sample_joint_angles_and_poses(
@@ -416,19 +496,6 @@ class Solver:
         else:
             return avg_l2_errs, avg_ang_errs
 
-    def __update_solver(self):
-        self._solver = Flow(
-            transforms=self._solver.transforms,  # type: ignore
-            base=Unconditional(
-                DiagNormal,
-                torch.zeros((self._robot.n_dofs,), device=self._device)
-                + self._init_latent,
-                torch.ones((self._robot.n_dofs,), device=self._device)
-                * self._shrink_ratio,
-                buffer=True,
-            ),  # type: ignore
-        )
-
     def sample_P_path(self, load_time: str = "", num_steps=20, seed=47) -> np.ndarray:
         """
         sample a path from P_ts
@@ -473,70 +540,6 @@ class Solver:
             print(f"{traj_dir} load successfully.")
 
         return P_path
-
-    def __sample_J_traj(self, P_path: np.ndarray, ref_F: np.ndarray):
-        """
-        sample a trajectory from IK solver that fit P_path
-
-        Parameters
-        ----------
-        P_path : np.ndarray
-            a sequence of target end-effector poses
-        ref_F : np.ndarray
-            posture features
-
-        Returns
-        -------
-        torch.Tensor
-            array_like(num_steps, n_dofs)
-        """
-        assert self._shrink_ratio < 0.2, "shrink_ratio should be less than 0.2"
-
-        P_path = P_path[:, : self._m]
-        ref_F = np.atleast_2d(ref_F)
-        if len(P_path) != len(ref_F):
-            ref_F = np.tile(ref_F, (len(P_path), 1))  # type: ignore
-
-        C = np.column_stack((P_path, ref_F, np.zeros((len(P_path),))))  # type: ignore
-        C = torch.from_numpy(C).float().to(self._device)  # type: ignore
-
-        J_hat = self.sample(C, 1)
-        J_hat = torch.reshape(J_hat, (-1, self._robot.n_dofs))
-        return J_hat
-
-    def __sample_n_J_traj(self, P_path: np.ndarray, ref_F: np.ndarray):
-        """
-        sample a trajectory from IK solver that fit P_path
-
-        Parameters
-        ----------
-        P_path : np.ndarray
-            a sequence of target end-effector poses
-        ref_F : np.ndarray
-            posture features
-
-        Returns
-        -------
-        torch.Tensor
-            array_like(num_steps, n_dofs)
-        """
-        assert self._shrink_ratio < 0.2, "shrink_ratio should be less than 0.2"
-        num_traj = len(ref_F)
-        num_steps = len(P_path)
-
-        if self._m == 3:
-            P_path = P_path[:, : self._m]
-
-        C = np.empty((num_traj, num_steps, self._m + ref_F.shape[-1] + 1))
-        for i, f in enumerate(ref_F):
-            f = np.tile(np.atleast_2d(f), (num_steps, 1))  # type: ignore
-            C[i] = np.column_stack((P_path, f, np.zeros((num_steps,))))  # type: ignore
-        C = C.reshape(-1, self._m + ref_F.shape[-1] + 1)
-        C = torch.from_numpy(C).float().to(self._device)  # type: ignore
-
-        J_hat = self.sample(C, 1)
-        J_hat = torch.reshape(J_hat, (num_traj, num_steps, self._robot.n_dofs))
-        return J_hat
 
     def path_following(
         self,

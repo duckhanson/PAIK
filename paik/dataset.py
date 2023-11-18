@@ -9,7 +9,7 @@ from paik.settings import config
 from paik.utils import load_numpy, save_numpy
 
 
-def _data_collection(robot, N: int, n: int, m: int, r: int):
+def _data_collection(robot, N: int, n: int, m: int, r: int, return_new: bool):
     """
     collect data using uniform sampling
 
@@ -29,6 +29,9 @@ def _data_collection(robot, N: int, n: int, m: int, r: int):
             n, m, r
         )  # type: ignore
 
+    if return_new:
+        return robot.sample_joint_angles_and_poses(n=N, return_torch=False)
+    
     J = load_numpy(file_path=path_J)
     P = load_numpy(file_path=path_P)
 
@@ -41,8 +44,8 @@ def _data_collection(robot, N: int, n: int, m: int, r: int):
 
 
 def load_all_data(robot, n, m, r):
-    J_tr, P_tr = _data_collection(robot=robot, N=config.N_train, n=n, m=m, r=r)
-    _, P_ts = _data_collection(robot=robot, N=config.N_test, n=n, m=m, r=r)
+    J_tr, P_tr = _data_collection(robot=robot, N=config.N_train, n=n, m=m, r=r, return_new=False)
+    _, P_ts = _data_collection(robot=robot, N=config.N_test, n=n, m=m, r=r, return_new=False)
     F = _posture_feature_extraction(J=J_tr, P=P_tr, n=n, m=m, r=r)
     return J_tr, P_tr, P_ts, F
 

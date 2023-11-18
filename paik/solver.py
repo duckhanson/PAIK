@@ -194,11 +194,12 @@ class Solver:
 
     def denorm_J(self, J: np.ndarray | torch.Tensor):
         assert self._enable_normalize
+        device = J.device
         if isinstance(J, torch.Tensor):
             J = J.detach().cpu().numpy()
         return torch.from_numpy(
             (J * self.__std_J + self.__mean_J).astype(np.float32)
-        ).to(self._device)
+        ).to(device)
 
     def denorm_C(self, C: np.ndarray | torch.Tensor):
         assert self._enable_normalize
@@ -281,12 +282,12 @@ class Solver:
 
     def random_sample_JPF(self, num_samples: int):
         # Randomly sample poses from train set
-        J, P = _data_collection(self._robot, num_samples, self._n, self._m, self._r)
+        J, P = _data_collection(self._robot, num_samples, self._n, self._m, self._r, return_new=True)
         F = nearest_neighbor_F(self._knn, P, self._F, n_neighbors=1)
         return J, P, F
 
     def evaluate_solutions(
-        self, J: np.ndarray | torch.Tensor, P: np.ndarray, return_row: bool = False
+        self, J: np.ndarray | torch.Tensor, P: np.ndarray, return_row: bool = False, return_col: bool = False
     ):
         if isinstance(J, torch.Tensor):
             J = J.detach().cpu().numpy()
@@ -307,6 +308,8 @@ class Solver:
             )
         if return_row:
             return l2_errs.mean(axis=0), ang_errs.mean(axis=0)
+        elif return_col:
+            return l2_errs.mean(axis=1), ang_errs.mean(axis=1)
         return l2_errs.mean(), ang_errs.mean()
 
     def random_evaluation(

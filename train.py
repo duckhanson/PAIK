@@ -1,13 +1,11 @@
 # Import required packages
 from datetime import datetime
-from jrl.robot import Robot
 import torch
 import numpy as np
 
 from tqdm import tqdm
 from pprint import pprint
 import wandb
-from paik.model import get_robot
 from paik.settings import config as cfg, SolverConfig
 from paik.utils import init_seeds
 from paik.dataset import get_train_loader
@@ -21,8 +19,8 @@ POSE_ERR_THRESH = 7e-3
 
 
 class Trainer(Solver):
-    def __init__(self, robot: Robot, solver_param: SolverConfig) -> None:
-        super().__init__(robot, solver_param)
+    def __init__(self, solver_param: SolverConfig) -> None:
+        super().__init__(solver_param)
         self.__noise_esp = self.param.noise_esp
         self.__noise_esp_decay = self.param.noise_esp_decay  # 0.8 - 0.9
         self.__std_scale = 1 / self.__noise_esp
@@ -253,7 +251,7 @@ def main() -> None:
 
     solver_param = DEFAULT_SOLVER_PARAM_M7
 
-    trainer = Trainer(robot=get_robot(), solver_param=solver_param)
+    trainer = Trainer(solver_param=solver_param)
 
     trainer.mini_train(
         num_epochs=solver_param.num_epochs,

@@ -2,27 +2,23 @@ from typing import List, Callable, Any
 from time import sleep
 from dataclasses import dataclass
 
-from pprint import pprint
-from jrl.robot import Robot
-from jrl.robots import Panda, Fetch, FetchArm
-from jrl.evaluation import solution_pose_errors
-
-import klampt
 from klampt.math import so3
-from klampt.model import coordinates, trajectory
-from klampt import vis, GeometricPrimitive, Geometry3D, Point
+from klampt.model import coordinates
+from klampt import vis, Point
 from klampt import WorldModel
 import numpy as np
-import torch
-import torch.optim
-from paik.settings import config
-from paik.solver import Solver, DEFAULT_SOLVER_PARAM_M3, DEFAULT_SOLVER_PARAM_M7
-from paik.model import get_robot
+from paik.settings import SolverConfig
+from paik.solver import (
+    Solver,
+    DEFAULT_SOLVER_PARAM_M3,
+    DEFAULT_SOLVER_PARAM_M7,
+    DEFAULT_SOLVER_PARAM_M7_NORM,
+)
 
 
 class Visualizer(Solver):
-    def __init__(self, robot: Robot, solver_param: dict) -> None:
-        super().__init__(robot, solver_param)
+    def __init__(self, solver_param: SolverConfig) -> None:
+        super().__init__(solver_param)
 
     def _plot_pose(self, name: str, pose: np.ndarray, hide_label: bool = False):
         vis.add(
@@ -334,7 +330,7 @@ class Visualizer(Solver):
 
 
 def main():
-    visualizer = Visualizer(robot=get_robot(), solver_param=DEFAULT_SOLVER_PARAM_M7)
+    visualizer = Visualizer(solver_param=DEFAULT_SOLVER_PARAM_M7)
     # visualizer.sample_latent_space(num_samples=5)
     # visualizer.sample_posture_space(k=5)
     visualizer.visualize_path_following(

@@ -5,6 +5,10 @@ from typing import List, Tuple, Callable
 
 @dataclass()
 class SolverConfig:
+    # robot
+    robot_name: str = "panda"
+    nmr: Tuple[int, int, int] = (7, 7, 1)
+
     # model
     subnet_num_layers: int = 3
     model_architecture: str = "nsf"
@@ -12,7 +16,6 @@ class SolverConfig:
     shrink_ratio: float = 0.61
     subnet_width: int = 1150
     num_transforms: int = 8
-    nmr: Tuple[int, int, int] = (7, 7, 1)
 
     # training
     opt_type: str = "adamw"
@@ -37,21 +40,13 @@ class SolverConfig:
 
 
 @dataclass()
-class Developer:
-    def __init__(self, dictionary):
-        for key, value in dictionary.items():
-            setattr(self, key, value)
-
-
-@dataclass()
 class DataClassConfig:
     # workdir
     __current_folder_path, _ = os.path.split(os.path.realpath(__file__))
     __current_workdir_path, _ = os.path.split(os.path.realpath(__current_folder_path))
     workdir: str = __current_workdir_path
     # robot
-    robot_name: str = "panda"
-    enable_normalize: bool = False
+    robot_name: str = SolverConfig().robot_name
     # training
     N_train: int = 240_0000  # 2500_0000
     N_test: int = 5_0000  # 5_0000
@@ -99,7 +94,7 @@ class DataClassConfig:
     path_knn: Callable[
         [int, int, int, str, int, bool], str
     ] = (
-        lambda n, m, r, train_dir=train_dir, N_train=N_train, enable_normalize=enable_normalize: f"{train_dir}/knn-{N_train}-{n}-{m}-{r}-norm{enable_normalize}.pickle"
+        lambda n, m, r, train_dir=train_dir, N_train=N_train, enable_normalize=False: f"{train_dir}/knn-{N_train}-{n}-{m}-{r}-normFalse.pickle"
     )
 
     # experiment

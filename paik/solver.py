@@ -91,11 +91,10 @@ DEFAULT_SOLVER_PARAM_M7_NORM = SolverConfig(
 class Solver:
     def __init__(
         self,
-        robot: Robot = get_robot(),
         solver_param: SolverConfig = DEFAULT_SOLVER_PARAM_M7,
     ) -> None:
-        self._robot = robot
         self._solver_param = solver_param
+        self._robot = get_robot(solver_param.robot_name)
         self._device = solver_param.device
         # Neural spline flow (NSF) with 3 sample features and 5 context features
         n, m, r = solver_param.nmr
@@ -282,12 +281,18 @@ class Solver:
 
     def random_sample_JPF(self, num_samples: int):
         # Randomly sample poses from train set
-        J, P = _data_collection(self._robot, num_samples, self._n, self._m, self._r, return_new=True)
+        J, P = _data_collection(
+            self._robot, num_samples, self._n, self._m, self._r, return_new=True
+        )
         F = nearest_neighbor_F(self._knn, P, self._F, n_neighbors=1)
         return J, P, F
 
     def evaluate_solutions(
-        self, J: np.ndarray | torch.Tensor, P: np.ndarray, return_row: bool = False, return_col: bool = False
+        self,
+        J: np.ndarray | torch.Tensor,
+        P: np.ndarray,
+        return_row: bool = False,
+        return_col: bool = False,
     ):
         if isinstance(J, torch.Tensor):
             J = J.detach().cpu().numpy()

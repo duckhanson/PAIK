@@ -2,7 +2,6 @@
 import torch
 from datetime import datetime
 import wandb
-from paik.model import get_robot
 from paik.settings import SolverConfig
 from train import Trainer
 from paik.utils import init_seeds
@@ -131,7 +130,7 @@ def main() -> None:
 
     solver_param = SolverConfig(**solver_param)
 
-    trainer = Trainer(robot=get_robot(), solver_param=solver_param)
+    trainer = Trainer(solver_param=solver_param)
 
     trainer.mini_train(
         num_epochs=solver_param.num_epochs,

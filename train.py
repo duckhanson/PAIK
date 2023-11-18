@@ -123,7 +123,7 @@ class Trainer(Solver):
                     "solver": self._solver.state_dict(),
                     "opt": self._optimizer.state_dict(),
                 },
-                f"{cfg.weight_dir}{begin_time}.pth",
+                f"{cfg.weight_dir}/{begin_time}.pth",
             )
 
         del train_loader

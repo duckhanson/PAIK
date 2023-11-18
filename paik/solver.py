@@ -69,6 +69,24 @@ DEFAULT_SOLVER_PARAM_M7 = SolverConfig(
     device="cuda",
 )
 
+DEFAULT_SOLVER_PARAM_M7_NORM = SolverConfig(
+    lr=0.00037,
+    gamma=0.086,
+    opt_type="adamw",
+    noise_esp=0.0025,
+    sche_type="plateau",
+    random_perm=False,
+    shrink_ratio=0.68,
+    subnet_width=1024,
+    num_transforms=8,
+    decay_step_size=40000,
+    lr_weight_decay=0.012,
+    noise_esp_decay=0.97,
+    enable_normalize=True,
+    subnet_num_layers=3,
+    ckpt_name="1118-0317",
+)
+
 
 class Solver:
     def __init__(
@@ -276,7 +294,6 @@ class Solver:
         num_poses = len(P)
         num_sols = len(J)
         J = np.expand_dims(J, axis=1) if len(J.shape) == 2 else J
-        print(f"expanded J.shape: {J.shape}")
         assert J.shape == (num_sols, num_poses, self._robot.n_dofs)
 
         l2_errs = np.empty((num_poses, num_sols))

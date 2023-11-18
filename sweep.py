@@ -81,7 +81,7 @@ sweep_config = {
         },
         "random_perm": {
             # "values": [False, True]
-            'value': False
+            "value": False
         },
         "shrink_ratio": {
             "distribution": "q_uniform",
@@ -91,7 +91,7 @@ sweep_config = {
         },
         "enable_normalize": {
             # "values": [True, False]
-            'value': True
+            "value": True
         },
     },
 }

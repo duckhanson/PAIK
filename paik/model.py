@@ -112,10 +112,8 @@ def get_flow_model(
             optimizer.load_state_dict(state_dict=state["opt"])
 
             print(f"Model load successfully from {path_solver}")
-        except Exception:
-            print(
-                f"[Error] load error from {path_solver}, assuming you use different architecture."
-            )
+        except Exception as e:
+            print(f"[Warning] load error from {path_solver}, {e}.")
     else:
         print("Create a new model and start training.")
 

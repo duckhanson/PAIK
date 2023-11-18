@@ -2,7 +2,6 @@ import os
 import pickle
 import numpy as np
 import torch
-from paik.settings import config
 
 
 def init_seeds(seed=42):
@@ -116,7 +115,6 @@ def normalize(arr: np.ndarray, arr_min: np.ndarray, arr_max: np.ndarray):
 
 def denormalize(norm: np.ndarray, arr_min: np.ndarray, arr_max: np.ndarray):
     # example of use (the only one neede denormalize):
-    # joint config = model_output * (joint_max - joint_min) + joint_min
     # arr = norm * (arr_max - arr_min) + arr_min
     return norm * (arr_max - arr_min) + arr_min
 
@@ -136,21 +134,21 @@ def model_size(model):
     print(f"model parameters: {pytorch_total_params}")
 
 
-def create_robot_dirs() -> None:
+def create_robot_dirs(dir_paths) -> None:
     """
     _summary_
     """
-    for dp in config.dir_paths:
+    for dp in dir_paths:
         if not os.path.exists(path=dp):
             os.makedirs(name=dp)
             print(f"Create {dp}")
 
 
-def remove_empty_robot_dirs() -> None:
+def remove_empty_robot_dirs(dir_paths) -> None:
     """
     _summary_
     """
-    for dp in config.dir_paths:
+    for dp in dir_paths:
         walk = list(os.walk(dp))
         for p, _, _ in walk[::-1]:
             if os.path.exists(p) and len(os.listdir(p)) == 0:

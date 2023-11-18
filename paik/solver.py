@@ -7,21 +7,18 @@ import numpy as np
 import pandas as pd
 import torch
 
+from hnne import HNNE
+from sklearn.neighbors import NearestNeighbors
+
 from klampt.model import trajectory
 from jrl.robot import Robot
 from jrl.evaluation import _get_target_pose_batch
 from jrl.conversions import geodesic_distance_between_quaternions
 
-from paik.settings import config as cfg, SolverConfig
+from paik.settings import SolverConfig
 from paik.model import get_flow_model, get_knn, get_robot
 from paik.utils import load_numpy, save_numpy
-from paik.dataset import (
-    # load_all_data,
-    data_preprocess_for_inference,
-    _posture_feature_extraction,
-    nearest_neighbor_F,
-    _data_collection,
-)
+from paik.dataset import data_preprocess_for_inference, nearest_neighbor_F
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 
@@ -95,7 +92,9 @@ class Solver:
         solver_param: SolverConfig = DEFAULT_SOLVER_PARAM_M7,
     ) -> None:
         self._solver_param = solver_param
-        self._robot = get_robot(solver_param.robot_name)
+        self._robot = get_robot(
+            solver_param.robot_name, robot_dirs=solver_param.dir_paths
+        )
         self._device = solver_param.device
         # Neural spline flow (NSF) with 3 sample features and 5 context features
         n, m, r = solver_param.nmr
@@ -113,8 +112,8 @@ class Solver:
             scheduler_type=solver_param.sche_type,
             device=self._device,
             model_architecture=solver_param.model_architecture,
-            ckpt_name=solver_param.ckpt_name,
             random_perm=solver_param.random_perm,
+            path_solver=f"{solver_param.weight_dir}/{solver_param.ckpt_name}.pth",
             n=n,
             m=m,
             r=r,
@@ -127,7 +126,13 @@ class Solver:
 
         # load inference data
         assert n == self._robot.n_dofs, f"n should be {self._robot.n_dofs} as the robot"
+
+        self._n, self._m, self._r = n, m, r
         self._J_tr, self._P_tr, self._P_ts, self._F = self.__load_all_data()
+        self._knn = get_knn(
+            P_tr=self._P_tr,
+            path=f"{solver_param.train_dir}/knn-{solver_param.N_train}-{n}-{m}-{r}-normFalse.pickle",
+        )
 
         self._enable_normalize = solver_param.enable_normalize
         if self._enable_normalize:
@@ -137,11 +142,6 @@ class Solver:
             self.__std_P = self._P_tr.std(axis=0)
             self.__mean_F = self._F.mean(axis=0)
             self.__std_F = self._F.std(axis=0)
-
-        self._knn = get_knn(P_tr=self._P_tr, n=n, m=m, r=r)
-        self._n = n
-        self._m = m
-        self._r = r
 
     @property
     def latent(self):
@@ -171,15 +171,75 @@ class Solver:
         self._init_latent = value
         self.__update_solver()
 
+    def __posture_feature_extraction(self, J: np.ndarray, P: np.ndarray):
+        """
+        generate posture feature from J (training data)
+
+        Parameters
+        ----------
+        J : np.ndarray
+            joint configurations
+        P : np.ndarray
+            poses of the robot
+
+        Returns
+        -------
+        F : np.ndarray
+            posture features
+        """
+        assert self._r > 0
+        path = f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}.npy"
+        F = load_numpy(file_path=path) if os.path.exists(path=path) else None
+
+        if F is None or F.shape[-1] != self._r or len(F) != len(J):
+            # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
+            hnne = HNNE(dim=self._r)
+            # maximum number of data for hnne (11M), we use max_num_data_hnne to test
+            num_data = min(self.param.max_num_data_hnne, len(J))
+            S = np.column_stack((J, P))
+            F = hnne.fit_transform(X=S[:num_data], dim=self._r, verbose=True)
+            # query nearest neighbors for the rest of J
+            if len(F) != len(J):
+                knn = NearestNeighbors(n_neighbors=1)
+                knn.fit(S[:num_data])
+                neigh_idx = knn.kneighbors(
+                    S[num_data:], n_neighbors=1, return_distance=False
+                )
+                neigh_idx = neigh_idx.flatten()  # type: ignore
+                F = np.row_stack((F, F[neigh_idx]))
+
+            save_numpy(file_path=path, arr=F)
+        print(f"F load successfully from {path}")
+
+        return F
+
+    def __data_collection(self, train: bool, return_new: bool = False):
+        if train:
+            path_J = f"{self.param.train_dir}/J-{self.param.N_train}-{self._n}-{self._m}-{self._r}.npy"
+            path_P = f"{self.param.train_dir}/P-{self.param.N_train}-{self._n}-{self._m}-{self._r}.npy"
+        else:
+            path_J = f"{self.param.val_dir}/J-{self.param.N_test}-{self._n}-{self._m}-{self._r}.npy"
+            path_P = f"{self.param.val_dir}/P-{self.param.N_test}-{self._n}-{self._m}-{self._r}.npy"
+
+        N = self.param.N_train if train else self.param.N_test
+
+        if return_new:
+            return self._robot.sample_joint_angles_and_poses(n=N, return_torch=False)
+
+        J = load_numpy(file_path=path_J)
+        P = load_numpy(file_path=path_P)
+
+        if len(J) != N or len(P) != N:
+            J, P = self._robot.sample_joint_angles_and_poses(n=N, return_torch=False)
+            save_numpy(file_path=path_J, arr=J)
+            save_numpy(file_path=path_P, arr=P[:, : self._m])
+
+        return J, P
+
     def __load_all_data(self):
-        n, m, r = self.param.nmr
-        J_tr, P_tr = _data_collection(
-            robot=self._robot, N=self.param.N_train, n=n, m=m, r=r, return_new=False
-        )
-        _, P_ts = _data_collection(
-            robot=self._robot, N=self.param.N_test, n=n, m=m, r=r, return_new=False
-        )
-        F = _posture_feature_extraction(J=J_tr, P=P_tr, n=n, m=m, r=r)
+        J_tr, P_tr = self.__data_collection(train=True)
+        _, P_ts = self.__data_collection(train=False)
+        F = self.__posture_feature_extraction(J=J_tr, P=P_tr)
         return J_tr, P_tr, P_ts, F
 
     def norm_J(self, J: np.ndarray | torch.Tensor):
@@ -203,7 +263,7 @@ class Solver:
 
     def denorm_J(self, J: np.ndarray | torch.Tensor):
         assert self._enable_normalize
-        device = J.device if isinstance(J, torch.Tensor) else 'cpu'
+        device = J.device if isinstance(J, torch.Tensor) else "cpu"
         if isinstance(J, torch.Tensor):
             J = J.detach().cpu().numpy()
         return torch.from_numpy(
@@ -291,8 +351,8 @@ class Solver:
 
     def random_sample_JPF(self, num_samples: int):
         # Randomly sample poses from train set
-        J, P = _data_collection(
-            self._robot, num_samples, self._n, self._m, self._r, return_new=True
+        J, P = self._robot.sample_joint_angles_and_poses(
+            n=num_samples, return_torch=False
         )
         F = nearest_neighbor_F(self._knn, P, self._F, n_neighbors=1)
         return J, P, F
@@ -388,9 +448,9 @@ class Solver:
         np.random.seed(seed)
 
         if load_time == "":
-            traj_dir = cfg.traj_dir + datetime.now().strftime("%m%d%H%M%S") + "/"
+            traj_dir = self.param.traj_dir + datetime.now().strftime("%m%d%H%M%S") + "/"
         else:
-            traj_dir = cfg.traj_dir + load_time + "/"
+            traj_dir = self.param.traj_dir + load_time + "/"
 
         P_path_file_path = traj_dir + "ee_traj.npy"
 

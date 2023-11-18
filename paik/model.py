@@ -1,6 +1,7 @@
 # Import required packages
 # import time
 from __future__ import annotations
+from typing import Tuple
 
 from os import path
 import numpy as np
@@ -16,7 +17,6 @@ from zuko.flows.neural import UNAF
 from zuko.flows.spline import NSF
 
 from jrl.robots import Panda
-from paik.settings import config
 from paik.utils import save_pickle, load_pickle, create_robot_dirs
 
 DEFAULT_ACTIVATION = LeakyReLU
@@ -35,7 +35,7 @@ def get_flow_model(
     optimizer_type: str,
     scheduler_type: str,
     device: str,
-    ckpt_name: str,
+    path_solver: str,
     n: int,
     m: int,
     r: int,
@@ -104,7 +104,6 @@ def get_flow_model(
     optimizer = get_optimizer(
         flow.parameters(), optimizer_type, lr, weight_decay=lr_weight_decay
     )
-    path_solver = f"{config.weight_dir}/{ckpt_name}.pth"
     if enable_load_model and path.exists(path=path_solver):
         try:
             state = torch.load(path_solver)
@@ -168,7 +167,7 @@ def get_sflow_model(flow: NSF | Flow, n: int, shrink_ratio: float, device: str):
     return sflow
 
 
-def get_knn(P_tr: np.ndarray, n: int, m: int, r: int):
+def get_knn(P_tr: np.ndarray, path: str):
     """
     fit a knn model
 
@@ -182,7 +181,6 @@ def get_knn(P_tr: np.ndarray, n: int, m: int, r: int):
     NearestNeighbors
         a knn model that fit end-effector positions of training data
     """
-    path = config.path_knn(n, m, r)
     try:
         knn = load_pickle(file_path=path)
         print(f"knn load successfully from {path}")
@@ -195,17 +193,11 @@ def get_knn(P_tr: np.ndarray, n: int, m: int, r: int):
         save_pickle(file_path=path, obj=knn)
         print(f"Create and save knn at {path}.")
 
-    # knn = NearestNeighbors(n_neighbors=1)
-    # P_tr = np.atleast_2d(P_tr)
-    # knn.fit(P_tr)
-    # save_pickle(file_path=path, obj=knn)
-    # print(f"Create and save knn at {path}.")
-
     return knn
 
 
-def get_robot(robot_name: str = config.robot_name):
-    create_robot_dirs()
+def get_robot(robot_name: str, robot_dirs: Tuple[str, str, str]):
+    create_robot_dirs(robot_dirs)
 
     if robot_name == "panda":
         return Panda()

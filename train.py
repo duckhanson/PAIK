@@ -6,14 +6,13 @@ import numpy as np
 from tqdm import tqdm
 from pprint import pprint
 import wandb
-from paik.settings import config as cfg, SolverConfig
+from paik.settings import SolverConfig
 from paik.utils import init_seeds
 from paik.dataset import get_train_loader
 
 from paik.solver import Solver, DEFAULT_SOLVER_PARAM_M7, DEFAULT_SOLVER_PARAM_M3
 
 USE_WANDB = False
-# NUM_RECORD_STEPS = 14e3
 PATIENCE = 4
 POSE_ERR_THRESH = 7e-3
 
@@ -114,14 +113,13 @@ class Trainer(Solver):
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
-
         if avg_position_error < pose_err_thres:  # type: ignore
             torch.save(
                 {
                     "solver": self._solver.state_dict(),
                     "opt": self._optimizer.state_dict(),
                 },
-                f"{cfg.weight_dir}/{begin_time}.pth",
+                f"{self.param.weight_dir}/{begin_time}.pth",
             )
 
         del train_loader

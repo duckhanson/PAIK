@@ -14,7 +14,7 @@ from paik.solver import Solver, DEFAULT_SOLVER_PARAM_M7, DEFAULT_SOLVER_PARAM_M3
 
 USE_WANDB = False
 PATIENCE = 4
-POSE_ERR_THRESH = 7e-3
+POSE_ERR_THRESH = 6e-3
 
 
 class Trainer(Solver):

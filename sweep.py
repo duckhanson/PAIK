@@ -8,8 +8,9 @@ from paik.utils import init_seeds
 
 USE_WANDB = True
 PATIENCE = 4
-POSE_ERR_THRESH = 8.3e-3
+POSE_ERR_THRESH = 5e-3
 EXPERMENT_COUNT = 20
+NUM_EPOCHS = 25
 
 
 sweep_config = {
@@ -18,31 +19,29 @@ sweep_config = {
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
         "subnet_width": {
-            # 'values': [1024, 1150]
             "value": 1024
         },
         "subnet_num_layers": {
-            # 'values': [3, 4]
             "value": 3
         },
         "num_transforms": {
-            # 'values': [8]  # 6, 8, ..., 16
-            "value": 8
+            'values': [7, 8]  # 6, 8, ..., 16
+            # "value": 8
         },
         "lr": {
             # a flat distribution between 0 and 0.1
             "distribution": "q_uniform",
             "q": 1e-5,
             "min": 3.0e-4,
-            "max": 6.8e-4,
+            "max": 5.5e-4,
             # 'value': 5e-4,
         },
         "lr_weight_decay": {
             # a flat distribution between 0 and 0.1
             "distribution": "q_uniform",
             "q": 1e-3,
-            "min": 1e-2,
-            "max": 3e-2,
+            "min": 2.5e-2,
+            "max": 2.9e-2,
             # 'value': 9.79e-1,
         },
         "decay_step_size": {
@@ -50,24 +49,24 @@ sweep_config = {
             "value": 4e4
         },
         "gamma": {
-            "distribution": "q_uniform",
-            "q": 1e-3,
-            "min": 8.4e-2,
-            "max": 8.6e-2,
-            # 'value': 9.79e-1
+            # "distribution": "q_uniform",
+            # "q": 1e-3,
+            # "min": 8.4e-2,
+            # "max": 8.6e-2,
+            'value': 8.6e-1
         },
         "noise_esp": {
             "distribution": "q_uniform",
             "q": 1e-4,
-            "min": 1.7e-3,
-            "max": 3.3e-3,
+            "min": 2.6e-3,
+            "max": 3.0e-3,
             # 'value': 9.79e-1
         },
         "noise_esp_decay": {
             "distribution": "q_uniform",
             "q": 1e-2,
             "min": 9.4e-1,
-            "max": 9.9e-1,
+            "max": 9.6e-1,
             # 'value': 9.79e-1
         },
         "opt_type": {
@@ -86,7 +85,7 @@ sweep_config = {
             "distribution": "q_uniform",
             "q": 1e-2,
             "min": 5.1e-1,
-            "max": 8.0e-1,
+            "max": 7.6e-1,
         },
         "enable_normalize": {
             # "values": [True, False]
@@ -124,7 +123,7 @@ def main() -> None:
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "nmr": (7, 7, 1),
         "batch_size": 128,
-        "num_epochs": 20,
+        "num_epochs": NUM_EPOCHS,
         "model_architecture": "nsf",
     }
 

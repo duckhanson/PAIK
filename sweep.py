@@ -18,14 +18,10 @@ sweep_config = {
     "method": "bayes",
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
-        "subnet_width": {
-            "value": 1024
-        },
-        "subnet_num_layers": {
-            "value": 3
-        },
+        "subnet_width": {"value": 1024},
+        "subnet_num_layers": {"value": 3},
         "num_transforms": {
-            'values': [7, 8]  # 6, 8, ..., 16
+            "values": [7, 8]  # 6, 8, ..., 16
             # "value": 8
         },
         "lr": {
@@ -53,7 +49,7 @@ sweep_config = {
             # "q": 1e-3,
             # "min": 8.4e-2,
             # "max": 8.6e-2,
-            'value': 8.6e-1
+            "value": 8.6e-1
         },
         "noise_esp": {
             "distribution": "q_uniform",

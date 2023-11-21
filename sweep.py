@@ -26,31 +26,31 @@ sweep_config = {
         },
         "lr": {
             # a flat distribution between 0 and 0.1
-            'values': [i * 1e-5 for i in range(30, 61)]
+            "values": [i * 1e-5 for i in range(30, 61)]
             # 'value': 5e-4,
         },
         "lr_weight_decay": {
             # a flat distribution between 0 and 0.1
-            'values': [i * 1e-3 for i in range(20, 29)]
+            "values": [i * 1e-3 for i in range(20, 29)]
             # 'value': 9.79e-1,
         },
         "decay_step_size": {
-            'values': [4e4, 5e4, 6e4],
+            "values": [4e4, 5e4, 6e4],
             # "value": 4e4
         },
         "gamma": {
-            'values': [.84, .85, .86]
+            "values": [0.84, 0.85, 0.86]
             # "value": 8.6e-1
         },
         "noise_esp": {
-            'values': [i * 1e-4 for i in range(20, 31)]
+            "values": [i * 1e-4 for i in range(20, 31)]
             # "distribution": "q_uniform",
             # "q": 1e-4,
             # "min": 2.0e-3,
             # "max": 3.0e-3,
         },
         "noise_esp_decay": {
-            'values': [.94, .95, .96, .97, .98, .99]
+            "values": [0.94, 0.95, 0.96, 0.97, 0.98, 0.99]
             # 'value': 9.79e-1
         },
         "opt_type": {
@@ -66,7 +66,7 @@ sweep_config = {
             "value": False
         },
         "shrink_ratio": {
-            'values': [i * 1e-2 for i in range(51, 77)]
+            "values": [i * 1e-2 for i in range(51, 77)]
             # "value": False
         },
         "enable_normalize": {

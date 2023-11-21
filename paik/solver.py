@@ -257,70 +257,6 @@ class Solver:
             ),  # type: ignore
         )
 
-    def __sample_J_traj(self, P_path: np.ndarray, ref_F: np.ndarray):
-        """
-        sample a trajectory from IK solver that fit P_path
-
-        Parameters
-        ----------
-        P_path : np.ndarray
-            a sequence of target end-effector poses
-        ref_F : np.ndarray
-            posture features
-
-        Returns
-        -------
-        torch.Tensor
-            array_like(num_steps, n_dofs)
-        """
-        assert self._shrink_ratio < 0.2, "shrink_ratio should be less than 0.2"
-
-        P_path = P_path[:, : self._m]
-        ref_F = np.atleast_2d(ref_F)
-        if len(P_path) != len(ref_F):
-            ref_F = np.tile(ref_F, (len(P_path), 1))  # type: ignore
-
-        C = np.column_stack((P_path, ref_F, np.zeros((len(P_path),))))  # type: ignore
-        C = torch.from_numpy(C).float().to(self._device)  # type: ignore
-
-        J_hat = self.sample(C, 1)
-        J_hat = torch.reshape(J_hat, (-1, self._robot.n_dofs))
-        return J_hat
-
-    def __sample_n_J_traj(self, P_path: np.ndarray, ref_F: np.ndarray):
-        """
-        sample a trajectory from IK solver that fit P_path
-
-        Parameters
-        ----------
-        P_path : np.ndarray
-            a sequence of target end-effector poses
-        ref_F : np.ndarray
-            posture features
-
-        Returns
-        -------
-        torch.Tensor
-            array_like(num_steps, n_dofs)
-        """
-        assert self._shrink_ratio < 0.2, "shrink_ratio should be less than 0.2"
-        num_traj = len(ref_F)
-        num_steps = len(P_path)
-
-        if self._m == 3:
-            P_path = P_path[:, : self._m]
-
-        C = np.empty((num_traj, num_steps, self._m + ref_F.shape[-1] + 1))
-        for i, f in enumerate(ref_F):
-            f = np.tile(np.atleast_2d(f), (num_steps, 1))  # type: ignore
-            C[i] = np.column_stack((P_path, f, np.zeros((num_steps,))))  # type: ignore
-        C = C.reshape(-1, self._m + ref_F.shape[-1] + 1)
-        C = torch.from_numpy(C).float().to(self._device)  # type: ignore
-
-        J_hat = self.sample(C, 1)
-        J_hat = torch.reshape(J_hat, (num_traj, num_steps, self._robot.n_dofs))
-        return J_hat
-
     def __random_sample_poses(self, num_poses: int):
         # Randomly sample poses from test set
         idx = np.random.choice(self._P_ts.shape[0], num_poses, replace=False)
@@ -572,43 +508,36 @@ class Solver:
         old_shrink_ratio = self._shrink_ratio
         self.shrink_ratio = shrink_ratio
 
-        # print(f'using shrink_ratio: {self.shrink_ratio}')
-
-        P_path = self.sample_P_path(load_time=load_time, num_steps=num_steps, seed=seed)
-        P_path_7 = (
-            P_path
-            if self._m == 7
-            else np.column_stack((P_path, np.ones((len(P_path), 4))))
+        # random sample P_path
+        P = self.sample_P_path(load_time=load_time, num_steps=num_steps, seed=seed)
+        P = (
+            P if self._m == 7 else np.column_stack((P, np.ones((len(P), 4))))
         )  # type: ignore
 
-        # ref_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path[0]), self._F, n_neighbors=300) # type: ignore # knn
-        # nn1_F = nearest_neighbor_F(self._knn, np.atleast_2d(P_path), self._F, n_neighbors=1) # type: ignore # knn
         time_begin = time()
 
-        ref_F = nearest_neighbor_F(
-            self._knn, np.atleast_2d(P_path), self._F, n_neighbors=30
-        )  # type: ignore # knn
-        ref_F = ref_F.flatten()
-        rand_idxs = np.random.randint(low=0, high=len(ref_F), size=num_traj)
-        ref_F = ref_F[rand_idxs].reshape(num_traj, -1)
-        # ref_F = F
-        # ref_F = rand_F(Path[0], F)
+        # P shape = (num_steps, m)
+        # Pt shape = (num_traj, num_steps, m)
+        Pt = np.tile(P, (num_traj, 1, 1)).reshape(-1, self._m)
 
-        # rand_idxs = list(range(num_traj))
-        # qs = self.__sample_J_traj(P_path, nn1_F)
-        # print("="*6 + f"=(use nearest)" + "="*6)
-        # print(P_path_7.shape)
-        # l2_err, ang_err = solution_pose_errors(robot=self._robot, solutions=qs, target_poses=P_path_7)
-        # df = pd.DataFrame({'l2_err': l2_err, 'ang_err': ang_err})
-        # print(df.describe())
-        Qs = self.__sample_n_J_traj(P_path, ref_F).detach().cpu().numpy()
+        # get nearest neighbor of p from self.knn
+        _, idx = self._knn.kneighbors(P, n_neighbors=5)
+        idx = idx.flatten()
+        Ft = np.tile(
+            np.expand_dims(
+                self._F[idx[np.random.randint(0, len(idx), size=num_traj)]], axis=1
+            ),
+            (1, num_steps, 1),
+        ).reshape(-1, self._r)
+
+        Qs = self.solve(Pt, Ft, num_sols=1, return_numpy=True).reshape(
+            num_traj, num_steps, self._n
+        )
         if enable_evaluation:
             mjac_arr = np.array([max_joint_angle_change(qs) for qs in Qs])
             # Qs = (num_traj, num_steps, n_dofs)
             # evaluate = (num_sols, num_poses, n_dofs)
-            l2_err_arr, ang_err_arr = self.evaluate_solutions(
-                Qs, P_path_7, return_row=True
-            )
+            l2_err_arr, ang_err_arr = self.evaluate_solutions(Qs, P, return_row=True)
             df = pd.DataFrame(
                 {
                     "l2_err": l2_err_arr,
@@ -620,7 +549,7 @@ class Solver:
             print(f"avg_inference_time: {round((time() - time_begin) / num_traj, 3)}")
 
         if enable_plot:
-            return P_path_7, Qs, ref_F
+            return P, Qs, Ft
 
         self.shrink_ratio = old_shrink_ratio
 

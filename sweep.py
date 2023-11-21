@@ -26,43 +26,31 @@ sweep_config = {
         },
         "lr": {
             # a flat distribution between 0 and 0.1
-            "distribution": "q_uniform",
-            "q": 1e-5,
-            "min": 3.0e-4,
-            "max": 5.5e-4,
+            'values': [i * 1e-5 for i in range(30, 61)]
             # 'value': 5e-4,
         },
         "lr_weight_decay": {
             # a flat distribution between 0 and 0.1
-            "distribution": "q_uniform",
-            "q": 1e-3,
-            "min": 2.5e-2,
-            "max": 2.9e-2,
+            'values': [i * 1e-3 for i in range(20, 29)]
             # 'value': 9.79e-1,
         },
         "decay_step_size": {
-            # 'values': [4e4, 5e4, 6e4],
-            "value": 4e4
+            'values': [4e4, 5e4, 6e4],
+            # "value": 4e4
         },
         "gamma": {
-            # "distribution": "q_uniform",
-            # "q": 1e-3,
-            # "min": 8.4e-2,
-            # "max": 8.6e-2,
-            "value": 8.6e-1
+            'values': [.84, .85, .86]
+            # "value": 8.6e-1
         },
         "noise_esp": {
-            "distribution": "q_uniform",
-            "q": 1e-4,
-            "min": 2.6e-3,
-            "max": 3.0e-3,
-            # 'value': 9.79e-1
+            'values': [i * 1e-4 for i in range(20, 31)]
+            # "distribution": "q_uniform",
+            # "q": 1e-4,
+            # "min": 2.0e-3,
+            # "max": 3.0e-3,
         },
         "noise_esp_decay": {
-            "distribution": "q_uniform",
-            "q": 1e-2,
-            "min": 9.4e-1,
-            "max": 9.6e-1,
+            'values': [.94, .95, .96, .97, .98, .99]
             # 'value': 9.79e-1
         },
         "opt_type": {
@@ -78,10 +66,8 @@ sweep_config = {
             "value": False
         },
         "shrink_ratio": {
-            "distribution": "q_uniform",
-            "q": 1e-2,
-            "min": 5.1e-1,
-            "max": 7.6e-1,
+            'values': [i * 1e-2 for i in range(51, 77)]
+            # "value": False
         },
         "enable_normalize": {
             # "values": [True, False]

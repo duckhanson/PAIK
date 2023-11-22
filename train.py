@@ -10,7 +10,7 @@ from paik.settings import SolverConfig
 from paik.utils import init_seeds
 from paik.dataset import get_train_loader
 
-from paik.solver import Solver, DEFAULT_SOLVER_PARAM_M7, DEFAULT_SOLVER_PARAM_M3
+from paik.solver import Solver, DEFAULT_SOLVER_PARAM_M7_NORM
 
 USE_WANDB = False
 PATIENCE = 4
@@ -75,20 +75,18 @@ class Trainer(Solver):
             print(
                 f"using shrink_ratio: {self.shrink_ratio} (fixed), where original shrink_ratio: {self.param.shrink_ratio} (training)"
             )
-            avg_position_error, avg_orientation_error = self.random_evaluation(
-                num_poses=num_eval_poses, num_sols=num_eval_sols
-            )  # type: ignore
+            avg_pos_errs, avg_ori_errs = self.random_evaluation(num_poses=num_eval_poses, num_sols=num_eval_sols)  # type: ignore
             self.shrink_ratio = self.param.shrink_ratio  # type: ignore
 
             if self.param.sche_type == "plateau":
-                self._scheduler.step(avg_position_error)  # type: ignore
+                self._scheduler.step(avg_pos_errs)  # type: ignore
             elif self.param.sche_type == "cos":
                 self._scheduler.step()  # type: ignore
 
             log_info = {
                 "lr": self._optimizer.param_groups[0]["lr"],  # type: ignore
-                "position_errors": avg_position_error,
-                "orientation_errors": avg_orientation_error,
+                "position_errors": avg_pos_errs,
+                "orientation_errors": avg_ori_errs,
                 "train_loss": batch_loss.mean(),
                 "noise_esp": self.__noise_esp,
             }
@@ -98,22 +96,22 @@ class Trainer(Solver):
             else:
                 pprint(log_info)
 
-            if np.isnan(avg_position_error) or avg_position_error > 1e-1:
-                print(f"Early stopping ({avg_position_error} > 1e-1)")
+            if np.isnan(avg_pos_errs) or avg_pos_errs > 1e-1:
+                print(f"Early stopping ({avg_pos_errs} > 1e-1)")
                 break
 
-            if ep > 14 and avg_position_error > 1.5e-2:
-                print(f"Early stopping ({avg_position_error} > 1e-2)")
+            if ep > 14 and avg_pos_errs > 1.5e-2:
+                print(f"Early stopping ({avg_pos_errs} > 1e-2)")
                 break
 
             # early_stopping needs the validation loss to check if it has decresed,
             # and if it has, it will make a checkpoint of the current model
-            early_stopping(avg_position_error, self._solver)
+            early_stopping(avg_pos_errs, self._solver)
 
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
-        if avg_position_error < pose_err_thres:  # type: ignore
+        if avg_pos_errs < pose_err_thres:  # type: ignore
             torch.save(
                 {
                     "solver": self._solver.state_dict(),
@@ -247,7 +245,7 @@ def main() -> None:
     if USE_WANDB:
         wandb.init(name=begin_time, notes=f"r=0")
 
-    solver_param = DEFAULT_SOLVER_PARAM_M7
+    solver_param = DEFAULT_SOLVER_PARAM_M7_NORM
 
     trainer = Trainer(solver_param=solver_param)
 

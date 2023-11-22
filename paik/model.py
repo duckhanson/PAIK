@@ -117,13 +117,14 @@ def get_flow_model(
         print("Create a new model and start training.")
 
     # Train to maximize the log-likelihood
-    scheduler = StepLR(optimizer, step_size=decay_step_size, gamma=gamma)
     if scheduler_type == "cos":
         scheduler = CosineAnnealingLR(optimizer, T_max=3, eta_min=lr * 1e-2)
     elif scheduler_type == "plateau":
         scheduler = ReduceLROnPlateau(
             optimizer, mode="min", factor=gamma, patience=2, verbose=True
         )
+    else:
+        scheduler = StepLR(optimizer, step_size=decay_step_size, gamma=gamma)
 
     return flow, optimizer, scheduler
 

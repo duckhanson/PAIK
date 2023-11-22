@@ -553,6 +553,93 @@ class Solver:
 
         self.shrink_ratio = old_shrink_ratio
 
+    def path_following_iterative_F(
+        self,
+        load_time: str = "",
+        num_traj: int = 3,
+        num_steps=20,
+        shrink_ratio: float = 0.1,
+        enable_evaluation: bool = False,
+        enable_plot: bool = False,
+        seed: int = 47,
+    ):
+        """
+        evaluate the performance of path following
+
+        Parameters
+        ----------
+        load_time : str, optional
+            file name of load P_path, by default ""
+        num_traj : int, optional
+            number of demo trajectories, by default 3
+        num_steps : int, optional
+            length of the generated path, by default 20
+        shrink_ratio : float, optional
+            the shrink ratio of the based distribution of IK solver, by default 0.1
+        enable_evaluation : bool, optional
+            use evaluation or not, by default False
+        enable_plot : bool, optional
+            use plot or not, by default False
+        """
+
+        old_shrink_ratio = self._shrink_ratio
+        self.shrink_ratio = shrink_ratio
+
+        # random sample P_path
+        P = self.sample_P_path(load_time=load_time, num_steps=num_steps, seed=seed)
+        P = (
+            P if self._m == 7 else np.column_stack((P, np.ones((len(P), 4))))
+        )  # type: ignore
+
+        time_begin = time()
+
+        # JPknn = NearestNeighbors(n_neighbors=1).fit(np.column_stack((self._J_tr, self._P_tr)))
+        # def get_F(J, P):
+        #     J, P = np.atleast_2d(J), np.atleast_2d(P)
+        #     _, idx = JPknn.kneighbors(np.column_stack((J, P)))
+        #     return self._F[idx.flatten()]
+
+        JPknn = NearestNeighbors(n_neighbors=1).fit(self._J_tr)
+
+        def get_F(J, P):
+            J, P = np.atleast_2d(J), np.atleast_2d(P)
+            _, idx = JPknn.kneighbors(J)
+            return self._F[idx.flatten()]
+
+        # get nearest neighbor of p from self.knn
+        _, idx = self._knn.kneighbors(np.atleast_2d(P[0]), n_neighbors=30)
+        idx = idx.flatten()
+        # Fbegin shape = (num_traj, r)
+        Fb = self._F[idx[np.random.randint(0, len(idx), size=num_traj)]]
+
+        Qs = np.empty((num_traj, num_steps, self._n))
+
+        for i, fb in enumerate(Fb):
+            for j, p in enumerate(P):
+                f = get_F(Qs[i, j - 1], p) if j > 0 else fb
+                Qs[i, j] = self.solve(
+                    np.atleast_2d(p), np.atleast_2d(f), num_sols=1, return_numpy=True
+                ).reshape(-1, self._n)
+        if enable_evaluation:
+            mjac_arr = np.array([max_joint_angle_change(qs) for qs in Qs])
+            # Qs = (num_traj, num_steps, n_dofs)
+            # evaluate = (num_sols, num_poses, n_dofs)
+            l2_err_arr, ang_err_arr = self.evaluate_solutions(Qs, P, return_row=True)
+            df = pd.DataFrame(
+                {
+                    "l2_err": l2_err_arr,
+                    "ang_err": ang_err_arr,
+                    "mjac": mjac_arr,
+                }
+            )
+            print(df.describe())
+            print(f"avg_inference_time: {round((time() - time_begin) / num_traj, 3)}")
+
+        if enable_plot:
+            return P, Qs, Fb
+
+        self.shrink_ratio = old_shrink_ratio
+
 
 def solution_pose_errors(
     robot: Robot,

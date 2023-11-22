@@ -18,11 +18,9 @@ sweep_config = {
     "method": "bayes",
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
-        "subnet_width": {"value": 1024},
-        "subnet_num_layers": {"value": 3},
         "num_transforms": {
-            "values": [7, 8]  # 6, 8, ..., 16
-            # "value": 8
+            # "values": [7, 8]  # 6, 8, ..., 16
+            "value": 8
         },
         "lr": {
             # a flat distribution between 0 and 0.1
@@ -53,25 +51,9 @@ sweep_config = {
             "values": [0.94, 0.95, 0.96, 0.97, 0.98, 0.99]
             # 'value': 9.79e-1
         },
-        "opt_type": {
-            # 'values': ['adam', 'adamw', 'sgd', 'sgd_nesterov']
-            "value": "adamw"
-        },
-        "sche_type": {
-            # 'values': ['step', 'plateau'], # cos bad
-            "value": "plateau"
-        },
-        "random_perm": {
-            # "values": [False, True]
-            "value": False
-        },
         "shrink_ratio": {
             "values": [i * 1e-2 for i in range(51, 77)]
             # "value": False
-        },
-        "enable_normalize": {
-            # "values": [True, False]
-            "value": True
         },
     },
 }
@@ -86,22 +68,21 @@ def main() -> None:
     # note that we define values from `wandb.config`
     # instead of defining hard values
     solver_param = {
-        "subnet_width": wandb.config.subnet_width,
-        "subnet_num_layers": wandb.config.subnet_num_layers,
         "num_transforms": wandb.config.num_transforms,
         "lr": wandb.config.lr,
         "lr_weight_decay": wandb.config.lr_weight_decay,
         "decay_step_size": wandb.config.decay_step_size,
         "gamma": wandb.config.gamma,
         "shrink_ratio": wandb.config.shrink_ratio,
-        "random_perm": wandb.config.random_perm,
         "noise_esp": wandb.config.noise_esp,
         "noise_esp_decay": wandb.config.noise_esp_decay,
-        "opt_type": wandb.config.opt_type,
-        "sche_type": wandb.config.sche_type,
-        "ckpt_name": "",
-        "enable_normalize": wandb.config.enable_normalize,
-        "enable_load_model": False,
+        "subnet_width": 1024,
+        "subnet_num_layers": 3,
+        "opt_type": "adamw",
+        "sche_type": "plateau",
+        "random_perm": False,
+        "enable_normalize": True,
+        "enable_load_model": True,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "nmr": (7, 7, 1),
         "batch_size": 128,

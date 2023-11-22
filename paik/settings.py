@@ -12,30 +12,30 @@ class SolverConfig:
     # model
     subnet_num_layers: int = 3
     model_architecture: str = "nsf"
-    random_perm: bool = True
-    shrink_ratio: float = 0.61
-    subnet_width: int = 1150
+    random_perm: bool = False
+    shrink_ratio: float = 0.68
+    subnet_width: int = 1024
     num_transforms: int = 8
 
     # training
     opt_type: str = "adamw"
-    lr: float = 3.6e-4
-    lr_weight_decay: float = 1.8e-2
-    decay_step_size: int = int(5e4)
+    lr: float = 3.7e-4
+    lr_weight_decay: float = 1.2e-2
+    decay_step_size: int = int(4e4)
 
-    noise_esp: float = 1.9e-3
-    noise_esp_decay: float = 0.92
+    noise_esp: float = 2.5e-3
+    noise_esp_decay: float = 0.97
 
     sche_type: str = "plateau"
-    gamma: float = 8.4e-2
+    gamma: float = 8.6e-2
 
     batch_size: int = 128
     num_epochs: int = 15
 
     # inference
-    ckpt_name: str = "1107-1013"
+    ckpt_name: str = "1118-0317"
     enable_load_model: bool = True
-    enable_normalize: bool = False
+    enable_normalize: bool = True
     device: str = "cuda"
 
     # workdir

@@ -108,17 +108,6 @@ def save_numpy(file_path: str, arr: np.ndarray):
     np.save(file_path, arr)
 
 
-def normalize(arr: np.ndarray, arr_min: np.ndarray, arr_max: np.ndarray):
-    # norm = (val - min) / (max - min)
-    return (arr - arr_min) / (arr_max - arr_min)
-
-
-def denormalize(norm: np.ndarray, arr_min: np.ndarray, arr_max: np.ndarray):
-    # example of use (the only one neede denormalize):
-    # arr = norm * (arr_max - arr_min) + arr_min
-    return norm * (arr_max - arr_min) + arr_min
-
-
 def model_size(model):
     param_size = 0
     for param in model.parameters():

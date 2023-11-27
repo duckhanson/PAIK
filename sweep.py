@@ -1,9 +1,7 @@
 # Import required packages
 from paik.solver import DEFAULT_SOLVER_PARAM_M7_NORM
-import torch
 from datetime import datetime
 import wandb
-from paik.settings import SolverConfig
 from train import Trainer
 from paik.utils import init_seeds
 

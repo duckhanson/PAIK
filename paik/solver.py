@@ -6,6 +6,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import torch
+from tabulate import tabulate
 
 from hnne import HNNE
 from sklearn.neighbors import NearestNeighbors
@@ -416,14 +417,18 @@ class Solver:
         J_hat = self.sample(C, num_sols)
         J_hat = J_hat.detach().cpu().numpy()
         inference_time = round((time() - time_begin), 3)
-        print(f"model inference time: {inference_time}")
 
         P = P if self._m == 7 else np.column_stack((P, np.ones(shape=(len(P), 4))))
 
         avg_l2_errs, avg_ang_errs = self.evaluate_solutions(J_hat, P)
 
         errors_time = round((time() - time_begin), 3) - inference_time
-        print(f"calculation errors time: {errors_time}")
+        print(
+            tabulate(
+                [[inference_time, errors_time]],
+                headers=["inference time", "evaluation time"],
+            )
+        )
 
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 

@@ -111,14 +111,15 @@ class Trainer(Solver):
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
-        if avg_pos_errs < pose_err_thres:  # type: ignore
-            torch.save(
-                {
-                    "solver": self._solver.state_dict(),
-                    "opt": self._optimizer.state_dict(),
-                },
-                f"{self.param.weight_dir}/{begin_time}.pth",
-            )
+            
+            if avg_pos_errs < pose_err_thres:  # type: ignore
+                torch.save(
+                    {
+                        "solver": self._solver.state_dict(),
+                        "opt": self._optimizer.state_dict(),
+                    },
+                    f"{self.param.weight_dir}/{begin_time}.pth",
+                )
 
         del train_loader
         print("Finished Training")

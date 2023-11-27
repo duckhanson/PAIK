@@ -337,14 +337,9 @@ class Solver:
         )
 
         # Begin inference
-        J_hat = self.sample(C, num_sols)
+        J_hat = torch.reshape(self.sample(C, num_sols), (num_sols * k, -1))
 
-        J_hat = torch.reshape(J_hat, (num_sols * k, -1))
-
-        if return_numpy:
-            J_hat = J_hat.numpy()
-
-        return J_hat
+        return J_hat.numpy() if return_numpy else J_hat
 
     def solve(
         self, P: np.ndarray, F: np.ndarray, num_sols: int, return_numpy: bool = False

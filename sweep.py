@@ -1,4 +1,5 @@
 # Import required packages
+from paik.solver import DEFAULT_SOLVER_PARAM_M7_NORM
 import torch
 from datetime import datetime
 import wandb
@@ -7,9 +8,9 @@ from train import Trainer
 from paik.utils import init_seeds
 
 USE_WANDB = True
-PATIENCE = 4
+PATIENCE = 5
 POSE_ERR_THRESH = 5e-3
-EXPERMENT_COUNT = 20
+EXPERMENT_COUNT = 10
 NUM_EPOCHS = 25
 
 
@@ -24,7 +25,7 @@ sweep_config = {
         },
         "lr": {
             # a flat distribution between 0 and 0.1
-            "values": [i * 1e-5 for i in range(30, 61)]
+            "values": [i * 1e-7 for i in range(7, 310)]
             # 'value': 5e-4,
         },
         "lr_weight_decay": {
@@ -65,34 +66,14 @@ def main() -> None:
     # instead of defining hard values
     wandb.init(name=begin_time, notes=f"")
 
-    # note that we define values from `wandb.config`
-    # instead of defining hard values
-    solver_param = {
-        "num_transforms": wandb.config.num_transforms,
-        "lr": wandb.config.lr,
-        "lr_weight_decay": wandb.config.lr_weight_decay,
-        "decay_step_size": wandb.config.decay_step_size,
-        "gamma": wandb.config.gamma,
-        "shrink_ratio": wandb.config.shrink_ratio,
-        "noise_esp": wandb.config.noise_esp,
-        "noise_esp_decay": wandb.config.noise_esp_decay,
-        "subnet_width": 1024,
-        "subnet_num_layers": 3,
-        "opt_type": "adamw",
-        "sche_type": "plateau",
-        "random_perm": False,
-        "enable_normalize": True,
-        "enable_load_model": True,
-        "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "nmr": (7, 7, 1),
-        "batch_size": 128,
-        "num_epochs": NUM_EPOCHS,
-        "model_architecture": "nsf",
-    }
-
-    solver_param = SolverConfig(**solver_param)
-
+    solver_param = DEFAULT_SOLVER_PARAM_M7_NORM
+    solver_param.lr = wandb.config.lr
+    solver_param.lr_weight_decay = wandb.config.lr_weight_decay
+    solver_param.decay_step_size = wandb.config.decay_step_size
+    
     trainer = Trainer(solver_param=solver_param)
+
+    print(trainer.random_evaluation(num_poses=100, num_sols=100))
 
     trainer.mini_train(
         num_epochs=solver_param.num_epochs,

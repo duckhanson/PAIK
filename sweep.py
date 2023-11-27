@@ -9,7 +9,7 @@ from paik.utils import init_seeds
 
 USE_WANDB = True
 PATIENCE = 5
-POSE_ERR_THRESH = 5e-3
+POSE_ERR_THRESH = 4e-3
 EXPERMENT_COUNT = 10
 NUM_EPOCHS = 25
 
@@ -70,6 +70,8 @@ def main() -> None:
     solver_param.lr = wandb.config.lr
     solver_param.lr_weight_decay = wandb.config.lr_weight_decay
     solver_param.decay_step_size = wandb.config.decay_step_size
+    solver_param.noise_esp = wandb.config.noise_esp
+    solver_param.noise_esp_decay = wandb.config.noise_esp_decay
     
     trainer = Trainer(solver_param=solver_param)
 

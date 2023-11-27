@@ -66,7 +66,7 @@ def get_flow_model(
         shrink_ratio=shrink_ratio,
     )
     flow = flow.to(device)
-    
+
     optimizer = get_optimizer(
         flow.parameters(), optimizer_type, lr, weight_decay=lr_weight_decay
     )

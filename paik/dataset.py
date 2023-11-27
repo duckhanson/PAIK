@@ -43,13 +43,10 @@ def data_preprocess_for_inference(P, F, knn, m: int, k: int = 1, device: str = "
     # ref_F = pick_F(P, F) # f_pick
     P = np.tile(P, (len(ref_F), 1)) if len(P) == 1 and k > 1 else P
 
-    # Add noise std and Project to Tensor(device)
-    C = torch.from_numpy(
+    # Add noise std
+    return torch.from_numpy(
         np.column_stack((P, ref_F, np.zeros((ref_F.shape[0], 1)))).astype(np.float32)
-    ).to(
-        device=device
-    )  # type: ignore
-    return C
+    )
 
 
 def nearest_neighbor_F(
@@ -63,11 +60,7 @@ def nearest_neighbor_F(
 
     P_ts = np.atleast_2d(P_ts)  # type: ignore
     assert len(P_ts) < len(F)
-    # neigh_idx = knn.kneighbors(P_ts[:, :3], n_neighbors=n_neighbors, return_distance=False)
-    neigh_idx = knn.kneighbors(P_ts, n_neighbors=n_neighbors, return_distance=False)
-    neigh_idx = neigh_idx.flatten()  # type: ignore
-
-    return F[neigh_idx]
+    return F[knn.kneighbors(P_ts, n_neighbors=n_neighbors, return_distance=False).flatten()]  # type: ignore
 
 
 def rand_F(P_ts: np.ndarray, F: np.ndarray):
@@ -75,8 +68,7 @@ def rand_F(P_ts: np.ndarray, F: np.ndarray):
 
 
 def pick_F(P_ts: np.ndarray, F: np.ndarray):
-    idx = np.random.randint(low=0, high=len(F), size=len(np.atleast_2d(P_ts)))
-    return F[idx]
+    return F[np.random.randint(low=0, high=len(F), size=len(np.atleast_2d(P_ts)))]
 
 
 class CustomDataset(Dataset):

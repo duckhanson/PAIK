@@ -21,7 +21,6 @@ class SolverConfig:
     opt_type: str = "adamw"
     lr: float = 3.7e-4
     lr_weight_decay: float = 1.2e-2
-    decay_step_size: int = int(4e4)
 
     noise_esp: float = 2.5e-3
     noise_esp_decay: float = 0.97

@@ -31,10 +31,6 @@ sweep_config = {
             "values": [i * 1e-3 for i in range(20, 29)]
             # 'value': 9.79e-1,
         },
-        "decay_step_size": {
-            "values": [4e4, 5e4, 6e4],
-            # "value": 4e4
-        },
         "gamma": {
             "values": [0.84, 0.85, 0.86]
             # "value": 8.6e-1
@@ -67,7 +63,6 @@ def main() -> None:
     solver_param = DEFAULT_SOLVER_PARAM_M7_NORM
     solver_param.lr = wandb.config.lr
     solver_param.lr_weight_decay = wandb.config.lr_weight_decay
-    solver_param.decay_step_size = wandb.config.decay_step_size
     solver_param.noise_esp = wandb.config.noise_esp
     solver_param.noise_esp_decay = wandb.config.noise_esp_decay
 

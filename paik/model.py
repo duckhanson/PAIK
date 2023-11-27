@@ -9,11 +9,9 @@ import torch
 from torch.nn import LeakyReLU
 from sklearn.neighbors import NearestNeighbors
 from torch import optim
-from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR, ReduceLROnPlateau
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from zuko.distributions import DiagNormal
-from zuko.flows import Flow, Unconditional, MaskedAutoregressiveTransform
-from zuko.flows.coupling import GeneralCouplingTransform
-from zuko.flows.neural import UNAF
+from zuko.flows import Flow, Unconditional
 from zuko.flows.spline import NSF
 
 from jrl.robots import Panda
@@ -29,7 +27,6 @@ def get_flow_model(
     shrink_ratio: float,
     lr: float,
     lr_weight_decay: float,
-    decay_step_size: int,
     gamma: float,
     model_architecture: str,
     optimizer_type: str,
@@ -48,11 +45,15 @@ def get_flow_model(
     :return: (nsf, AdamW, StepLR)
     :rtype: tuple
     """
+    assert model_architecture in ["nsf"]
+    assert optimizer_type in ["adam", "adamw", "sgd", "sgd_nesterov"]
+    assert scheduler_type in ["plateau"]
     # Build Generative model, NSF
     # Neural spline flow (NSF) with inputs 7 features and 3 + 4 + 1 context
     num_conditions = m + r + 1
-    if model_architecture == "nsf":
-        flow = NSF(
+
+    flow = change_flow_base(
+        NSF(
             features=n,
             context=num_conditions,
             transforms=num_transforms,
@@ -60,47 +61,12 @@ def get_flow_model(
             bins=10,
             activation=DEFAULT_ACTIVATION,
             hidden_features=[subnet_width] * subnet_num_layers,
-        ).to(device)
-    elif model_architecture == "nf":
-        flow = Flow(
-            transforms=[
-                GeneralCouplingTransform(
-                    features=n,
-                    context=num_conditions,
-                    activation=DEFAULT_ACTIVATION,
-                    hidden_features=[subnet_width] * subnet_num_layers,
-                )
-                for _ in range(num_transforms)
-                # Unconditional(RotationTransform, torch.randn(n, n)), # type: ignore
-            ],
-            base=Unconditional(
-                DiagNormal,
-                torch.zeros(n),
-                torch.ones(n),
-                buffer=True,
-            ),  # type: ignore
-        ).to(device)
-    elif model_architecture == "unaf":
-        flow = UNAF(
-            features=n,
-            context=num_conditions,
-            transforms=num_transforms,
-            randperm=random_perm,
-            activation=DEFAULT_ACTIVATION,
-            hidden_features=[subnet_width] * subnet_num_layers,
-        ).to(device)
-    # elif architecture == "cnf":
-    #     flow = CNF(
-    #         features=n,
-    #         context=num_conditions,
-    #         transforms=num_transforms,
-    #         activation=DEFAULT_ACTIVATION,
-    #         hidden_features=[subnet_width] * subnet_num_layers,
-    #     ).to(device)
-    else:
-        raise NotImplementedError("Not support architecture.")
-
-    flow = get_sflow_model(flow, n=n, shrink_ratio=shrink_ratio, device=device)
+        ),
+        n=n,
+        shrink_ratio=shrink_ratio,
+    )
+    flow = flow.to(device)
+    
     optimizer = get_optimizer(
         flow.parameters(), optimizer_type, lr, weight_decay=lr_weight_decay
     )
@@ -117,14 +83,9 @@ def get_flow_model(
         print("Create a new model and start training.")
 
     # Train to maximize the log-likelihood
-    if scheduler_type == "cos":
-        scheduler = CosineAnnealingLR(optimizer, T_max=3, eta_min=lr * 1e-2)
-    elif scheduler_type == "plateau":
-        scheduler = ReduceLROnPlateau(
-            optimizer, mode="min", factor=gamma, patience=2, verbose=True
-        )
-    else:
-        scheduler = StepLR(optimizer, step_size=decay_step_size, gamma=gamma)
+    scheduler = ReduceLROnPlateau(
+        optimizer, mode="min", factor=gamma, patience=2, verbose=True
+    )
 
     return flow, optimizer, scheduler
 
@@ -144,7 +105,7 @@ def get_optimizer(params, optimizer_type, lr, weight_decay):
     raise NotImplementedError
 
 
-def get_sflow_model(flow: NSF | Flow, n: int, shrink_ratio: float, device: str):
+def change_flow_base(flow: NSF | Flow, n: int, shrink_ratio: float):
     """
     shrink normal distribution model
 
@@ -153,7 +114,7 @@ def get_sflow_model(flow: NSF | Flow, n: int, shrink_ratio: float, device: str):
     :return: _description_
     :rtype: _type_
     """
-    sflow = Flow(
+    return Flow(
         transforms=flow.transforms,  # type: ignore
         base=Unconditional(
             DiagNormal,
@@ -162,10 +123,6 @@ def get_sflow_model(flow: NSF | Flow, n: int, shrink_ratio: float, device: str):
             buffer=True,
         ),  # type: ignore
     )
-
-    sflow.to(device)
-
-    return sflow
 
 
 def get_knn(P_tr: np.ndarray, path: str):

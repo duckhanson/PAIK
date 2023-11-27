@@ -83,7 +83,7 @@ DEFAULT_SOLVER_PARAM_M7_NORM = SolverConfig(
     noise_esp_decay=0.97,
     enable_normalize=True,
     subnet_num_layers=3,
-    ckpt_name="1124-1758", # "1123-0919", "1124-1758"
+    ckpt_name="1124-1758",  # "1123-0919", "1124-1758"
 )
 
 
@@ -476,7 +476,7 @@ class Solver:
             print(f"{traj_dir} load successfully.")
 
         return P
-    
+
     def sample_Jtraj_Ppath(self, load_time: str = "", num_steps=20, seed=47):
         """
         sample a path from P_ts
@@ -510,10 +510,10 @@ class Solver:
             # endPoints = np.random.rand(2, cfg.m) # 2 for begin and end
             rand_idxs = np.random.randint(low=0, high=len(self._J_tr), size=2)
             endPoints = self._J_tr[rand_idxs]
-            Jtraj = trajectory.Trajectory(milestones=endPoints) # type: ignore
+            Jtraj = trajectory.Trajectory(milestones=endPoints)  # type: ignore
             J = np.array([Jtraj.eval(i / num_steps) for i in range(num_steps)])
             P = self._robot.forward_kinematics(J[:, 0 : self._robot.n_dofs])
-            
+
             save_numpy(file_path=Jtraj_file_path, arr=J)
             save_numpy(file_path=Ppath_file_path, arr=P)
         return J, P

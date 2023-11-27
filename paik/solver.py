@@ -132,7 +132,7 @@ class Solver:
         self._J_tr, self._P_tr, self._P_ts, self._F = self.__load_all_data()
         self._knn = get_knn(
             P_tr=self._P_tr,
-            path=f"{solver_param.train_dir}/knn-{solver_param.N_train}-{n}-{m}-{r}-normFalse.pickle",
+            path=f"{solver_param.train_dir}/knn-{solver_param.N_train}-{n}-{m}-{r}.pickle",
         )
 
         self._enable_normalize = solver_param.enable_normalize

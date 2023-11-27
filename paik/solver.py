@@ -170,7 +170,7 @@ class Solver:
         self.__update_solver()
 
     # private methods
-    def __posture_feature_extraction(self, J: np.ndarray, P: np.ndarray):
+    def __get_posture_feature(self, J: np.ndarray, P: np.ndarray):
         """
         generate posture feature from J (training data)
 
@@ -212,7 +212,7 @@ class Solver:
 
         return F
 
-    def __data_collection(self, train: bool, return_new: bool = False):
+    def __get_JP_data(self, train: bool, return_new: bool = False):
         if train:
             path_J = f"{self.param.train_dir}/J-{self.param.N_train}-{self._n}-{self._m}-{self._r}.npy"
             path_P = f"{self.param.train_dir}/P-{self.param.N_train}-{self._n}-{self._m}-{self._r}.npy"
@@ -236,9 +236,9 @@ class Solver:
         return J, P
 
     def __load_all_data(self):
-        J_tr, P_tr = self.__data_collection(train=True)
-        _, P_ts = self.__data_collection(train=False)
-        F = self.__posture_feature_extraction(J=J_tr, P=P_tr)
+        J_tr, P_tr = self.__get_JP_data(train=True)
+        _, P_ts = self.__get_JP_data(train=False)
+        F = self.__get_posture_feature(J=J_tr, P=P_tr)
         return J_tr, P_tr, P_ts, F
 
     def __update_solver(self):
@@ -253,12 +253,6 @@ class Solver:
                 buffer=True,
             ),  # type: ignore
         )
-
-    def __random_sample_poses(self, num_poses: int):
-        # Randomly sample poses from test set
-        idx = np.random.choice(self._P_ts.shape[0], num_poses, replace=False)
-        P = self._P_ts[idx]
-        return P
 
     # public methods
     def norm_J(self, J: np.ndarray | torch.Tensor):
@@ -404,7 +398,7 @@ class Solver:
         self, num_poses: int, num_sols: int, return_time: bool = False
     ):
         # Randomly sample poses from test set
-        P = self.__random_sample_poses(num_poses=num_poses)
+        P = self._P_ts[np.random.choice(self._P_ts.shape[0], num_poses, replace=False)]
         time_begin = time()
         # Data Preprocessing
         C = data_preprocess_for_inference(P=P, F=self._F, knn=self._knn, m=self._m)

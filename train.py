@@ -111,7 +111,7 @@ class Trainer(Solver):
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
-            
+
             if avg_pos_errs < pose_err_thres:  # type: ignore
                 torch.save(
                     {

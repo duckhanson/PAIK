@@ -21,17 +21,15 @@ def get_train_loader(
     :return: torch dataloader
     :rtype: dataloader
     """
-    assert len(J) == len(P) and (F is None or len(P) == len(F))
+    assert len(J) == len(P) and F is not None
 
-    if F is None:
-        C = P
-    else:
-        C = np.column_stack((P, F))
-
-    dataset = create_dataset(features=J, targets=C, device=device)
-    loader = dataset.create_loader(shuffle=True, batch_size=batch_size)
-
-    return loader
+    return DataLoader(
+        CustomDataset(features=J, targets=np.column_stack((P, F)), device=device),
+        batch_size=batch_size,
+        shuffle=True,
+        drop_last=True,
+        #   generator=torch.Generator(device='cuda')
+    )
 
 
 def data_preprocess_for_inference(P, F, knn, m: int, k: int = 1, device: str = "cuda"):
@@ -81,33 +79,6 @@ def pick_F(P_ts: np.ndarray, F: np.ndarray):
     return F[idx]
 
 
-def create_dataset(
-    features: np.ndarray,
-    targets: np.ndarray,
-    device: str,
-):
-    """
-    _summary_
-
-    :param verbose: _description_, defaults to False
-    :type verbose: bool, optional
-    :param features: _description_, defaults to None
-    :type features: np.ndarray, optional
-    :param targets: _description_, defaults to None
-    :type targets: np.ndarray, optional
-    :param enable_normalize: _description_, defaults to False
-    :type enable_normalize: bool, optional
-    :param device: _description_, defaults to config.device
-    :type device: str, optional
-    :return: _description_
-    :rtype: _type_
-    """
-
-    return CustomDataset(
-        features, targets, device=device
-    )
-
-
 class CustomDataset(Dataset):
     def __init__(self, features, targets, device):
         if len(features) != len(targets):
@@ -125,12 +96,3 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, id):
         return self.features[id], self.targets[id]
-
-    def create_loader(self, shuffle, batch_size):
-        return DataLoader(
-            self,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            drop_last=True,
-            #   generator=torch.Generator(device='cuda')
-        )

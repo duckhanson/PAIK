@@ -121,25 +121,3 @@ def model_size(model):
 
     pytorch_total_params = sum(p.numel() for p in model.parameters())
     print(f"model parameters: {pytorch_total_params}")
-
-
-def create_robot_dirs(dir_paths) -> None:
-    """
-    _summary_
-    """
-    for dp in dir_paths:
-        if not os.path.exists(path=dp):
-            os.makedirs(name=dp)
-            print(f"Create {dp}")
-
-
-def remove_empty_robot_dirs(dir_paths) -> None:
-    """
-    _summary_
-    """
-    for dp in dir_paths:
-        walk = list(os.walk(dp))
-        for p, _, _ in walk[::-1]:
-            if os.path.exists(p) and len(os.listdir(p)) == 0:
-                os.removedirs(p)
-                print(f"Delete {p}")

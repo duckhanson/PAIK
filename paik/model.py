@@ -3,7 +3,7 @@
 from __future__ import annotations
 from typing import Tuple
 
-from os import path
+import os
 import numpy as np
 import torch
 from torch.nn import LeakyReLU
@@ -17,7 +17,7 @@ from zuko.flows.neural import UNAF
 from zuko.flows.spline import NSF
 
 from jrl.robots import Panda
-from paik.utils import save_pickle, load_pickle, create_robot_dirs
+from paik.utils import save_pickle, load_pickle
 
 DEFAULT_ACTIVATION = LeakyReLU
 
@@ -104,7 +104,7 @@ def get_flow_model(
     optimizer = get_optimizer(
         flow.parameters(), optimizer_type, lr, weight_decay=lr_weight_decay
     )
-    if enable_load_model and path.exists(path=path_solver):
+    if enable_load_model and os.path.exists(path=path_solver):
         try:
             state = torch.load(path_solver)
             flow.load_state_dict(state_dict=state["solver"])
@@ -198,7 +198,11 @@ def get_knn(P_tr: np.ndarray, path: str):
 
 
 def get_robot(robot_name: str, robot_dirs: Tuple[str, str, str]):
-    create_robot_dirs(robot_dirs)
+    # def create_robot_dirs(dir_paths) -> None:
+    for dp in robot_dirs:
+        if not os.path.exists(path=dp):
+            os.makedirs(name=dp)
+            print(f"Create {dp}")
 
     if robot_name == "panda":
         return Panda()

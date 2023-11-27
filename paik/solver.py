@@ -451,15 +451,8 @@ class Solver:
 
         if load_time == "" or not os.path.exists(path=P_path_file_path):
             # endPoints = np.random.rand(2, cfg.m) # 2 for begin and end
-            rand_idxs = np.random.randint(low=0, high=len(self._P_ts), size=2)
-            endPoints = self._P_ts[rand_idxs]
-            traj = trajectory.Trajectory(milestones=endPoints)  # type: ignore
-            P = np.empty((num_steps, self._m))
-            for i in range(num_steps):
-                iStep = i / num_steps
-                point = traj.eval(iStep)
-                P[i] = point
-
+            traj = trajectory.Trajectory(milestones=self._P_ts[np.random.randint(low=0, high=len(self._P_ts), size=2)])  # type: ignore
+            P = np.array([traj.eval(i / num_steps) for i in range(num_steps)])
             save_numpy(file_path=P_path_file_path, arr=P)
         else:
             P = load_numpy(file_path=P_path_file_path)

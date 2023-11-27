@@ -349,11 +349,13 @@ class Solver:
     def solve(
         self, P: np.ndarray, F: np.ndarray, num_sols: int, return_numpy: bool = False
     ):
-        C = torch.from_numpy(
-            np.column_stack((P, F, np.zeros((len(F), 1)))).astype(np.float32)
-        ).to(self._device)
         # Begin inference
-        J_hat = self.sample(C, num_sols)
+        J_hat = self.sample(
+            torch.from_numpy(
+                np.column_stack((P, F, np.zeros((len(F), 1)))).astype(np.float32)
+            ),
+            num_sols,
+        )
         return J_hat.numpy() if return_numpy else J_hat
 
     def random_sample_JPF(self, num_samples: int):

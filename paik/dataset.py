@@ -51,24 +51,24 @@ def data_preprocess_for_inference(P, F, knn, m: int, k: int = 1, device: str = "
 
 def nearest_neighbor_F(
     knn: NearestNeighbors,
-    P_ts: np.ndarray[float, float],
+    P: np.ndarray[float, float],
     F: np.ndarray[float, float],
     n_neighbors: int = 1,
 ):
     if F is None:
         raise ValueError("F cannot be None")
 
-    P_ts = np.atleast_2d(P_ts)  # type: ignore
-    assert len(P_ts) < len(F)
-    return F[knn.kneighbors(P_ts, n_neighbors=n_neighbors, return_distance=False).flatten()]  # type: ignore
+    P = np.atleast_2d(P)  # type: ignore
+    assert len(P) < len(F)
+    return F[knn.kneighbors(P, n_neighbors=n_neighbors, return_distance=False).flatten()]  # type: ignore
 
 
-def rand_F(P_ts: np.ndarray, F: np.ndarray):
-    return np.random.rand(len(np.atleast_2d(P_ts)), F.shape[-1])
+def rand_F(P: np.ndarray, F: np.ndarray):
+    return np.random.rand(len(np.atleast_2d(P)), F.shape[-1])
 
 
-def pick_F(P_ts: np.ndarray, F: np.ndarray):
-    return F[np.random.randint(low=0, high=len(F), size=len(np.atleast_2d(P_ts)))]
+def pick_F(P: np.ndarray, F: np.ndarray):
+    return F[np.random.randint(low=0, high=len(F), size=len(np.atleast_2d(P)))]
 
 
 class CustomDataset(Dataset):

@@ -28,6 +28,23 @@ class Visualizer(PathFollower):
             hide_label=hide_label,
         )
 
+    def solve_set_k(
+        self,
+        single_pose: np.ndarray,
+        num_sols: int,
+        k: int = 1,
+    ):
+        P = (
+            single_pose[:, : self._m]
+            if len(single_pose.shape) == 2
+            else np.atleast_2d(single_pose[: self._m])
+        )
+        F = self._F[self.nearest_neighnbor_P.kneighbors(np.atleast_2d(P), n_neighbors=k, return_distance=False).flatten()]  # type: ignore
+        P = np.tile(P, (len(F), 1)) if len(P) == 1 and k > 1 else P
+        return np.reshape(
+            self.solve(P, F, num_sols, return_numpy=True), (num_sols * k, -1)
+        )
+
     def _run_demo(
         self,
         n_worlds: int,

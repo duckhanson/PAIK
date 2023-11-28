@@ -84,14 +84,14 @@ class Solver:
         self,
         solver_param: SolverConfig = DEFAULT_SOLVER_PARAM_M7,
     ) -> None:
-        self._solver_param = solver_param
+        self.__solver_param = solver_param
         self._robot = get_robot(
             solver_param.robot_name, robot_dirs=solver_param.dir_paths
         )
         self._device = solver_param.device
         # Neural spline flow (NSF) with 3 sample features and 5 context features
         n, m, r = solver_param.nmr
-        flow, optimizer, scheduler = get_flow_model(
+        self._solver, self._optimizer, self._scheduler = get_flow_model(
             enable_load_model=solver_param.enable_load_model,
             num_transforms=solver_param.num_transforms,
             subnet_width=solver_param.subnet_width,
@@ -108,9 +108,6 @@ class Solver:
             m=m,
             r=r,
         )  # type: ignore
-        self._solver = flow
-        self._optimizer = optimizer
-        self._scheduler = scheduler
         self._shrink_ratio = solver_param.shrink_ratio
         self._init_latent = torch.zeros((1, self.robot.n_dofs)).to(self._device)
 
@@ -144,7 +141,7 @@ class Solver:
 
     @property
     def param(self):
-        return self._solver_param
+        return self.__solver_param
 
     @shrink_ratio.setter
     def shrink_ratio(self, value: float):
@@ -254,23 +251,6 @@ class Solver:
         if isinstance(C, torch.Tensor):
             C = C.detach().cpu().numpy()
         return torch.from_numpy((C * self.__std_C + self.__mean_C).astype(np.float32))
-
-    def solve_set_k(
-        self,
-        single_pose: np.ndarray,
-        num_sols: int,
-        k: int = 1,
-    ):
-        P = (
-            single_pose[:, : self._m]
-            if len(single_pose.shape) == 2
-            else np.atleast_2d(single_pose[: self._m])
-        )
-        F = self._F[self.nearest_neighnbor_P.kneighbors(np.atleast_2d(P), n_neighbors=k, return_distance=False).flatten()]  # type: ignore
-        P = np.tile(P, (len(F), 1)) if len(P) == 1 and k > 1 else P
-        return np.reshape(
-            self.solve(P, F, num_sols, return_numpy=True), (num_sols * k, -1)
-        )
 
     def solve(
         self, P: np.ndarray, F: np.ndarray, num_sols: int, return_numpy: bool = False

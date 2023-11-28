@@ -183,7 +183,6 @@ class Solver:
 
     def denorm_J(self, J: np.ndarray | torch.Tensor):
         assert self._enable_normalize
-        device = J.device if isinstance(J, torch.Tensor) else "cpu"
         if isinstance(J, torch.Tensor):
             J = J.detach().cpu().numpy()
         return torch.from_numpy((J * self.__std_J + self.__mean_J).astype(np.float32))

@@ -137,7 +137,7 @@ class Solver:
             mean_std = lambda x: (x.mean(axis=0), x.std(axis=0))
             self.__mean_J, self.__std_J = mean_std(self._J_tr)
             self.__mean_P, self.__std_P = mean_std(self._P_tr)
-            self.__mean_F, self.__std_F = mean_std(self._F)  
+            self.__mean_F, self.__std_F = mean_std(self._F)
 
     @property
     def latent(self):
@@ -179,18 +179,20 @@ class Solver:
             P = load_numpy(file_path=path_P)
 
             if len(J) != N or len(P) != N:
-                J, P = self._robot.sample_joint_angles_and_poses(n=N, return_torch=False)
+                J, P = self._robot.sample_joint_angles_and_poses(
+                    n=N, return_torch=False
+                )
                 save_numpy(file_path=path_J, arr=J)
                 save_numpy(file_path=path_P, arr=P[:, : self._m])
 
             return J, P
-        
+
         def get_posture_feature(J: np.ndarray, P: np.ndarray):
             assert self._r > 0
             file_path = f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}.npy"
-            F = load_numpy(file_path=file_path) 
+            F = load_numpy(file_path=file_path)
 
-            GENERATE_NEW = (F.shape != (len(J), self._r))
+            GENERATE_NEW = F.shape != (len(J), self._r)
             if GENERATE_NEW:
                 # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
                 hnne = HNNE(dim=self._r)
@@ -202,15 +204,22 @@ class Solver:
                 if len(F) != len(J):
                     knn = NearestNeighbors(n_neighbors=1)
                     knn.fit(S[:num_data])
-                    F = np.row_stack((F, F[knn.kneighbors(
-                        S[num_data:], n_neighbors=1, return_distance=False
-                    ).flatten()])) # type: ignore
+                    F = np.row_stack(
+                        (
+                            F,
+                            F[
+                                knn.kneighbors(
+                                    S[num_data:], n_neighbors=1, return_distance=False
+                                ).flatten()
+                            ],
+                        )
+                    )  # type: ignore
 
                 save_numpy(file_path=file_path, arr=F)
             print(f"F load successfully from {file_path}")
 
             return F
-        
+
         J_train, P_train = get_JP_data(train=True)
         _, P_test = get_JP_data(train=False)
         F = get_posture_feature(J=J_train, P=P_train)
@@ -233,9 +242,7 @@ class Solver:
     def norm_J(self, J: np.ndarray | torch.Tensor):
         if isinstance(J, torch.Tensor):
             J = J.detach().cpu().numpy()
-        return torch.from_numpy(
-            ((J - self.__mean_J) / self.__std_J).astype(np.float32)
-        ).to(self._device)
+        return torch.from_numpy(((J - self.__mean_J) / self.__std_J).astype(np.float32))
 
     def norm_C(self, C: np.ndarray | torch.Tensor):
         assert self._enable_normalize
@@ -245,18 +252,14 @@ class Solver:
         F = (C[:, self._m : self._m + self._r] - self.__mean_F) / self.__std_F
         noise = C[:, -1]
 
-        return torch.from_numpy(np.column_stack((P, F, noise)).astype(np.float32)).to(
-            self._device
-        )
+        return torch.from_numpy(np.column_stack((P, F, noise)).astype(np.float32))
 
     def denorm_J(self, J: np.ndarray | torch.Tensor):
         assert self._enable_normalize
         device = J.device if isinstance(J, torch.Tensor) else "cpu"
         if isinstance(J, torch.Tensor):
             J = J.detach().cpu().numpy()
-        return torch.from_numpy(
-            (J * self.__std_J + self.__mean_J).astype(np.float32)
-        ).to(device)
+        return torch.from_numpy((J * self.__std_J + self.__mean_J).astype(np.float32))
 
     def denorm_C(self, C: np.ndarray | torch.Tensor):
         assert self._enable_normalize
@@ -266,14 +269,13 @@ class Solver:
         F = C[:, self._m : self._m + self._r] * self.__std_F + self.__mean_F
         noise = C[:, -1]
 
-        return torch.from_numpy(np.column_stack((P, F, noise)).astype(np.float32)).to(
-            self._device
-        )
+        return torch.from_numpy(np.column_stack((P, F, noise)).astype(np.float32))
 
     def sample(self, C, K):
         if self._enable_normalize:
             C = self.norm_C(C)
 
+        C = C.to(self._device)
         with torch.inference_mode():
             J = self._solver(C).sample((K,)).detach().cpu()
 

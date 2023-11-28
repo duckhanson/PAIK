@@ -24,7 +24,7 @@ def get_train_loader(
     assert len(J) == len(P) and F is not None
 
     return DataLoader(
-        CustomDataset(features=J, targets=np.column_stack((P, F)), device=device),
+        CustomDataset(features=J, targets=np.column_stack((P, F))),
         batch_size=batch_size,
         shuffle=True,
         drop_last=True,
@@ -32,7 +32,7 @@ def get_train_loader(
     )
 
 
-def data_preprocess_for_inference(P, F, knn, m: int, k: int = 1, device: str = "cuda"):
+def data_preprocess_for_inference(P, F, knn, m: int, k: int = 1):
     assert F is not None
     P = np.atleast_2d(P[:, :m])
     F = np.atleast_2d(F)
@@ -72,16 +72,15 @@ def pick_F(P: np.ndarray, F: np.ndarray):
 
 
 class CustomDataset(Dataset):
-    def __init__(self, features, targets, device):
+    def __init__(self, features, targets):
         if len(features) != len(targets):
             raise ValueError("features and targets should have the same shape[0].")
 
         features = np.array(features)
         targets = np.array(targets)
         self.df = pd.DataFrame(data=np.column_stack((features, targets)))
-        self.device = device
-        self.features = torch.tensor(features, device=device, dtype=torch.float32)
-        self.targets = torch.tensor(targets, device=device, dtype=torch.float32)
+        self.features = torch.tensor(features, dtype=torch.float32)
+        self.targets = torch.tensor(targets, dtype=torch.float32)
 
     def __len__(self):
         return len(self.features)

@@ -141,6 +141,8 @@ class Trainer(Solver):
 
         if self.param.enable_normalize:
             x, y = self.norm_J(x), self.norm_C(y)
+        x = x.to(self._device)
+        y = y.to(self._device)
         loss = -self._solver(y).log_prob(x)  # -log p(x | y)
         loss = loss.mean()
 
@@ -154,11 +156,11 @@ class Trainer(Solver):
 def add_noise(batch, esp: float, std_scale: float):
     J, C = batch
     if esp < 1e-9:
-        std = torch.zeros((C.shape[0], 1)).to(C.device)
+        std = torch.zeros((C.shape[0], 1))
         C = torch.column_stack((C, std))
     else:
         # softflow implementation
-        s = esp * torch.rand((C.shape[0], 1)).to(C.device)
+        s = esp * torch.rand((C.shape[0], 1))
         C = torch.column_stack((C, std_scale * s))
         noise = torch.normal(
             mean=torch.zeros_like(input=J),

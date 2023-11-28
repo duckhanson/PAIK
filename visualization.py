@@ -9,14 +9,13 @@ from klampt import WorldModel
 import numpy as np
 from paik.settings import SolverConfig
 from paik.solver import (
-    Solver,
-    DEFAULT_SOLVER_PARAM_M3,
     DEFAULT_SOLVER_PARAM_M7,
     DEFAULT_SOLVER_PARAM_M7_NORM,
 )
+from path_follower import PathFollower
 
 
-class Visualizer(Solver):
+class Visualizer(PathFollower):
     def __init__(self, solver_param: SolverConfig) -> None:
         super().__init__(solver_param)
 
@@ -144,34 +143,26 @@ class Visualizer(Solver):
         enable_box: bool = False,
         seed=47,
     ):
-        P_path, J_traj, ref_F = self.path_following(
-            load_time=load_time,
-            num_traj=num_traj,
-            shrink_ratio=shrink_ratio,
-            enable_plot=True,
-            seed=seed,
-        )  # type: ignore
-        P_path = np.tile(P_path, (num_traj, 1))
-        Qs = np.empty((num_traj, J_traj.shape[1], 17))
-        for i, J in enumerate(J_traj):
-            qs = np.asarray(self.robot._x_to_qs(J))  # type: ignore
-            Qs[i] = qs
-        P_path = P_path.reshape(-1, P_path.shape[-1])
+        J, P = self.sample_Jtraj_Ppath(load_time=load_time)
+        J_hat = self.solve_path(J, P, num_traj=num_traj, return_numpy=True)
+        P = np.tile(P, (num_traj, 1))
+        Qs = np.array([self.robot._x_to_qs(qs) for qs in J_hat])  # type: ignore
+        P = P.reshape(-1, P.shape[-1])
         Qs = Qs.reshape(-1, Qs.shape[-1])
 
         if enable_box:
-            self._visualize_box(Qs, P_path)
+            self._visualize_box(Qs, P)
         else:
-            self._oscillate_target(Qs, P_path)
+            self._oscillate_target(Qs, P)
 
-    def _oscillate_target(self, Qs, P_path):
+    def _oscillate_target(self, Qs, P):
         """Oscillating target pose"""
 
         time_p_loop = 0.01
         title = "Solutions for oscillating target pose"
 
         def target_pose_fn(counter: int):
-            return P_path[max(counter, len(P_path) - 1)]
+            return P[max(counter, len(P) - 1)]
 
         def setup_fn(worlds):
             vis.add("coordinates", coordinates.manager())
@@ -210,7 +201,7 @@ class Visualizer(Solver):
             else:
                 _demo_state.counter -= 1
 
-            if _demo_state.counter == len(P_path) - 1:
+            if _demo_state.counter == len(P) - 1:
                 _demo_state.direction = False
             elif _demo_state.counter == 0:
                 _demo_state.direction = True
@@ -251,9 +242,9 @@ class Visualizer(Solver):
             title=title,
         )
 
-    def _visualize_box(self, Qs, P_path):
+    def _visualize_box(self, Qs, P):
         def target_pose_fn(counter: int):
-            return P_path[counter]
+            return P[counter]
 
         """Shows how to pop up a visualization window with a world"""
 
@@ -283,7 +274,7 @@ class Visualizer(Solver):
                 else:
                     self.counter -= 1
 
-                if self.counter == len(P_path) - 1:
+                if self.counter == len(P) - 1:
                     self.direction = False
                 elif self.counter == 0:
                     self.direction = True
@@ -328,7 +319,7 @@ class Visualizer(Solver):
 
 
 def main():
-    visualizer = Visualizer(solver_param=DEFAULT_SOLVER_PARAM_M7)
+    visualizer = Visualizer(solver_param=DEFAULT_SOLVER_PARAM_M7_NORM)
     # visualizer.sample_latent_space(num_samples=5)
     # visualizer.sample_posture_space(k=5)
     visualizer.visualize_path_following(

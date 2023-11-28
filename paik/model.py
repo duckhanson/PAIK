@@ -30,7 +30,6 @@ def get_flow_model(
     gamma: float,
     model_architecture: str,
     optimizer_type: str,
-    scheduler_type: str,
     device: str,
     path_solver: str,
     n: int,
@@ -47,7 +46,6 @@ def get_flow_model(
     """
     assert model_architecture in ["nsf"]
     assert optimizer_type in ["adam", "adamw", "sgd", "sgd_nesterov"]
-    assert scheduler_type in ["plateau"]
     # Build Generative model, NSF
     # Neural spline flow (NSF) with inputs 7 features and 3 + 4 + 1 context
     num_conditions = m + r + 1

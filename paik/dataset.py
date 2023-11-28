@@ -3,33 +3,9 @@ import numpy as np
 import pandas as pd
 import torch
 from sklearn.neighbors import NearestNeighbors
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 
 
-def get_train_loader(
-    J: np.ndarray, P: np.ndarray, F: np.ndarray, batch_size: int, device: str
-):
-    """
-    a training loader
-
-    :param J: joint configurations
-    :type J: np.ndarray
-    :param P: end-effector positions
-    :type P: np.ndarray
-    :param F: posture features
-    :type F: np.ndarray
-    :return: torch dataloader
-    :rtype: dataloader
-    """
-    assert len(J) == len(P) and F is not None
-
-    return DataLoader(
-        CustomDataset(features=J, targets=np.column_stack((P, F))),
-        batch_size=batch_size,
-        shuffle=True,
-        drop_last=True,
-        #   generator=torch.Generator(device='cuda')
-    )
 
 
 def data_preprocess_for_inference(P, F, knn, m: int, k: int = 1):

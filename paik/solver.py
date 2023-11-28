@@ -78,7 +78,7 @@ DEFAULT_SOLVER_PARAM_M7_NORM = SolverConfig(
     noise_esp_decay=0.97,
     enable_normalize=True,
     subnet_num_layers=3,
-    ckpt_name="1124-1758",  # "1123-0919", "1124-1758"
+    ckpt_name="1128-0459",  # "1128-0459", "1128-0857"
 )
 
 
@@ -396,47 +396,6 @@ class Solver:
             return avg_l2_errs, avg_ang_errs, avg_inference_time
         else:
             return avg_l2_errs, avg_ang_errs
-
-    def sample_Jtraj_Ppath(self, load_time: str = "", num_steps=20, seed=47):
-        """
-        sample a path from P_ts
-
-        Parameters
-        ----------
-        load_time : str, optional
-            file name of load P, by default ""
-        num_steps : int, optional
-            length of the generated path, by default 20
-
-        Returns
-        -------
-        np.ndarray
-            array_like(num_steps, m)
-        """
-        np.random.seed(seed)
-
-        if load_time == "":
-            traj_dir = self.param.traj_dir + datetime.now().strftime("%m%d%H%M%S") + "/"
-        else:
-            traj_dir = self.param.traj_dir + load_time + "/"
-
-        Ppath_file_path = traj_dir + "Ppath.npy"
-        Jtraj_file_path = traj_dir + "Jtraj.npy"
-
-        P = load_numpy(file_path=Ppath_file_path)
-        J = load_numpy(file_path=Jtraj_file_path)
-
-        if len(P) == 0 or len(J) == 0:
-            # endPoints = np.random.rand(2, cfg.m) # 2 for begin and end
-            rand_idxs = np.random.randint(low=0, high=len(self._J_tr), size=2)
-            endPoints = self._J_tr[rand_idxs]
-            Jtraj = trajectory.Trajectory(milestones=endPoints)  # type: ignore
-            J = np.array([Jtraj.eval(i / num_steps) for i in range(num_steps)])
-            P = self._robot.forward_kinematics(J[:, 0 : self._robot.n_dofs])
-
-            save_numpy(file_path=Jtraj_file_path, arr=J)
-            save_numpy(file_path=Ppath_file_path, arr=P)
-        return J, P
 
     # def path_following(
     #     self,

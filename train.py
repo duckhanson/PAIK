@@ -8,7 +8,8 @@ from pprint import pprint
 import wandb
 from paik.settings import SolverConfig
 from paik.utils import init_seeds
-from paik.dataset import get_train_loader
+from torch.utils.data import DataLoader
+from paik.dataset import CustomDataset
 
 from paik.solver import Solver, DEFAULT_SOLVER_PARAM_M7_NORM
 
@@ -23,9 +24,6 @@ class Trainer(Solver):
         self.__noise_esp = self.param.noise_esp
         self.__noise_esp_decay = self.param.noise_esp_decay  # 0.8 - 0.9
         self.__std_scale = 1 / self.__noise_esp
-
-    def __update_noise_esp(self, epoch: int):
-        self.__noise_esp = self.param.noise_esp * (self.__noise_esp_decay**epoch)
 
     def mini_train(
         self,
@@ -42,32 +40,32 @@ class Trainer(Solver):
         early_stopping = EarlyStopping(patience=patience, verbose=True)
         # data generation
         assert self._device == "cuda", "device should be cuda"
+        
+        update_noise_esp = lambda num_epochs: self.param.noise_esp * (self.__noise_esp_decay**num_epochs)
 
-        train_loader = get_train_loader(
-            J=self._J_tr,
-            P=self._P_tr,
-            F=self._F,  # type: ignore
-            device=self._device,
+        train_loader = DataLoader(
+            CustomDataset(features=self._J_tr, targets=np.column_stack((self._P_tr, self._F))),
             batch_size=batch_size,
+            shuffle=True,
+            drop_last=True,
+            #   generator=torch.Generator(device='cuda')
         )
 
         self._solver.train()
 
         for ep in range(num_epochs):
-            t = tqdm(train_loader)
+            tqdm_train_loader = tqdm(train_loader)
             batch_loss = np.zeros((len(train_loader)))
-            step = 0
-            for batch in t:
+            for i, batch in enumerate(tqdm_train_loader):
                 loss = self.train_step(batch=batch)
-                batch_loss[step] = loss
+                batch_loss[i] = loss
                 bar = {"loss": f"{np.round(loss, 3)}"}
-                t.set_postfix(bar, refresh=True)
+                tqdm_train_loader.set_postfix(bar, refresh=True)
                 if np.isnan(loss):
                     print(f"Early stopping ({loss} is nan)")
                     break
-                step += 1
 
-            self.__update_noise_esp(ep)
+            self.__noise_esp = update_noise_esp(ep)
 
             self.shrink_ratio = 0.25
             print(
@@ -91,16 +89,10 @@ class Trainer(Solver):
             else:
                 pprint(log_info)
 
-            if np.isnan(avg_pos_errs) or avg_pos_errs > 1e-1:
-                print(f"Early stopping ({avg_pos_errs} > 1e-1)")
+            if np.isnan(avg_pos_errs) or avg_pos_errs > 1e-1 or ep > 14 and avg_pos_errs > 1.5e-2:
+                print(f"Thresholds Touched ({avg_pos_errs} > 1e-1 or 1.5e-2 and ep > 14)")
                 break
 
-            if ep > 14 and avg_pos_errs > 1.5e-2:
-                print(f"Early stopping ({avg_pos_errs} > 1e-2)")
-                break
-
-            # early_stopping needs the validation loss to check if it has decresed,
-            # and if it has, it will make a checkpoint of the current model
             early_stopping(avg_pos_errs, self._solver)
 
             if early_stopping.early_stop:
@@ -116,7 +108,6 @@ class Trainer(Solver):
                     f"{self.param.weight_dir}/{begin_time}.pth",
                 )
 
-        del train_loader
         print("Finished Training")
 
     def train_step(self, batch):

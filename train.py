@@ -40,11 +40,15 @@ class Trainer(Solver):
         early_stopping = EarlyStopping(patience=patience, verbose=True)
         # data generation
         assert self._device == "cuda", "device should be cuda"
-        
-        update_noise_esp = lambda num_epochs: self.param.noise_esp * (self.__noise_esp_decay**num_epochs)
+
+        update_noise_esp = lambda num_epochs: self.param.noise_esp * (
+            self.__noise_esp_decay**num_epochs
+        )
 
         train_loader = DataLoader(
-            CustomDataset(features=self._J_tr, targets=np.column_stack((self._P_tr, self._F))),
+            CustomDataset(
+                features=self._J_tr, targets=np.column_stack((self._P_tr, self._F))
+            ),
             batch_size=batch_size,
             shuffle=True,
             drop_last=True,
@@ -89,8 +93,15 @@ class Trainer(Solver):
             else:
                 pprint(log_info)
 
-            if np.isnan(avg_pos_errs) or avg_pos_errs > 1e-1 or ep > 14 and avg_pos_errs > 1.5e-2:
-                print(f"Thresholds Touched ({avg_pos_errs} > 1e-1 or 1.5e-2 and ep > 14)")
+            if (
+                np.isnan(avg_pos_errs)
+                or avg_pos_errs > 1e-1
+                or ep > 14
+                and avg_pos_errs > 1.5e-2
+            ):
+                print(
+                    f"Thresholds Touched ({avg_pos_errs} > 1e-1 or 1.5e-2 and ep > 14)"
+                )
                 break
 
             early_stopping(avg_pos_errs, self._solver)

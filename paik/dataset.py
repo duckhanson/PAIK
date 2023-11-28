@@ -6,8 +6,6 @@ from sklearn.neighbors import NearestNeighbors
 from torch.utils.data import Dataset
 
 
-
-
 def data_preprocess_for_inference(P, F, knn, m: int, k: int = 1):
     assert F is not None
     P = np.atleast_2d(P[:, :m])

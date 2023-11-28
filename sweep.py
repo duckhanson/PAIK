@@ -12,10 +12,8 @@ EXPERMENT_COUNT = 20
 NUM_EPOCHS = 25
 ENABLE_LODE_MODEL = False
 
-
-get_ranage = lambda left_bound, right_bound, scale: [
-    i * scale for i in range(left_bound, right_bound)
-]
+def get_range(left_bound, right_bound, scale):
+    return [i * scale for i in range(left_bound, right_bound)]
 
 sweep_config = {
     "name": "sweep",
@@ -24,9 +22,9 @@ sweep_config = {
     "parameters": {
         "lr": {"values": get_range(30, 68, 1e-5)},
         "lr_weight_decay": {"values": get_range(10, 30, 1e-3)},
-        "gamma": {"values": get_range(84, 87, 1e-2)},
-        "noise_esp": {"values": get_range(17, 33, 1e-4)},
-        "noise_esp_decay": {"values": get_range(94, 99, 1e-2)},
+        "gamma": {"values": get_range(84, 87, 1e-3)},
+        "noise_esp": {"values": get_range(17, 34, 1e-4)},
+        "noise_esp_decay": {"values": get_range(94, 100, 1e-2)},
         "shrink_ratio": {"values": get_range(51, 77, 1e-2)},
     },
 }

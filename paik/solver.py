@@ -134,12 +134,10 @@ class Solver:
 
         self._enable_normalize = solver_param.enable_normalize
         if self._enable_normalize:
-            self.__mean_J = self._J_tr.mean(axis=0)
-            self.__std_J = self._J_tr.std(axis=0)
-            self.__mean_P = self._P_tr.mean(axis=0)
-            self.__std_P = self._P_tr.std(axis=0)
-            self.__mean_F = self._F.mean(axis=0)
-            self.__std_F = self._F.std(axis=0)
+            mean_std = lambda x: (x.mean(axis=0), x.std(axis=0))
+            self.__mean_J, self.__std_J = mean_std(self._J_tr)
+            self.__mean_P, self.__std_P = mean_std(self._P_tr)
+            self.__mean_F, self.__std_F = mean_std(self._F)  
 
     @property
     def latent(self):
@@ -170,76 +168,53 @@ class Solver:
         self.__update_solver()
 
     # private methods
-    def __get_posture_feature(self, J: np.ndarray, P: np.ndarray):
-        """
-        generate posture feature from J (training data)
-
-        Parameters
-        ----------
-        J : np.ndarray
-            joint configurations
-        P : np.ndarray
-            poses of the robot
-
-        Returns
-        -------
-        F : np.ndarray
-            posture features
-        """
-        assert self._r > 0
-        path = f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}.npy"
-        F = load_numpy(file_path=path) if os.path.exists(path=path) else None
-
-        if F is None or F.shape[-1] != self._r or len(F) != len(J):
-            # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
-            hnne = HNNE(dim=self._r)
-            # maximum number of data for hnne (11M), we use max_num_data_hnne to test
-            num_data = min(self.param.max_num_data_hnne, len(J))
-            S = np.column_stack((J, P))
-            F = hnne.fit_transform(X=S[:num_data], dim=self._r, verbose=True)
-            # query nearest neighbors for the rest of J
-            if len(F) != len(J):
-                knn = NearestNeighbors(n_neighbors=1)
-                knn.fit(S[:num_data])
-                neigh_idx = knn.kneighbors(
-                    S[num_data:], n_neighbors=1, return_distance=False
-                )
-                neigh_idx = neigh_idx.flatten()  # type: ignore
-                F = np.row_stack((F, F[neigh_idx]))
-
-            save_numpy(file_path=path, arr=F)
-        print(f"F load successfully from {path}")
-
-        return F
-
-    def __get_JP_data(self, train: bool, return_new: bool = False):
-        if train:
-            path_J = f"{self.param.train_dir}/J-{self.param.N_train}-{self._n}-{self._m}-{self._r}.npy"
-            path_P = f"{self.param.train_dir}/P-{self.param.N_train}-{self._n}-{self._m}-{self._r}.npy"
-        else:
-            path_J = f"{self.param.val_dir}/J-{self.param.N_test}-{self._n}-{self._m}-{self._r}.npy"
-            path_P = f"{self.param.val_dir}/P-{self.param.N_test}-{self._n}-{self._m}-{self._r}.npy"
-
-        N = self.param.N_train if train else self.param.N_test
-
-        if return_new:
-            return self._robot.sample_joint_angles_and_poses(n=N, return_torch=False)
-
-        J = load_numpy(file_path=path_J)
-        P = load_numpy(file_path=path_P)
-
-        if len(J) != N or len(P) != N:
-            J, P = self._robot.sample_joint_angles_and_poses(n=N, return_torch=False)
-            save_numpy(file_path=path_J, arr=J)
-            save_numpy(file_path=path_P, arr=P[:, : self._m])
-
-        return J, P
-
     def __load_all_data(self):
-        J_tr, P_tr = self.__get_JP_data(train=True)
-        _, P_ts = self.__get_JP_data(train=False)
-        F = self.__get_posture_feature(J=J_tr, P=P_tr)
-        return J_tr, P_tr, P_ts, F
+        def get_JP_data(train: bool):
+            N = self.param.N_train if train else self.param.N_test
+            _dir = self.param.train_dir if train else self.param.val_dir
+            path_J = f"{_dir}/J-{N}-{self._n}-{self._m}-{self._r}.npy"
+            path_P = f"{_dir}/P-{N}-{self._n}-{self._m}-{self._r}.npy"
+
+            J = load_numpy(file_path=path_J)
+            P = load_numpy(file_path=path_P)
+
+            if len(J) != N or len(P) != N:
+                J, P = self._robot.sample_joint_angles_and_poses(n=N, return_torch=False)
+                save_numpy(file_path=path_J, arr=J)
+                save_numpy(file_path=path_P, arr=P[:, : self._m])
+
+            return J, P
+        
+        def get_posture_feature(J: np.ndarray, P: np.ndarray):
+            assert self._r > 0
+            file_path = f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}.npy"
+            F = load_numpy(file_path=file_path) 
+
+            GENERATE_NEW = (F.shape != (len(J), self._r))
+            if GENERATE_NEW:
+                # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
+                hnne = HNNE(dim=self._r)
+                # maximum number of data for hnne (11M), we use max_num_data_hnne to test
+                num_data = min(self.param.max_num_data_hnne, len(J))
+                S = np.column_stack((J, P))
+                F = hnne.fit_transform(X=S[:num_data], dim=self._r, verbose=True)
+                # query nearest neighbors for the rest of J
+                if len(F) != len(J):
+                    knn = NearestNeighbors(n_neighbors=1)
+                    knn.fit(S[:num_data])
+                    F = np.row_stack((F, F[knn.kneighbors(
+                        S[num_data:], n_neighbors=1, return_distance=False
+                    ).flatten()])) # type: ignore
+
+                save_numpy(file_path=file_path, arr=F)
+            print(f"F load successfully from {file_path}")
+
+            return F
+        
+        J_train, P_train = get_JP_data(train=True)
+        _, P_test = get_JP_data(train=False)
+        F = get_posture_feature(J=J_train, P=P_train)
+        return J_train, P_train, P_test, F
 
     def __update_solver(self):
         self._solver = Flow(
@@ -576,93 +551,6 @@ class Solver:
 
         if enable_plot:
             return P, Qs, Ft
-
-        self.shrink_ratio = old_shrink_ratio
-
-    def path_following_iterative_F(
-        self,
-        load_time: str = "",
-        num_traj: int = 3,
-        num_steps=20,
-        shrink_ratio: float = 0.1,
-        enable_evaluation: bool = False,
-        enable_plot: bool = False,
-        seed: int = 47,
-    ):
-        """
-        evaluate the performance of path following
-
-        Parameters
-        ----------
-        load_time : str, optional
-            file name of load P_path, by default ""
-        num_traj : int, optional
-            number of demo trajectories, by default 3
-        num_steps : int, optional
-            length of the generated path, by default 20
-        shrink_ratio : float, optional
-            the shrink ratio of the based distribution of IK solver, by default 0.1
-        enable_evaluation : bool, optional
-            use evaluation or not, by default False
-        enable_plot : bool, optional
-            use plot or not, by default False
-        """
-
-        old_shrink_ratio = self._shrink_ratio
-        self.shrink_ratio = shrink_ratio
-
-        # random sample P_path
-        P = self.sample_P_path(load_time=load_time, num_steps=num_steps, seed=seed)
-        P = (
-            P if self._m == 7 else np.column_stack((P, np.ones((len(P), 4))))
-        )  # type: ignore
-
-        time_begin = time()
-
-        # JPknn = NearestNeighbors(n_neighbors=1).fit(np.column_stack((self._J_tr, self._P_tr)))
-        # def get_F(J, P):
-        #     J, P = np.atleast_2d(J), np.atleast_2d(P)
-        #     _, idx = JPknn.kneighbors(np.column_stack((J, P)))
-        #     return self._F[idx.flatten()]
-
-        JPknn = NearestNeighbors(n_neighbors=1).fit(self._J_tr)
-
-        def get_F(J, P):
-            J, P = np.atleast_2d(J), np.atleast_2d(P)
-            _, idx = JPknn.kneighbors(J)
-            return self._F[idx.flatten()]
-
-        # get nearest neighbor of p from self.knn
-        _, idx = self._knn.kneighbors(np.atleast_2d(P[0]), n_neighbors=30)
-        idx = idx.flatten()
-        # Fbegin shape = (num_traj, r)
-        Fb = self._F[idx[np.random.randint(0, len(idx), size=num_traj)]]
-
-        Qs = np.empty((num_traj, num_steps, self._n))
-
-        for i, fb in enumerate(Fb):
-            for j, p in enumerate(P):
-                f = get_F(Qs[i, j - 1], p) if j > 0 else fb
-                Qs[i, j] = self.solve(
-                    np.atleast_2d(p), np.atleast_2d(f), num_sols=1, return_numpy=True
-                ).reshape(-1, self._n)
-        if enable_evaluation:
-            mjac_arr = np.array([max_joint_angle_change(qs) for qs in Qs])
-            # Qs = (num_traj, num_steps, n_dofs)
-            # evaluate = (num_sols, num_poses, n_dofs)
-            l2_err_arr, ang_err_arr = self.evaluate_solutions(Qs, P, return_row=True)
-            df = pd.DataFrame(
-                {
-                    "l2_err": l2_err_arr,
-                    "ang_err": ang_err_arr,
-                    "mjac": mjac_arr,
-                }
-            )
-            print(df.describe())
-            print(f"avg_inference_time: {round((time() - time_begin) / num_traj, 3)}")
-
-        if enable_plot:
-            return P, Qs, Fb
 
         self.shrink_ratio = old_shrink_ratio
 

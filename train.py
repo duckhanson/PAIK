@@ -67,8 +67,6 @@ class Trainer(Solver):
                     break
                 step += 1
 
-                if self.param.sche_type == "step":
-                    self._scheduler.step()  # type: ignore
             self.__update_noise_esp(ep)
 
             self.shrink_ratio = 0.25
@@ -78,10 +76,7 @@ class Trainer(Solver):
             avg_pos_errs, avg_ori_errs = self.random_evaluation(num_poses=num_eval_poses, num_sols=num_eval_sols)  # type: ignore
             self.shrink_ratio = self.param.shrink_ratio  # type: ignore
 
-            if self.param.sche_type == "plateau":
-                self._scheduler.step(avg_pos_errs)  # type: ignore
-            elif self.param.sche_type == "cos":
-                self._scheduler.step()  # type: ignore
+            self._scheduler.step(avg_pos_errs)  # type: ignore
 
             log_info = {
                 "lr": self._optimizer.param_groups[0]["lr"],  # type: ignore

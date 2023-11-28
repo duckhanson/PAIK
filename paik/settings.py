@@ -25,7 +25,6 @@ class SolverConfig:
     noise_esp: float = 2.5e-3
     noise_esp_decay: float = 0.97
 
-    sche_type: str = "plateau"
     gamma: float = 8.6e-2
 
     batch_size: int = 128

@@ -95,7 +95,7 @@ class Solver:
         # Neural spline flow (NSF) with 3 sample features and 5 context features
         n, m, r = solver_param.nmr
         flow, optimizer, scheduler = get_flow_model(
-            enable_load_model=True,
+            enable_load_model=solver_param.enable_load_model,
             num_transforms=solver_param.num_transforms,
             subnet_width=solver_param.subnet_width,
             subnet_num_layers=solver_param.subnet_num_layers,

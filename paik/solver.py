@@ -267,43 +267,12 @@ class Solver:
 
         return torch.from_numpy(np.column_stack((P, F, noise)).astype(np.float32))
 
-    def sample(self, C, K):
-        if self._enable_normalize:
-            C = self.norm_C(C)
-
-        C = C.to(self._device)
-        with torch.inference_mode():
-            J = self._solver(C).sample((K,)).detach().cpu()
-
-        if self._enable_normalize:
-            J = self.denorm_J(J)
-        return J
-
     def solve_set_k(
         self,
         single_pose: np.ndarray,
         num_sols: int,
         k: int = 1,
     ):
-        """
-        _summary_
-
-        Parameters
-        ----------
-        single_pose : np.ndarray
-            a single task point, m=3 or m=7
-        num_sols : int
-            number of solutions to be sampled from base distribution
-        k : int, optional
-            number of posture features to be sampled from knn, by default 1
-        return_numpy : bool, optional
-            return numpy array type or torch cuda tensor type, by default False
-
-        Returns
-        -------
-        array_like
-            array_like(num_sols * k, n_dofs)
-        """
         P = (
             single_pose[:, : self._m]
             if len(single_pose.shape) == 2
@@ -318,14 +287,16 @@ class Solver:
     def solve(
         self, P: np.ndarray, F: np.ndarray, num_sols: int, return_numpy: bool = False
     ):
-        # Begin inference
-        J_hat = self.sample(
-            torch.from_numpy(
-                np.column_stack((P, F, np.zeros((len(F), 1)))).astype(np.float32)
-            ),
-            num_sols,
-        )
-        return J_hat.numpy() if return_numpy else J_hat
+        C = np.column_stack((P, F, np.zeros((len(F), 1)))).astype(np.float32)
+        C = self.norm_C(C) if self._enable_normalize else torch.from_numpy(C)
+        C = C.to(self._device)
+        with torch.inference_mode():
+            J = self._solver(C).sample((num_sols,)).detach().cpu()
+
+        if self._enable_normalize:
+            J = self.denorm_J(J)
+
+        return J.numpy() if return_numpy else J
 
     def get_random_JPF(self, num_samples: int):
         # Randomly sample poses from train set
@@ -405,82 +376,6 @@ class Solver:
             return avg_l2_errs, avg_ang_errs, avg_inference_time
         else:
             return avg_l2_errs, avg_ang_errs
-
-    # def path_following(
-    #     self,
-    #     load_time: str = "",
-    #     num_traj: int = 3,
-    #     num_steps=20,
-    #     shrink_ratio: float = 0.1,
-    #     enable_evaluation: bool = False,
-    #     enable_plot: bool = False,
-    #     seed: int = 47,
-    # ):
-    #     """
-    #     evaluate the performance of path following
-
-    #     Parameters
-    #     ----------
-    #     load_time : str, optional
-    #         file name of load P_path, by default ""
-    #     num_traj : int, optional
-    #         number of demo trajectories, by default 3
-    #     num_steps : int, optional
-    #         length of the generated path, by default 20
-    #     shrink_ratio : float, optional
-    #         the shrink ratio of the based distribution of IK solver, by default 0.1
-    #     enable_evaluation : bool, optional
-    #         use evaluation or not, by default False
-    #     enable_plot : bool, optional
-    #         use plot or not, by default False
-    #     """
-    #     old_shrink_ratio = self._shrink_ratio
-    #     self.shrink_ratio = shrink_ratio
-
-    #     # random sample P_path
-    #     P = self.sample_P_path(load_time=load_time, num_steps=num_steps, seed=seed)
-    #     P = (
-    #         P if self._m == 7 else np.column_stack((P, np.ones((len(P), 4))))
-    #     )  # type: ignore
-
-    #     time_begin = time()
-
-    #     # P shape = (num_steps, m)
-    #     # Pt shape = (num_traj, num_steps, m)
-    #     Pt = np.tile(P, (num_traj, 1, 1)).reshape(-1, self._m)
-
-    #     # get nearest neighbor of p from self.knn
-    #     _, idx = self._knn.kneighbors(P, n_neighbors=5)
-    #     idx = idx.flatten()
-    #     Ft = np.tile(
-    #         np.expand_dims(
-    #             self._F[idx[np.random.randint(0, len(idx), size=num_traj)]], axis=1
-    #         ),
-    #         (1, num_steps, 1),
-    #     ).reshape(-1, self._r)
-
-    #     Qs = self.solve(Pt, Ft, num_sols=1, return_numpy=True).reshape(
-    #         num_traj, num_steps, self._n
-    #     )
-    #     if enable_evaluation:
-    #         mjac_arr = np.array([max_joint_angle_change(qs) for qs in Qs])
-    #         # Qs = (num_traj, num_steps, n_dofs)
-    #         # evaluate = (num_sols, num_poses, n_dofs)
-    #         l2_err_arr, ang_err_arr = self.evaluate_solutions(Qs, P, return_row=True)
-    #         df = pd.DataFrame(
-    #             {
-    #                 "l2_err": l2_err_arr,
-    #                 "ang_err": ang_err_arr,
-    #                 "mjac": mjac_arr,
-    #             }
-    #         )
-    #         print(df.describe())
-    #         print(f"avg_inference_time: {round((time() - time_begin) / num_traj, 3)}")
-
-    #     if enable_plot:
-    #         return P, Qs, Ft
-
-    #     self.shrink_ratio = old_shrink_ratio
 
 
 def max_joint_angle_change(qs: torch.Tensor | np.ndarray):

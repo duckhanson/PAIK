@@ -6,12 +6,12 @@ import numpy as np
 from tqdm import tqdm
 from pprint import pprint
 import wandb
-from paik.settings import SolverConfig
+from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_NORM
 from paik.utils import init_seeds
 from torch.utils.data import DataLoader
 from paik.dataset import CustomDataset
 
-from paik.solver import Solver, DEFAULT_SOLVER_PARAM_M7_NORM
+from paik.solver import Solver
 
 USE_WANDB = False
 PATIENCE = 4

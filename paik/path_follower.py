@@ -6,13 +6,10 @@ from datetime import datetime
 from tabulate import tabulate
 from sklearn.neighbors import NearestNeighbors
 from paik.utils import load_numpy, save_numpy
-from paik.settings import SolverConfig
+from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_NORM
 
 from paik.solver import (
     Solver,
-    DEFAULT_SOLVER_PARAM_M7,
-    DEFAULT_SOLVER_PARAM_M3,
-    DEFAULT_SOLVER_PARAM_M7_NORM,
     max_joint_angle_change,
 )
 

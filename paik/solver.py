@@ -401,44 +401,6 @@ class Solver:
         else:
             return avg_l2_errs, avg_ang_errs
 
-    def sample_P_path(self, load_time: str = "", num_steps=20, seed=47) -> np.ndarray:
-        """
-        sample a path from P_ts
-
-        Parameters
-        ----------
-        load_time : str, optional
-            file name of load P, by default ""
-        num_steps : int, optional
-            length of the generated path, by default 20
-
-        Returns
-        -------
-        np.ndarray
-            array_like(num_steps, m)
-        """
-        np.random.seed(seed)
-
-        if load_time == "":
-            traj_dir = self.param.traj_dir + datetime.now().strftime("%m%d%H%M%S") + "/"
-        else:
-            traj_dir = self.param.traj_dir + load_time + "/"
-
-        P_path_file_path = traj_dir + "ee_traj.npy"
-
-        if load_time == "" or not os.path.exists(path=P_path_file_path):
-            # endPoints = np.random.rand(2, cfg.m) # 2 for begin and end
-            traj = trajectory.Trajectory(milestones=self._P_ts[np.random.randint(low=0, high=len(self._P_ts), size=2)])  # type: ignore
-            P = np.array([traj.eval(i / num_steps) for i in range(num_steps)])
-            save_numpy(file_path=P_path_file_path, arr=P)
-        else:
-            P = load_numpy(file_path=P_path_file_path)
-
-        if os.path.exists(path=traj_dir):
-            print(f"{traj_dir} load successfully.")
-
-        return P
-
     def sample_Jtraj_Ppath(self, load_time: str = "", num_steps=20, seed=47):
         """
         sample a path from P_ts
@@ -480,81 +442,81 @@ class Solver:
             save_numpy(file_path=Ppath_file_path, arr=P)
         return J, P
 
-    def path_following(
-        self,
-        load_time: str = "",
-        num_traj: int = 3,
-        num_steps=20,
-        shrink_ratio: float = 0.1,
-        enable_evaluation: bool = False,
-        enable_plot: bool = False,
-        seed: int = 47,
-    ):
-        """
-        evaluate the performance of path following
+    # def path_following(
+    #     self,
+    #     load_time: str = "",
+    #     num_traj: int = 3,
+    #     num_steps=20,
+    #     shrink_ratio: float = 0.1,
+    #     enable_evaluation: bool = False,
+    #     enable_plot: bool = False,
+    #     seed: int = 47,
+    # ):
+    #     """
+    #     evaluate the performance of path following
 
-        Parameters
-        ----------
-        load_time : str, optional
-            file name of load P_path, by default ""
-        num_traj : int, optional
-            number of demo trajectories, by default 3
-        num_steps : int, optional
-            length of the generated path, by default 20
-        shrink_ratio : float, optional
-            the shrink ratio of the based distribution of IK solver, by default 0.1
-        enable_evaluation : bool, optional
-            use evaluation or not, by default False
-        enable_plot : bool, optional
-            use plot or not, by default False
-        """
-        old_shrink_ratio = self._shrink_ratio
-        self.shrink_ratio = shrink_ratio
+    #     Parameters
+    #     ----------
+    #     load_time : str, optional
+    #         file name of load P_path, by default ""
+    #     num_traj : int, optional
+    #         number of demo trajectories, by default 3
+    #     num_steps : int, optional
+    #         length of the generated path, by default 20
+    #     shrink_ratio : float, optional
+    #         the shrink ratio of the based distribution of IK solver, by default 0.1
+    #     enable_evaluation : bool, optional
+    #         use evaluation or not, by default False
+    #     enable_plot : bool, optional
+    #         use plot or not, by default False
+    #     """
+    #     old_shrink_ratio = self._shrink_ratio
+    #     self.shrink_ratio = shrink_ratio
 
-        # random sample P_path
-        P = self.sample_P_path(load_time=load_time, num_steps=num_steps, seed=seed)
-        P = (
-            P if self._m == 7 else np.column_stack((P, np.ones((len(P), 4))))
-        )  # type: ignore
+    #     # random sample P_path
+    #     P = self.sample_P_path(load_time=load_time, num_steps=num_steps, seed=seed)
+    #     P = (
+    #         P if self._m == 7 else np.column_stack((P, np.ones((len(P), 4))))
+    #     )  # type: ignore
 
-        time_begin = time()
+    #     time_begin = time()
 
-        # P shape = (num_steps, m)
-        # Pt shape = (num_traj, num_steps, m)
-        Pt = np.tile(P, (num_traj, 1, 1)).reshape(-1, self._m)
+    #     # P shape = (num_steps, m)
+    #     # Pt shape = (num_traj, num_steps, m)
+    #     Pt = np.tile(P, (num_traj, 1, 1)).reshape(-1, self._m)
 
-        # get nearest neighbor of p from self.knn
-        _, idx = self._knn.kneighbors(P, n_neighbors=5)
-        idx = idx.flatten()
-        Ft = np.tile(
-            np.expand_dims(
-                self._F[idx[np.random.randint(0, len(idx), size=num_traj)]], axis=1
-            ),
-            (1, num_steps, 1),
-        ).reshape(-1, self._r)
+    #     # get nearest neighbor of p from self.knn
+    #     _, idx = self._knn.kneighbors(P, n_neighbors=5)
+    #     idx = idx.flatten()
+    #     Ft = np.tile(
+    #         np.expand_dims(
+    #             self._F[idx[np.random.randint(0, len(idx), size=num_traj)]], axis=1
+    #         ),
+    #         (1, num_steps, 1),
+    #     ).reshape(-1, self._r)
 
-        Qs = self.solve(Pt, Ft, num_sols=1, return_numpy=True).reshape(
-            num_traj, num_steps, self._n
-        )
-        if enable_evaluation:
-            mjac_arr = np.array([max_joint_angle_change(qs) for qs in Qs])
-            # Qs = (num_traj, num_steps, n_dofs)
-            # evaluate = (num_sols, num_poses, n_dofs)
-            l2_err_arr, ang_err_arr = self.evaluate_solutions(Qs, P, return_row=True)
-            df = pd.DataFrame(
-                {
-                    "l2_err": l2_err_arr,
-                    "ang_err": ang_err_arr,
-                    "mjac": mjac_arr,
-                }
-            )
-            print(df.describe())
-            print(f"avg_inference_time: {round((time() - time_begin) / num_traj, 3)}")
+    #     Qs = self.solve(Pt, Ft, num_sols=1, return_numpy=True).reshape(
+    #         num_traj, num_steps, self._n
+    #     )
+    #     if enable_evaluation:
+    #         mjac_arr = np.array([max_joint_angle_change(qs) for qs in Qs])
+    #         # Qs = (num_traj, num_steps, n_dofs)
+    #         # evaluate = (num_sols, num_poses, n_dofs)
+    #         l2_err_arr, ang_err_arr = self.evaluate_solutions(Qs, P, return_row=True)
+    #         df = pd.DataFrame(
+    #             {
+    #                 "l2_err": l2_err_arr,
+    #                 "ang_err": ang_err_arr,
+    #                 "mjac": mjac_arr,
+    #             }
+    #         )
+    #         print(df.describe())
+    #         print(f"avg_inference_time: {round((time() - time_begin) / num_traj, 3)}")
 
-        if enable_plot:
-            return P, Qs, Ft
+    #     if enable_plot:
+    #         return P, Qs, Ft
 
-        self.shrink_ratio = old_shrink_ratio
+    #     self.shrink_ratio = old_shrink_ratio
 
 
 def solution_pose_errors(

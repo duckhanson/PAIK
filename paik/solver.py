@@ -17,7 +17,7 @@ from jrl.evaluation import _get_target_pose_batch
 from jrl.conversions import geodesic_distance_between_quaternions
 
 from paik.settings import SolverConfig
-from paik.model import get_flow_model, get_knn, get_robot
+from paik.model import get_flow_model, get_robot
 from paik.utils import load_numpy, save_numpy
 from paik.dataset import nearest_neighbor_F
 from zuko.distributions import DiagNormal
@@ -123,17 +123,16 @@ class Solver:
 
         self._n, self._m, self._r = n, m, r
         self._J_tr, self._P_tr, self._P_ts, self._F = self.__load_all_data()
-        self._knn = get_knn(
-            P_tr=self._P_tr,
-            path=f"{solver_param.train_dir}/knn-{solver_param.N_train}-{n}-{m}-{r}.pickle",
-        )
+        self.nearest_neighnbor_P = NearestNeighbors(n_neighbors=1).fit(self._P_tr)
 
         self._enable_normalize = solver_param.enable_normalize
         if self._enable_normalize:
-            mean_std = lambda x: (x.mean(axis=0), x.std(axis=0))
-            self.__mean_J, self.__std_J = mean_std(self._J_tr)
-            self.__mean_P, self.__std_P = mean_std(self._P_tr)
-            self.__mean_F, self.__std_F = mean_std(self._F)
+            self.__mean_J, self.__std_J = self._J_tr.mean(axis=0), self._J_tr.std(
+                axis=0
+            )
+            C = np.column_stack((self._P_tr, self._F))
+            self.__mean_C = np.concatenate((C.mean(axis=0), np.zeros((1))))
+            self.__std_C = np.concatenate((C.std(axis=0), np.ones((1))))
 
     @property
     def latent(self):
@@ -236,6 +235,7 @@ class Solver:
 
     # public methods
     def norm_J(self, J: np.ndarray | torch.Tensor):
+        assert self._enable_normalize
         if isinstance(J, torch.Tensor):
             J = J.detach().cpu().numpy()
         return torch.from_numpy(((J - self.__mean_J) / self.__std_J).astype(np.float32))
@@ -244,11 +244,7 @@ class Solver:
         assert self._enable_normalize
         if isinstance(C, torch.Tensor):
             C = C.detach().cpu().numpy()
-        P = (C[:, : self._m] - self.__mean_P) / self.__std_P
-        F = (C[:, self._m : self._m + self._r] - self.__mean_F) / self.__std_F
-        noise = C[:, -1]
-
-        return torch.from_numpy(np.column_stack((P, F, noise)).astype(np.float32))
+        return torch.from_numpy(((C - self.__mean_C) / self.__std_C).astype(np.float32))
 
     def denorm_J(self, J: np.ndarray | torch.Tensor):
         assert self._enable_normalize
@@ -261,11 +257,7 @@ class Solver:
         assert self._enable_normalize
         if isinstance(C, torch.Tensor):
             C = C.detach().cpu().numpy()
-        P = C[:, : self._m] * self.__std_P + self.__mean_P
-        F = C[:, self._m : self._m + self._r] * self.__std_F + self.__mean_F
-        noise = C[:, -1]
-
-        return torch.from_numpy(np.column_stack((P, F, noise)).astype(np.float32))
+        return torch.from_numpy((C * self.__std_C + self.__mean_C).astype(np.float32))
 
     def solve_set_k(
         self,
@@ -278,7 +270,7 @@ class Solver:
             if len(single_pose.shape) == 2
             else np.atleast_2d(single_pose[: self._m])
         )
-        F = nearest_neighbor_F(knn, P, F, n_neighbors=k)  # type: ignore
+        F = self._F[self.nearest_neighnbor_P.kneighbors(np.atleast_2d(P), n_neighbors=k, return_distance=False).flatten()]  # type: ignore
         P = np.tile(P, (len(F), 1)) if len(P) == 1 and k > 1 else P
         return np.reshape(
             self.solve(P, F, num_sols, return_numpy=True), (num_sols * k, -1)
@@ -303,7 +295,7 @@ class Solver:
         J, P = self._robot.sample_joint_angles_and_poses(
             n=num_samples, return_torch=False
         )
-        F = nearest_neighbor_F(self._knn, P, self._F, n_neighbors=1)
+        F = self._F[self.nearest_neighnbor_P.kneighbors(np.atleast_2d(P), n_neighbors=1, return_distance=False).flatten()]  # type: ignore
         return J, P, F
 
     def evaluate_solutions(
@@ -337,8 +329,8 @@ class Solver:
         ang_errs = np.empty((num_poses, num_sols))
         for i in range(num_poses):
             l2_errs[i], ang_errs[i] = get_pose_errors(
-                J_hat=J[:, i, :], P=P[i]
-            )  # type: ignore
+                J_hat=J[:, i, :], P=P[i]  # type: ignore
+            )
         if return_row:
             return l2_errs.mean(axis=0), ang_errs.mean(axis=0)
         elif return_col:
@@ -352,7 +344,7 @@ class Solver:
         P = self._P_ts[np.random.choice(self._P_ts.shape[0], num_poses, replace=False)]
         time_begin = time()
         # Data Preprocessing
-        F = nearest_neighbor_F(self._knn, P, self._F)  # type: ignore
+        F = self._F[self.nearest_neighnbor_P.kneighbors(np.atleast_2d(P), n_neighbors=1, return_distance=False).flatten()]  # type: ignore
 
         # Begin inference
         J_hat = self.solve(P, F, num_sols, return_numpy=True)

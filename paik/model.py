@@ -1,5 +1,4 @@
 # Import required packages
-# import time
 from __future__ import annotations
 from typing import Tuple
 
@@ -7,7 +6,6 @@ import os
 import numpy as np
 import torch
 from torch.nn import LeakyReLU
-from sklearn.neighbors import NearestNeighbors
 from torch import optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from zuko.distributions import DiagNormal
@@ -15,7 +13,6 @@ from zuko.flows import Flow, Unconditional
 from zuko.flows.spline import NSF
 
 from jrl.robots import Panda
-from paik.utils import save_pickle, load_pickle
 
 DEFAULT_ACTIVATION = LeakyReLU
 
@@ -121,35 +118,6 @@ def change_flow_base(flow: NSF | Flow, n: int, shrink_ratio: float):
             buffer=True,
         ),  # type: ignore
     )
-
-
-def get_knn(P_tr: np.ndarray, path: str):
-    """
-    fit a knn model
-
-    Parameters
-    ----------
-    P_tr : np.ndarray
-        end-effector positions of training data
-
-    Returns
-    -------
-    NearestNeighbors
-        a knn model that fit end-effector positions of training data
-    """
-    try:
-        knn = load_pickle(file_path=path)
-        print(f"knn load successfully from {path}")
-    except FileNotFoundError as e:
-        print(e)
-        knn = NearestNeighbors(n_neighbors=1)
-        P_tr = np.atleast_2d(P_tr)
-        # knn.fit(P_tr[:, :3])
-        knn.fit(P_tr)
-        save_pickle(file_path=path, obj=knn)
-        print(f"Create and save knn at {path}.")
-
-    return knn
 
 
 def get_robot(robot_name: str, robot_dirs: Tuple[str, str, str]):

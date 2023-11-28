@@ -8,16 +8,12 @@ from torch.utils.data import Dataset
 
 def nearest_neighbor_F(
     knn: NearestNeighbors,
-    P: np.ndarray[float, float],
-    F: np.ndarray[float, float],
+    P: np.ndarray,
+    F: np.ndarray,
     n_neighbors: int = 1,
 ):
-    if F is None:
-        raise ValueError("F cannot be None")
-
-    P = np.atleast_2d(P)  # type: ignore
-    assert len(P) < len(F)
-    return F[knn.kneighbors(P, n_neighbors=n_neighbors, return_distance=False).flatten()]  # type: ignore
+    assert F is not None
+    return F[knn.kneighbors(np.atleast_2d(P), n_neighbors=n_neighbors, return_distance=False).flatten()]  # type: ignore
 
 
 def rand_F(P: np.ndarray, F: np.ndarray):

@@ -41,13 +41,14 @@ class Trainer(Solver):
         # data generation
         assert self._device == "cuda", "device should be cuda"
 
-        update_noise_esp = lambda num_epochs: self.param.noise_esp * (
+        def update_noise_esp(num_epochs): return self.param.noise_esp * (
             self.__noise_esp_decay**num_epochs
         )
 
         train_loader = DataLoader(
             CustomDataset(
-                features=self._J_tr, targets=np.column_stack((self._P_tr, self._F))
+                features=self._J_tr, targets=np.column_stack(
+                    (self._P_tr, self._F))
             ),
             batch_size=batch_size,
             shuffle=True,
@@ -75,7 +76,8 @@ class Trainer(Solver):
             print(
                 f"using shrink_ratio: {self.shrink_ratio} (fixed), where original shrink_ratio: {self.param.shrink_ratio} (training)"
             )
-            avg_pos_errs, avg_ori_errs = self.random_evaluation(num_poses=num_eval_poses, num_sols=num_eval_sols)  # type: ignore
+            avg_pos_errs, avg_ori_errs = self.random_sample_solutions_with_evaluation(
+                num_poses=num_eval_poses, num_sols=num_eval_sols)  # type: ignore
             self.shrink_ratio = self.param.shrink_ratio  # type: ignore
 
             self._scheduler.step(avg_pos_errs)  # type: ignore
@@ -134,7 +136,8 @@ class Trainer(Solver):
         Returns:
             _type_: _description_
         """
-        x, y = add_noise(batch, esp=self.__noise_esp, std_scale=self.__std_scale)
+        x, y = add_noise(batch, esp=self.__noise_esp,
+                         std_scale=self.__std_scale)
 
         if self.param.enable_normalize:
             x, y = self.norm_J(x), self.norm_C(y)

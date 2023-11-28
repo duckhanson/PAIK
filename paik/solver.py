@@ -340,9 +340,21 @@ class Solver:
         P: np.ndarray,
         return_row: bool = False,
         return_col: bool = False,
-    ) -> tuple[Any, Any]:
+    ):
         if isinstance(J, torch.Tensor):
             J = J.detach().cpu().numpy()
+
+        def get_pose_errors(
+            J_hat: np.ndarray,
+            P: torch.Tensor | np.ndarray,
+        ) -> tuple[np.ndarray, np.ndarray]:
+            P = _get_target_pose_batch(P, J_hat.shape[0])
+            P_hat = self._robot.forward_kinematics(J_hat[:, : self._n])
+
+            # Positional Error
+            l2_errors = np.linalg.norm(P_hat[:, :3] - P[:, :3], axis=1)
+            ang_errors = geodesic_distance_between_quaternions(P[:, 3:], P_hat[:, 3:])
+            return l2_errors, ang_errors # type: ignore
 
         num_poses = len(P)
         num_sols = len(J)
@@ -352,19 +364,14 @@ class Solver:
         l2_errs = np.empty((num_poses, num_sols))
         ang_errs = np.empty((num_poses, num_sols))
         for i in range(num_poses):
-            l2_errs[i], ang_errs[i] = solution_pose_errors(
-                robot=self._robot,
-                solutions=J[:, i, :],  # type: ignore
-                target_poses=P[i],
-                device=self._device,
-            )
+            l2_errs[i], ang_errs[i] = get_pose_errors(J_hat=J[:, i, :], P=P[i]) # type: ignore
         if return_row:
             return l2_errs.mean(axis=0), ang_errs.mean(axis=0)
         elif return_col:
             return l2_errs.mean(axis=1), ang_errs.mean(axis=1)
         return l2_errs.mean(), ang_errs.mean()
 
-    def random_evaluation(
+    def random_sample_solutions_with_evaluation(
         self, num_poses: int, num_sols: int, return_time: bool = False
     ):
         # Randomly sample poses from test set
@@ -472,52 +479,6 @@ class Solver:
     #         return P, Qs, Ft
 
     #     self.shrink_ratio = old_shrink_ratio
-
-
-def solution_pose_errors(
-    robot: Robot,
-    solutions: np.ndarray,
-    target_poses: torch.Tensor | np.ndarray,
-    device: str,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Return the L2 and angular errors of calculated ik solutions for a given target_pose. Note: this function expects
-    multiple solutions but only a single target_pose. All of the solutions are assumed to be for the given target_pose
-
-    Args:
-        robot (Robot): The Robot which contains the FK function we will use
-        solutions (Union[np.ndarray]): [n x 7] IK solutions for the given target pose
-        target_pose (np.ndarray): [7] the target pose the IK solutions were generated for
-
-    Returns:
-        tuple[np.ndarray, np.ndarray]: The L2, and angular (rad) errors of IK solutions for the given target_pose
-    """
-    assert isinstance(
-        target_poses, (np.ndarray, torch.Tensor)
-    ), f"target_poses must be a torch.Tensor or np.ndarray (got {type(target_poses)})"
-
-    if isinstance(target_poses, torch.Tensor):
-        target_poses = target_poses.detach().cpu().numpy()
-    target_poses = _get_target_pose_batch(target_poses, solutions.shape[0])
-
-    ee_pose_ikflow = robot.forward_kinematics(solutions[:, 0 : robot.n_dofs])
-    rot_output = ee_pose_ikflow[:, 3:]
-
-    # Positional Error
-    l2_errors = np.linalg.norm(ee_pose_ikflow[:, 0:3] - target_poses[:, 0:3], axis=1)
-    rot_target = target_poses[:, 3:]
-    assert rot_target.shape == rot_output.shape
-
-    # Surprisingly, this is almost always faster to calculate on the gpu than on the cpu. I would expect the opposite
-    # for low number of solutions (< 200).
-    q_target_pt = torch.tensor(rot_target, device=device, dtype=torch.float32)
-    q_current_pt = torch.tensor(rot_output, device=device, dtype=torch.float32)
-    ang_errors = (
-        geodesic_distance_between_quaternions(q_target_pt, q_current_pt)
-        .detach()
-        .cpu()
-        .numpy()
-    )
-    return l2_errors, ang_errors
 
 
 def max_joint_angle_change(qs: torch.Tensor | np.ndarray):

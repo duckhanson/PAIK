@@ -12,9 +12,11 @@ EXPERMENT_COUNT = 20
 NUM_EPOCHS = 25
 ENABLE_LODE_MODEL = False
 
-get_range = lambda left_bound, right_bound, scale: [
+
+def get_range(left_bound, right_bound, scale): return [
     i * scale for i in range(left_bound, right_bound)
 ]
+
 
 sweep_config = {
     "name": "sweep",
@@ -48,7 +50,8 @@ def main() -> None:
 
     trainer = Trainer(solver_param=solver_param)
 
-    print(trainer.random_evaluation(num_poses=100, num_sols=100))
+    print(trainer.random_sample_solutions_with_evaluation(
+        num_poses=100, num_sols=100))
 
     trainer.mini_train(
         num_epochs=solver_param.num_epochs,
@@ -66,7 +69,8 @@ if __name__ == "__main__":
     init_seeds(seed=42)
     project_name = "msik_ikflow_nsf_norm"
 
-    sweep_id = wandb.sweep(sweep=sweep_config, project=project_name, entity="luca_nthu")
+    sweep_id = wandb.sweep(
+        sweep=sweep_config, project=project_name, entity="luca_nthu")
     # Start sweep job.
     wandb.agent(sweep_id, function=main, count=EXPERMENT_COUNT)
     wandb.finish()

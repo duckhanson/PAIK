@@ -18,7 +18,6 @@ class SolverConfig:
     num_transforms: int = 8
 
     # training
-    opt_type: str = "adamw"
     lr: float = 3.7e-4
     lr_weight_decay: float = 1.2e-2
 

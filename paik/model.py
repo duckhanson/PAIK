@@ -26,7 +26,6 @@ def get_flow_model(
     lr_weight_decay: float,
     gamma: float,
     model_architecture: str,
-    optimizer_type: str,
     device: str,
     path_solver: str,
     n: int,
@@ -42,7 +41,6 @@ def get_flow_model(
     :rtype: tuple
     """
     assert model_architecture in ["nsf"]
-    assert optimizer_type in ["adam", "adamw", "sgd", "sgd_nesterov"]
     # Build Generative model, NSF
     # Neural spline flow (NSF) with inputs 7 features and 3 + 4 + 1 context
     num_conditions = m + r + 1
@@ -62,9 +60,7 @@ def get_flow_model(
     )
     flow = flow.to(device)
 
-    optimizer = get_optimizer(
-        flow.parameters(), optimizer_type, lr, weight_decay=lr_weight_decay
-    )
+    optimizer = optim.AdamW(flow.parameters(), lr=lr, weight_decay=lr_weight_decay)
     if enable_load_model and os.path.exists(path=path_solver):
         try:
             state = torch.load(path_solver)
@@ -83,21 +79,6 @@ def get_flow_model(
     )
 
     return flow, optimizer, scheduler
-
-
-def get_optimizer(params, optimizer_type, lr, weight_decay):
-    if optimizer_type == "adam":
-        return optim.Adam(params, lr=lr, weight_decay=weight_decay)
-    elif optimizer_type == "adamw":
-        return optim.AdamW(params, lr=lr, weight_decay=weight_decay)
-    elif optimizer_type == "sgd":
-        return optim.SGD(params, lr=lr, weight_decay=weight_decay, momentum=0.9)
-    elif optimizer_type == "sgd_nesterov":
-        return optim.SGD(
-            params, lr=lr, weight_decay=weight_decay, momentum=0.9, nesterov=True
-        )
-
-    raise NotImplementedError
 
 
 def change_flow_base(flow: NSF | Flow, n: int, shrink_ratio: float):

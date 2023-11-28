@@ -12,7 +12,7 @@ from paik.solver import (
     DEFAULT_SOLVER_PARAM_M7,
     DEFAULT_SOLVER_PARAM_M7_NORM,
 )
-from path_follower import PathFollower
+from paik.path_follower import PathFollower
 
 
 class Visualizer(PathFollower):

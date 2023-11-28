@@ -114,9 +114,7 @@ class Visualizer(Solver):
             target_pose = self.robot.forward_kinematics_klampt(random_sample)[0]
 
             # Get solutions to pose of random sample
-            ik_solutions = self.solve_set_k(
-                target_pose, num_samples, k=k, return_numpy=True
-            )
+            ik_solutions = self.solve_set_k(target_pose, num_samples, k=k)
             qs = self.robot._x_to_qs(ik_solutions)  # type: ignore
             for i in range(nb_sols):
                 worlds[i + 1].robot(0).setConfig(qs[i])

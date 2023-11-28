@@ -19,7 +19,7 @@ from jrl.conversions import geodesic_distance_between_quaternions
 from paik.settings import SolverConfig
 from paik.model import get_flow_model, get_knn, get_robot
 from paik.utils import load_numpy, save_numpy
-from paik.dataset import data_preprocess_for_inference, nearest_neighbor_F
+from paik.dataset import nearest_neighbor_F
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 
@@ -284,7 +284,6 @@ class Solver:
         single_pose: np.ndarray,
         num_sols: int,
         k: int = 1,
-        return_numpy: bool = False,
     ):
         """
         _summary_
@@ -305,14 +304,16 @@ class Solver:
         array_like
             array_like(num_sols * k, n_dofs)
         """
-        C = data_preprocess_for_inference(
-            P=single_pose, F=self._F, knn=self._knn, m=self._m, k=k
+        P = (
+            single_pose[:, : self._m]
+            if len(single_pose.shape) == 2
+            else np.atleast_2d(single_pose[: self._m])
         )
-
-        # Begin inference
-        J_hat = torch.reshape(self.sample(C, num_sols), (num_sols * k, -1))
-
-        return J_hat.numpy() if return_numpy else J_hat
+        F = nearest_neighbor_F(knn, P, F, n_neighbors=k)  # type: ignore
+        P = np.tile(P, (len(F), 1)) if len(P) == 1 and k > 1 else P
+        return np.reshape(
+            self.solve(P, F, num_sols, return_numpy=True), (num_sols * k, -1)
+        )
 
     def solve(
         self, P: np.ndarray, F: np.ndarray, num_sols: int, return_numpy: bool = False
@@ -380,11 +381,10 @@ class Solver:
         P = self._P_ts[np.random.choice(self._P_ts.shape[0], num_poses, replace=False)]
         time_begin = time()
         # Data Preprocessing
-        C = data_preprocess_for_inference(P=P, F=self._F, knn=self._knn, m=self._m)
+        F = nearest_neighbor_F(self._knn, P, self._F)  # type: ignore
 
         # Begin inference
-        J_hat = self.sample(C, num_sols)
-        J_hat = J_hat.detach().cpu().numpy()
+        J_hat = self.solve(P, F, num_sols, return_numpy=True)
         inference_time = round((time() - time_begin), 3)
 
         P = P if self._m == 7 else np.column_stack((P, np.ones(shape=(len(P), 4))))

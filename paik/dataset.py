@@ -6,23 +6,6 @@ from sklearn.neighbors import NearestNeighbors
 from torch.utils.data import Dataset
 
 
-def data_preprocess_for_inference(P, F, knn, m: int, k: int = 1):
-    assert F is not None
-    P = np.atleast_2d(P[:, :m])
-    F = np.atleast_2d(F)
-
-    # Data Preprocessing: Posture Feature Extraction
-    ref_F = np.atleast_2d(nearest_neighbor_F(knn, P, F, n_neighbors=k))  # type: ignore
-    # ref_F = rand_F(P, F) # f_rand
-    # ref_F = pick_F(P, F) # f_pick
-    P = np.tile(P, (len(ref_F), 1)) if len(P) == 1 and k > 1 else P
-
-    # Add noise std
-    return torch.from_numpy(
-        np.column_stack((P, ref_F, np.zeros((ref_F.shape[0], 1)))).astype(np.float32)
-    )
-
-
 def nearest_neighbor_F(
     knn: NearestNeighbors,
     P: np.ndarray[float, float],

@@ -12,8 +12,10 @@ EXPERMENT_COUNT = 20
 NUM_EPOCHS = 25
 ENABLE_LODE_MODEL = False
 
+
 def get_range(left_bound, right_bound, scale):
     return [i * scale for i in range(left_bound, right_bound)]
+
 
 sweep_config = {
     "name": "sweep",

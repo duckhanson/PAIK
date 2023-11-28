@@ -9,3 +9,6 @@ wandb/*
 *.pyc
 *.json
 *.yml
+*checkpoint*
+logs/*
+mlruns/

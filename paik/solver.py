@@ -326,7 +326,7 @@ class Solver:
         )
         return J_hat.numpy() if return_numpy else J_hat
 
-    def random_sample_JPF(self, num_samples: int):
+    def get_random_JPF(self, num_samples: int):
         # Randomly sample poses from train set
         J, P = self._robot.sample_joint_angles_and_poses(
             n=num_samples, return_torch=False
@@ -354,7 +354,7 @@ class Solver:
             # Positional Error
             l2_errors = np.linalg.norm(P_hat[:, :3] - P[:, :3], axis=1)
             ang_errors = geodesic_distance_between_quaternions(P[:, 3:], P_hat[:, 3:])
-            return l2_errors, ang_errors # type: ignore
+            return l2_errors, ang_errors  # type: ignore
 
         num_poses = len(P)
         num_sols = len(J)
@@ -364,7 +364,9 @@ class Solver:
         l2_errs = np.empty((num_poses, num_sols))
         ang_errs = np.empty((num_poses, num_sols))
         for i in range(num_poses):
-            l2_errs[i], ang_errs[i] = get_pose_errors(J_hat=J[:, i, :], P=P[i]) # type: ignore
+            l2_errs[i], ang_errs[i] = get_pose_errors(
+                J_hat=J[:, i, :], P=P[i]
+            )  # type: ignore
         if return_row:
             return l2_errs.mean(axis=0), ang_errs.mean(axis=0)
         elif return_col:

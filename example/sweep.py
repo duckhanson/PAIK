@@ -69,7 +69,7 @@ def main() -> None:
     )
 
     trainer.mini_train(
-        num_epochs=solver_param.num_epochs,
+        num_epochs=NUM_EPOCHS,
         batch_size=solver_param.batch_size,
         begin_time=begin_time,
         use_wandb=USE_WANDB,

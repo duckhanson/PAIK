@@ -8,7 +8,7 @@ from tqdm import tqdm
 from pprint import pprint
 import wandb
 from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_NORM
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 
 from paik.solver import Solver
 
@@ -60,19 +60,32 @@ class Trainer(Solver):
             self.__noise_esp_decay**num_epochs
         )
 
-        train_loader = DataLoader(
-            CustomDataset(
-                features=self._J_tr, targets=np.column_stack((self._P_tr, self._F))
-            ),
-            batch_size=batch_size,
-            shuffle=True,
-            drop_last=True,
-            #   generator=torch.Generator(device='cuda')
-        )
-
         self._solver.train()
 
         for ep in range(num_epochs):
+            # add noise
+            if self.__noise_esp < 1e-9:
+                noise_std = np.zeros((len(self._F), 1))
+            else:
+                noise_std = self.__noise_esp * np.random.rand(len(self._F), 1)
+            J = self._J_tr + noise_std * np.random.randn(*self._J_tr.shape)
+            C = np.column_stack((self._P_tr, self._F, self.__std_scale * noise_std))
+            
+            if self.param.enable_normalize:
+                J, C = self.norm_J(J), self.norm_C(C)
+            else:
+                J, C = torch.from_numpy(J.astype(np.float32)), torch.from_numpy(
+                    C.astype(np.float32)
+                )  
+            
+            train_loader = DataLoader(
+                TensorDataset(J.to(self._device), C.to(self._device)),
+                batch_size=batch_size,
+                shuffle=True,
+                drop_last=True,
+                # generator=torch.Generator(device='cuda:0'), # when use train stand alone
+            )
+            
             tqdm_train_loader = tqdm(train_loader)
             batch_loss = np.zeros((len(train_loader)))
             for i, batch in enumerate(tqdm_train_loader):
@@ -151,12 +164,7 @@ class Trainer(Solver):
         Returns:
             _type_: _description_
         """
-        x, y = add_noise(batch, esp=self.__noise_esp, std_scale=self.__std_scale)
-
-        if self.param.enable_normalize:
-            x, y = self.norm_J(x), self.norm_C(y)
-        x = x.to(self._device)
-        y = y.to(self._device)
+        x, y = batch
         loss = -self._solver(y).log_prob(x)  # -log p(x | y)
         loss = loss.mean()
 
@@ -165,39 +173,6 @@ class Trainer(Solver):
         self._optimizer.step()
 
         return loss.item()
-
-
-def add_noise(batch, esp: float, std_scale: float):
-    J, C = batch
-    if esp < 1e-9:
-        std = torch.zeros((C.shape[0], 1))
-        C = torch.column_stack((C, std))
-    else:
-        # softflow implementation
-        s = esp * torch.rand((C.shape[0], 1))
-        C = torch.column_stack((C, std_scale * s))
-        noise = torch.normal(
-            mean=torch.zeros_like(input=J),
-            std=torch.repeat_interleave(input=s, repeats=J.shape[1], dim=1),
-        )
-        J = J + noise
-    return J, C
-
-
-class CustomDataset(Dataset):
-    def __init__(self, features, targets):
-        if len(features) != len(targets):
-            raise ValueError("features and targets should have the same shape[0].")
-
-        self.features = torch.from_numpy(np.array(features).astype(np.float32))
-        self.targets = torch.from_numpy(np.array(targets).astype(np.float32))
-
-    def __len__(self):
-        return self.features.shape[0]
-
-    def __getitem__(self, id):
-        return self.features[id], self.targets[id]
-
 
 class EarlyStopping:
     # https://github.com/Bjarten/early-stopping-pytorch/blob/master/pytorchtools.py

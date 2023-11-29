@@ -28,6 +28,7 @@ class SolverConfig:
 
     batch_size: int = 128
     num_epochs: int = 15
+    shce_patience: int = 2
 
     # inference
     ckpt_name: str = "1118-0317"

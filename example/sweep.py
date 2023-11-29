@@ -8,7 +8,7 @@ from paik.train import Trainer
 USE_WANDB = True
 PATIENCE = 5
 POSE_ERR_THRESH = 5.5e-3
-EXPERMENT_COUNT = 20
+EXPERMENT_COUNT = 1
 NUM_EPOCHS = 25
 ENABLE_LODE_MODEL = False
 
@@ -28,6 +28,7 @@ sweep_config = {
         "noise_esp": {"values": get_range(17, 34, 1e-4)},
         "noise_esp_decay": {"values": get_range(94, 100, 1e-2)},
         "shrink_ratio": {"values": get_range(51, 77, 1e-2)},
+        "sche_patience": {"values": get_range(1, 3, 1)},
     },
 }
 
@@ -46,6 +47,7 @@ def main() -> None:
     solver_param.noise_esp_decay = wandb.config.noise_esp_decay
     solver_param.shrink_ratio = wandb.config.shrink_ratio
     solver_param.enable_load_model = ENABLE_LODE_MODEL
+    solver_param.shce_patience = wandb.config.sche_patience
 
     trainer = Trainer(solver_param=solver_param)
 
@@ -53,7 +55,7 @@ def main() -> None:
         avg_l2_errs,
         avg_ang_errs,
         avg_inference_time,  # type: ignore
-    ) = trainer.random_sample_solutions_with_evaluation(num_poses=100, num_sols=100)
+    ) = trainer.random_sample_solutions_with_evaluation(num_poses=100, num_sols=100, return_time=True)
 
     print(
         tabulate(

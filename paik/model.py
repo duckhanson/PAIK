@@ -33,6 +33,7 @@ def get_flow_model(
     r: int,
     random_perm: bool,
     enable_load_model: bool,
+    shce_patience: int,
 ):
     """
     Return nsf model and optimizer
@@ -75,7 +76,7 @@ def get_flow_model(
 
     # Train to maximize the log-likelihood
     scheduler = ReduceLROnPlateau(
-        optimizer, mode="min", factor=gamma, patience=2, verbose=True
+        optimizer, mode="min", factor=gamma, patience=shce_patience, verbose=True
     )
 
     return flow, optimizer, scheduler

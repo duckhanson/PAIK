@@ -49,6 +49,7 @@ class Solver:
             n=self._n,
             m=self._m,
             r=self._r,
+            shce_patience=solver_param.shce_patience,
         )  # type: ignore
         self._shrink_ratio = solver_param.shrink_ratio
         self._init_latent = torch.zeros((1, self.robot.n_dofs)).to(self._device)

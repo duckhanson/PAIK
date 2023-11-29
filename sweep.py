@@ -2,7 +2,7 @@
 from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM
 from datetime import datetime
 import wandb
-from paik.train import Trainer, init_seeds
+from paik.train import Trainer
 
 USE_WANDB = True
 PATIENCE = 5
@@ -63,7 +63,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    init_seeds(seed=42)
     project_name = "msik_ikflow_nsf_norm"
 
     sweep_id = wandb.sweep(sweep=sweep_config, project=project_name, entity="luca_nthu")

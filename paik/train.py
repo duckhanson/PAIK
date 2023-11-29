@@ -1,6 +1,7 @@
 # Import required packages
 from datetime import datetime
 import torch
+import torch.backends.cudnn
 import numpy as np
 
 from tqdm import tqdm
@@ -17,6 +18,7 @@ POSE_ERR_THRESH = 6e-3
 
 
 def init_seeds(seed=42):
+    print(f"set seed {seed}")
     torch.manual_seed(seed)  # sets the seed for generating random numbers.
     torch.cuda.manual_seed(
         seed
@@ -47,8 +49,9 @@ class Trainer(Solver):
         pose_err_thres=1e-2,
         num_eval_poses=100,
         num_eval_sols=100,
+        seed=42,
     ) -> None:
-        init_seeds()
+        init_seeds(seed=seed)
         early_stopping = EarlyStopping(patience=patience, verbose=True)
         # data generation
         assert self._device == "cuda", "device should be cuda"
@@ -297,5 +300,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    init_seeds()
     main()

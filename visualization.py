@@ -8,7 +8,7 @@ from klampt import vis, Point
 from klampt import WorldModel
 import numpy as np
 from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_NORM
-from paik.path_follower import PathFollower
+from paik.follower import PathFollower
 
 
 class Visualizer(PathFollower):

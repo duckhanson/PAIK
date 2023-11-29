@@ -2,8 +2,7 @@
 from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM
 from datetime import datetime
 import wandb
-from paik.train import Trainer
-from paik.utils import init_seeds
+from paik.train import Trainer, init_seeds
 
 USE_WANDB = True
 PATIENCE = 5

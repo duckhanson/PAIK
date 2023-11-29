@@ -7,7 +7,6 @@ from tqdm import tqdm
 from pprint import pprint
 import wandb
 from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_NORM
-from paik.utils import init_seeds
 from torch.utils.data import Dataset, DataLoader
 
 from paik.solver import Solver
@@ -17,19 +16,18 @@ PATIENCE = 4
 POSE_ERR_THRESH = 6e-3
 
 
-class CustomDataset(Dataset):
-    def __init__(self, features, targets):
-        if len(features) != len(targets):
-            raise ValueError("features and targets should have the same shape[0].")
+def init_seeds(seed=42):
+    torch.manual_seed(seed)  # sets the seed for generating random numbers.
+    torch.cuda.manual_seed(
+        seed
+    )  # Sets the seed for generating random numbers for the current GPU. It’s safe to call this function if CUDA is not available; in that case, it is silently ignored.
+    torch.cuda.manual_seed_all(
+        seed
+    )  # Sets the seed for generating random numbers on all GPUs. It’s safe to call this function if CUDA is not available; in that case, it is silently ignored.
 
-        self.features = torch.from_numpy(np.array(features).astype(np.float32))
-        self.targets = torch.from_numpy(np.array(targets).astype(np.float32))
-
-    def __len__(self):
-        return self.features.shape[0]
-
-    def __getitem__(self, id):
-        return self.features[id], self.targets[id]
+    if seed == 0:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 
 class Trainer(Solver):
@@ -89,7 +87,7 @@ class Trainer(Solver):
             print(
                 f"using shrink_ratio: {self.shrink_ratio} (fixed), where original shrink_ratio: {self.param.shrink_ratio} (training)"
             )
-            avg_pos_errs, avg_ori_errs = self.random_sample_solutions_with_evaluation( # type: ignore
+            avg_pos_errs, avg_ori_errs = self.random_sample_solutions_with_evaluation(  # type: ignore
                 num_poses=num_eval_poses, num_sols=num_eval_sols
             )  # type: ignore
             self.shrink_ratio = self.param.shrink_ratio  # type: ignore
@@ -181,6 +179,21 @@ def add_noise(batch, esp: float, std_scale: float):
         )
         J = J + noise
     return J, C
+
+
+class CustomDataset(Dataset):
+    def __init__(self, features, targets):
+        if len(features) != len(targets):
+            raise ValueError("features and targets should have the same shape[0].")
+
+        self.features = torch.from_numpy(np.array(features).astype(np.float32))
+        self.targets = torch.from_numpy(np.array(targets).astype(np.float32))
+
+    def __len__(self):
+        return self.features.shape[0]
+
+    def __getitem__(self, id):
+        return self.features[id], self.targets[id]
 
 
 class EarlyStopping:

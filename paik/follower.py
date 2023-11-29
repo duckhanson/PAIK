@@ -5,7 +5,7 @@ from time import time
 from datetime import datetime
 from tabulate import tabulate
 from sklearn.neighbors import NearestNeighbors
-from paik.utils import load_numpy, save_numpy
+from paik.file import load_numpy, save_numpy
 from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_NORM
 
 from paik.solver import (

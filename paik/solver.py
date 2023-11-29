@@ -16,7 +16,7 @@ from jrl.conversions import geodesic_distance_between_quaternions
 
 from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_NORM
 from paik.model import get_flow_model, get_robot
-from paik.utils import load_numpy, save_numpy
+from paik.file import load_numpy, save_numpy
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 

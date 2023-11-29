@@ -1,7 +1,9 @@
 # Import required packages
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 import torch
+from klampt.model import trajectory
 from time import time
 from datetime import datetime
 from tabulate import tabulate
@@ -34,6 +36,7 @@ class PathFollower(Solver):
         return_numpy: bool = False,
         return_evaluation: bool = False,
     ):
+        self.shrink_ratio = 0.25
         J_hat = self.solve(P, self._F[self.JP_knn.kneighbors(np.column_stack([J, P]), return_distance=False).flatten()], num_sols=num_traj, return_numpy=return_numpy)  # type: ignore
         if not return_evaluation:
             return J_hat

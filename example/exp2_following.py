@@ -14,15 +14,16 @@ from ikflow.model_loading import get_ik_solver
 
 TEST_PAFIK = True
 TEST_IKFLOW = True
-LOAD_TIME = "1124134231"
-NUM_TRAJECTORIES = 500
+LOAD_TIME = ""
+NUM_STEPS = 100
+NUM_TRAJECTORIES = 50
 DDJC_THRES = (40, 50, 60, 70, 80, 90, 100)
 
 
 def path_following(test_pafik: bool, test_ikflow: bool):
     solver = PathFollower(solver_param=DEFAULT_SOLVER_PARAM_M7_NORM)
 
-    J, P = solver.sample_Jtraj_Ppath(load_time=LOAD_TIME, num_steps=20)
+    J, P = solver.sample_Jtraj_Ppath(load_time=LOAD_TIME, num_steps=NUM_STEPS)
 
     if test_pafik:
         begin_time = time()

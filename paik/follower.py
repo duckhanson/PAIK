@@ -1,6 +1,7 @@
 # Import required packages
 import numpy as np
 import pandas as pd
+import torch
 from time import time
 from datetime import datetime
 from tabulate import tabulate
@@ -8,11 +9,13 @@ from sklearn.neighbors import NearestNeighbors
 from paik.file import load_numpy, save_numpy
 from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_NORM
 
-from paik.solver import (
-    Solver,
-    max_joint_angle_change,
-)
+from paik.solver import Solver
 
+
+def max_joint_angle_change(qs: torch.Tensor | np.ndarray):
+    if isinstance(qs, torch.Tensor):
+        qs = qs.detach().cpu().numpy()
+    return np.rad2deg(np.max(np.abs(np.diff(qs, axis=0))))
 
 class PathFollower(Solver):
     def __init__(self, solver_param: SolverConfig) -> None:

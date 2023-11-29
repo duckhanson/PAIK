@@ -286,7 +286,4 @@ class Solver:
             return avg_l2_errs, avg_ang_errs
 
 
-def max_joint_angle_change(qs: torch.Tensor | np.ndarray):
-    if isinstance(qs, torch.Tensor):
-        qs = qs.detach().cpu().numpy()
-    return np.rad2deg(np.max(np.abs(np.diff(qs, axis=0))))
+

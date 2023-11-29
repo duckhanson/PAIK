@@ -4,9 +4,8 @@ import pandas as pd
 from time import time
 from tabulate import tabulate
 
-from paik.solver import max_joint_angle_change
 from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM
-from paik.follower import PathFollower
+from paik.follower import PathFollower, max_joint_angle_change
 
 import torch
 from tqdm import trange

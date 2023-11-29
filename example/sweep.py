@@ -8,7 +8,7 @@ from paik.train import Trainer
 USE_WANDB = True
 PATIENCE = 5
 POSE_ERR_THRESH = 5.5e-3
-EXPERMENT_COUNT = 1
+EXPERMENT_COUNT = 10
 NUM_EPOCHS = 25
 ENABLE_LODE_MODEL = False
 
@@ -23,12 +23,13 @@ sweep_config = {
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
         "lr": {"values": get_range(30, 68, 1e-5)},
-        "lr_weight_decay": {"values": get_range(10, 30, 1e-3)},
+        "lr_weight_decay": {"values": get_range(15, 30, 1e-3)},
         "gamma": {"values": get_range(84, 87, 1e-3)},
         "noise_esp": {"values": get_range(17, 34, 1e-4)},
         "noise_esp_decay": {"values": get_range(94, 100, 1e-2)},
-        "shrink_ratio": {"values": get_range(51, 77, 1e-2)},
+        "shrink_ratio": {"values": get_range(51, 66, 1e-2)},
         "sche_patience": {"values": get_range(1, 3, 1)},
+        "batch_size": {"values": [128, 512, 1024]},
     },
 }
 
@@ -48,6 +49,7 @@ def main() -> None:
     solver_param.shrink_ratio = wandb.config.shrink_ratio
     solver_param.enable_load_model = ENABLE_LODE_MODEL
     solver_param.shce_patience = wandb.config.sche_patience
+    solver_param.batch_size = wandb.config.batch_size
 
     trainer = Trainer(solver_param=solver_param)
 

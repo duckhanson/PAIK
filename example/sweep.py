@@ -28,6 +28,7 @@ sweep_config = {
         "noise_esp": {"values": get_range(17, 34, 1e-4)},
         "noise_esp_decay": {"values": get_range(94, 100, 1e-2)},
         "shrink_ratio": {"values": get_range(51, 77, 1e-2)},
+        "sche_patience": {"values": get_range(1, 3, 1)},
     },
 }
 
@@ -46,6 +47,7 @@ def main() -> None:
     solver_param.noise_esp_decay = wandb.config.noise_esp_decay
     solver_param.shrink_ratio = wandb.config.shrink_ratio
     solver_param.enable_load_model = ENABLE_LODE_MODEL
+    solver_param.shce_patience = wandb.config.sche_patience
 
     trainer = Trainer(solver_param=solver_param)
 

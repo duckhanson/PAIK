@@ -116,7 +116,7 @@ DEFAULT_SOLVER_PARAM_M7_NORM = SolverConfig(
     noise_esp_decay=0.97,
     enable_normalize=True,
     subnet_num_layers=3,
-    ckpt_name="1129-0817",  # "1130-0044", "1129-2330", "1129-0817"
+    ckpt_name="1130-0201",  # "1130-0044", "1129-2330", "1129-0817", "1130-0201"
 )
 
 

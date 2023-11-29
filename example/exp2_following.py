@@ -14,10 +14,10 @@ from ikflow.model_loading import get_ik_solver
 
 TEST_PAFIK = True
 TEST_IKFLOW = True
-LOAD_TIME = ""
+LOAD_TIME = "1123134231"
 NUM_STEPS = 100
 NUM_TRAJECTORIES = 50
-DDJC_THRES = (40, 50, 60, 70, 80, 90, 100)
+DDJC_THRES = (120, 130, 140, 150)
 
 
 def path_following(test_pafik: bool, test_ikflow: bool):

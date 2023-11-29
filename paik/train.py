@@ -8,14 +8,28 @@ from pprint import pprint
 import wandb
 from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_NORM
 from paik.utils import init_seeds
-from torch.utils.data import DataLoader
-from paik.dataset import CustomDataset
+from torch.utils.data import Dataset, DataLoader
 
 from paik.solver import Solver
 
 USE_WANDB = False
 PATIENCE = 4
 POSE_ERR_THRESH = 6e-3
+
+
+class CustomDataset(Dataset):
+    def __init__(self, features, targets):
+        if len(features) != len(targets):
+            raise ValueError("features and targets should have the same shape[0].")
+
+        self.features = torch.from_numpy(np.array(features).astype(np.float32))
+        self.targets = torch.from_numpy(np.array(targets).astype(np.float32))
+
+    def __len__(self):
+        return self.features.shape[0]
+
+    def __getitem__(self, id):
+        return self.features[id], self.targets[id]
 
 
 class Trainer(Solver):
@@ -75,7 +89,7 @@ class Trainer(Solver):
             print(
                 f"using shrink_ratio: {self.shrink_ratio} (fixed), where original shrink_ratio: {self.param.shrink_ratio} (training)"
             )
-            avg_pos_errs, avg_ori_errs = self.random_sample_solutions_with_evaluation(
+            avg_pos_errs, avg_ori_errs = self.random_sample_solutions_with_evaluation( # type: ignore
                 num_poses=num_eval_poses, num_sols=num_eval_sols
             )  # type: ignore
             self.shrink_ratio = self.param.shrink_ratio  # type: ignore

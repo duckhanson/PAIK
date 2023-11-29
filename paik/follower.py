@@ -34,7 +34,7 @@ class PathFollower(Solver):
         if not return_evaluation:
             return J_hat
 
-        l2_errs, ang_errs = self.evaluate_solutions(J_hat, P)
+        l2_errs, ang_errs = self.evaluate_solutions(J_hat, P, return_row=True)
         mjac_arr = np.array([max_joint_angle_change(qs) for qs in J_hat])
         ddjc = np.linalg.norm(J_hat - J, axis=-1).mean(axis=-1)
         return J_hat, l2_errs, ang_errs, mjac_arr, ddjc

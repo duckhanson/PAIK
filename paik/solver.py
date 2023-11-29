@@ -32,7 +32,7 @@ class Solver:
         )
         self._device = solver_param.device
         # Neural spline flow (NSF) with 3 sample features and 5 context features
-        n, m, r = solver_param.nmr
+        self._n, self._m, self._r = solver_param.nmr
         self._solver, self._optimizer, self._scheduler = get_flow_model(
             enable_load_model=solver_param.enable_load_model,
             num_transforms=solver_param.num_transforms,
@@ -46,17 +46,16 @@ class Solver:
             model_architecture=solver_param.model_architecture,
             random_perm=solver_param.random_perm,
             path_solver=f"{solver_param.weight_dir}/{solver_param.ckpt_name}.pth",
-            n=n,
-            m=m,
-            r=r,
+            n=self._n,
+            m=self._m,
+            r=self._r,
         )  # type: ignore
         self._shrink_ratio = solver_param.shrink_ratio
         self._init_latent = torch.zeros((1, self.robot.n_dofs)).to(self._device)
 
         # load inference data
-        assert n == self._robot.n_dofs, f"n should be {self._robot.n_dofs} as the robot"
+        assert self._n == self._robot.n_dofs, f"n should be {self._robot.n_dofs} as the robot"
 
-        self._n, self._m, self._r = n, m, r
         self._J_tr, self._P_tr, self._P_ts, self._F = self.__load_all_data()
         self.nearest_neighnbor_P = NearestNeighbors(n_neighbors=1).fit(self._P_tr)
 

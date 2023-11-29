@@ -70,14 +70,14 @@ class Trainer(Solver):
                 noise_std = self.__noise_esp * np.random.rand(len(self._F), 1)
             J = self._J_tr + noise_std * np.random.randn(*self._J_tr.shape)
             C = np.column_stack((self._P_tr, self._F, self.__std_scale * noise_std))
-            
+
             if self.param.enable_normalize:
                 J, C = self.norm_J(J), self.norm_C(C)
             else:
                 J, C = torch.from_numpy(J.astype(np.float32)), torch.from_numpy(
                     C.astype(np.float32)
-                )  
-            
+                )
+
             train_loader = DataLoader(
                 TensorDataset(J.to(self._device), C.to(self._device)),
                 batch_size=batch_size,
@@ -85,7 +85,7 @@ class Trainer(Solver):
                 drop_last=True,
                 # generator=torch.Generator(device='cuda:0'), # when use train stand alone
             )
-            
+
             tqdm_train_loader = tqdm(train_loader)
             batch_loss = np.zeros((len(train_loader)))
             for i, batch in enumerate(tqdm_train_loader):
@@ -173,6 +173,7 @@ class Trainer(Solver):
         self._optimizer.step()
 
         return loss.item()
+
 
 class EarlyStopping:
     # https://github.com/Bjarten/early-stopping-pytorch/blob/master/pytorchtools.py

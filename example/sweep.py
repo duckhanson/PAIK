@@ -8,7 +8,7 @@ from paik.train import Trainer
 USE_WANDB = True
 PATIENCE = 5
 POSE_ERR_THRESH = 5.5e-3
-EXPERMENT_COUNT = 20
+EXPERMENT_COUNT = 1
 NUM_EPOCHS = 25
 ENABLE_LODE_MODEL = False
 
@@ -53,7 +53,7 @@ def main() -> None:
         avg_l2_errs,
         avg_ang_errs,
         avg_inference_time,  # type: ignore
-    ) = trainer.random_sample_solutions_with_evaluation(num_poses=100, num_sols=100)
+    ) = trainer.random_sample_solutions_with_evaluation(num_poses=100, num_sols=100, return_time=True)
 
     print(
         tabulate(

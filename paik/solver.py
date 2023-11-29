@@ -54,7 +54,9 @@ class Solver:
         self._init_latent = torch.zeros((1, self.robot.n_dofs)).to(self._device)
 
         # load inference data
-        assert self._n == self._robot.n_dofs, f"n should be {self._robot.n_dofs} as the robot"
+        assert (
+            self._n == self._robot.n_dofs
+        ), f"n should be {self._robot.n_dofs} as the robot"
 
         self._J_tr, self._P_tr, self._P_ts, self._F = self.__load_all_data()
         self.nearest_neighnbor_P = NearestNeighbors(n_neighbors=1).fit(self._P_tr)
@@ -139,7 +141,7 @@ class Solver:
                             F[
                                 knn.kneighbors(
                                     S[num_data:], n_neighbors=1, return_distance=False
-                                ).flatten()
+                                ).flatten()  # type: ignore
                             ],
                         )
                     )  # type: ignore
@@ -178,7 +180,7 @@ class Solver:
         assert self._enable_normalize
         if isinstance(C, torch.Tensor):
             C = C.detach().cpu().numpy()
-        return torch.from_numpy(((C - self.__mean_C) / self.__std_C).astype(np.float32))
+        return torch.from_numpy(((C - self.__mean_C) / self.__std_C).astype(np.float32))  # type: ignore
 
     def denorm_J(self, J: np.ndarray | torch.Tensor):
         assert self._enable_normalize
@@ -190,7 +192,7 @@ class Solver:
         assert self._enable_normalize
         if isinstance(C, torch.Tensor):
             C = C.detach().cpu().numpy()
-        return torch.from_numpy((C * self.__std_C + self.__mean_C).astype(np.float32))
+        return torch.from_numpy((C * self.__std_C + self.__mean_C).astype(np.float32))  # type: ignore
 
     def solve(
         self, P: np.ndarray, F: np.ndarray, num_sols: int, return_numpy: bool = False
@@ -284,6 +286,3 @@ class Solver:
             return avg_l2_errs, avg_ang_errs, avg_inference_time
         else:
             return avg_l2_errs, avg_ang_errs
-
-
-

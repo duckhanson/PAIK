@@ -17,6 +17,7 @@ def max_joint_angle_change(qs: torch.Tensor | np.ndarray):
         qs = qs.detach().cpu().numpy()
     return np.rad2deg(np.max(np.abs(np.diff(qs, axis=0))))
 
+
 class PathFollower(Solver):
     def __init__(self, solver_param: SolverConfig) -> None:
         super().__init__(solver_param)

@@ -59,13 +59,13 @@ class Visualizer(PathFollower):
 
         # TODO: Adjust terrain height for each robot
         if load_terrain:
-            terrain_filepath = "visualization_resources/terrains/plane.off"
+            terrain_filepath = "data/visualization_resources/terrains/plane.off"
             res = worlds[0].loadTerrain(terrain_filepath)
             assert res, f"Failed to load terrain '{terrain_filepath}'"
             vis.add("terrain", worlds[0].terrain(0))
 
         if load_box:
-            box_filepath = "visualization_resources/objects/thincube.off"
+            box_filepath = "data/visualization_resources/objects/thincube.off"
             res = worlds[0].loadRigidObject(box_filepath)
             assert res, f"Failed to load obj '{box_filepath}'"
             vis.add("box", worlds[0].rigidObject(0))

@@ -69,7 +69,11 @@ class Solver:
             )
             C = np.column_stack((self._P_tr, self._F))
             self.__mean_C = np.concatenate((C.mean(axis=0), np.zeros((1))))
-            self.__std_C = np.concatenate((C.std(axis=0), np.ones((1))))
+            std_C = np.concatenate((C.std(axis=0), np.ones((1))))
+            scale = np.ones_like(self.__mean_C)
+            scale[self._m : self._m + self._r] *= solver_param.posture_feature_scale
+            self.__std_C = std_C / scale
+            
 
     @property
     def latent(self):

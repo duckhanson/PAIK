@@ -8,7 +8,7 @@ from paik.train import Trainer
 USE_WANDB = True
 PATIENCE = 5
 POSE_ERR_THRESH = 5.5e-3
-EXPERMENT_COUNT = 10
+EXPERMENT_COUNT = 20
 NUM_EPOCHS = 25
 ENABLE_LODE_MODEL = False
 
@@ -27,9 +27,8 @@ sweep_config = {
         "gamma": {"values": get_range(84, 87, 1e-3)},
         "noise_esp": {"values": get_range(17, 34, 1e-4)},
         "noise_esp_decay": {"values": get_range(94, 100, 1e-2)},
-        "shrink_ratio": {"values": get_range(51, 66, 1e-2)},
-        "sche_patience": {"values": get_range(1, 3, 1)},
-        "batch_size": {"values": [128, 512, 1024]},
+        "shrink_ratio": {"values": get_range(53, 66, 1e-2)},
+        "posture_feature_scale": {"values": get_range(10, 15, 1e-1)},
     },
 }
 
@@ -47,9 +46,8 @@ def main() -> None:
     solver_param.noise_esp = wandb.config.noise_esp
     solver_param.noise_esp_decay = wandb.config.noise_esp_decay
     solver_param.shrink_ratio = wandb.config.shrink_ratio
-    solver_param.enable_load_model = ENABLE_LODE_MODEL
-    solver_param.shce_patience = wandb.config.sche_patience
-    solver_param.batch_size = wandb.config.batch_size
+    solver_param.enable_load_model = ENABLE_LODE_MODEL # type: ignore
+    solver_param.posture_feature_scale = wandb.config.posture_feature_scale
 
     trainer = Trainer(solver_param=solver_param)
 

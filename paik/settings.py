@@ -26,9 +26,10 @@ class SolverConfig:
 
     gamma: float = 8.6e-2
 
-    batch_size: int = 128
+    batch_size: int = 1024
     num_epochs: int = 15
     shce_patience: int = 2
+    posture_feature_scale: float = 1.0
 
     # inference
     ckpt_name: str = "1118-0317"
@@ -116,7 +117,7 @@ DEFAULT_SOLVER_PARAM_M7_NORM = SolverConfig(
     noise_esp_decay=0.97,
     enable_normalize=True,
     subnet_num_layers=3,
-    ckpt_name="1130-0201",  # "1130-0044", "1129-2330", "1129-0817", "1130-0201"
+    ckpt_name="1130-0335",  # "1130-0044", "1129-2330", "1129-0817", "1130-0201", "1130-0248", "1130-0335", "1130-0422", "1130-0537", #"1130-1013", "1130-1452"
 )
 
 

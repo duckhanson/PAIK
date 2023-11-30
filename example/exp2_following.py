@@ -13,11 +13,11 @@ from ikflow.utils import set_seed
 from ikflow.model_loading import get_ik_solver
 
 TEST_PAFIK = True
-TEST_IKFLOW = True
+TEST_IKFLOW = False
 LOAD_TIME = "1123134231"
 NUM_STEPS = 100
 NUM_TRAJECTORIES = 50
-DDJC_THRES = (120, 130, 140, 150)
+DDJC_THRES = (70, 100, 120, 130)
 
 
 def path_following(test_pafik: bool, test_ikflow: bool):

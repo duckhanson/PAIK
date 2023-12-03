@@ -1,6 +1,31 @@
 import os
+import shutil
 import pickle
 import numpy as np
+
+
+# remove files under the directory
+def remove_files_under_dir(dir_path, except_files=[]):
+    """
+    remove files under the directory
+    exmaple of use: remove_files_under_dir('./wandb/', except_files=[])
+    """
+
+    for file in os.listdir(dir_path):
+        if len(except_files) != 0 and file.split(".")[0] in except_files:
+            continue
+
+        file_path = os.path.join(dir_path, file)
+
+        try:
+            if os.path.isfile(file_path):
+                print(f"remove {file_path}")
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                print(f"remove {file_path}")
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print(e)
 
 
 def load_pickle(file_path: str):

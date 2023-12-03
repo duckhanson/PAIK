@@ -7,7 +7,7 @@ from paik.train import Trainer
 
 USE_WANDB = True
 PATIENCE = 5
-POSE_ERR_THRESH = 5.5e-3
+POSE_ERR_THRESH = 6e-3
 EXPERMENT_COUNT = 20
 NUM_EPOCHS = 25
 ENABLE_LODE_MODEL = False
@@ -22,13 +22,12 @@ sweep_config = {
     "method": "bayes",
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
-        "lr": {"values": get_range(30, 68, 1e-5)},
-        "lr_weight_decay": {"values": get_range(15, 30, 1e-3)},
+        "lr": {"values": get_range(40, 68, 1e-5)},
+        "lr_weight_decay": {"values": get_range(15, 20, 1e-3)},
         "gamma": {"values": get_range(84, 87, 1e-3)},
         "noise_esp": {"values": get_range(17, 34, 1e-4)},
         "noise_esp_decay": {"values": get_range(94, 100, 1e-2)},
-        "shrink_ratio": {"values": get_range(53, 66, 1e-2)},
-        "posture_feature_scale": {"values": get_range(10, 15, 1e-1)},
+        "shrink_ratio": {"values": get_range(58, 66, 1e-2)},
     },
 }
 
@@ -46,8 +45,7 @@ def main() -> None:
     solver_param.noise_esp = wandb.config.noise_esp
     solver_param.noise_esp_decay = wandb.config.noise_esp_decay
     solver_param.shrink_ratio = wandb.config.shrink_ratio
-    solver_param.enable_load_model = ENABLE_LODE_MODEL # type: ignore
-    solver_param.posture_feature_scale = wandb.config.posture_feature_scale
+    solver_param.enable_load_model = ENABLE_LODE_MODEL  # type: ignore
 
     trainer = Trainer(solver_param=solver_param)
 

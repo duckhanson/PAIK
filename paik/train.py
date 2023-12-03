@@ -90,7 +90,7 @@ class Trainer(Solver):
             batch_loss = np.zeros((len(train_loader)))
             for i, batch in enumerate(tqdm_train_loader):
                 tqdm_train_loader.set_description(f"Epochs {ep}")
-                
+
                 loss = self.train_step(batch=batch)
                 batch_loss[i] = loss
                 bar = {"loss": f"{np.round(loss, 3)}"}

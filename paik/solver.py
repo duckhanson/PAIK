@@ -73,7 +73,6 @@ class Solver:
             scale = np.ones_like(self.__mean_C)
             scale[self._m : self._m + self._r] *= solver_param.posture_feature_scale
             self.__std_C = std_C / scale
-            
 
     @property
     def latent(self):

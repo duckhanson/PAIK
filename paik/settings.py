@@ -26,7 +26,7 @@ class SolverConfig:
 
     gamma: float = 8.6e-2
 
-    batch_size: int = 1024
+    batch_size: int = 2048
     num_epochs: int = 15
     shce_patience: int = 2
     posture_feature_scale: float = 1.0
@@ -43,7 +43,7 @@ class SolverConfig:
     workdir: str = __current_workdir_path
 
     # training
-    N_train: int = 240_0000  # 2500_0000
+    N_train: int = 500_0000  # 2500_0000
     N_test: int = 5_0000  # 5_0000
 
     # data
@@ -57,7 +57,7 @@ class SolverConfig:
 
     # hnne parameter
     weight_dir: str = f"{workdir}/weights/{robot_name}"
-    max_num_data_hnne: int = 150_0000
+    max_num_data_hnne: int = 400_0000
 
     # experiment
     traj_dir: str = f"{data_dir}/trajectory/"
@@ -65,45 +65,45 @@ class SolverConfig:
     dir_paths: Tuple[str, str, str] = (data_dir, weight_dir, traj_dir)
 
 
-DEFAULT_SOLVER_PARAM_M3 = SolverConfig(
-    lr=0.00033,
-    gamma=0.094,
-    noise_esp=0.001,
-    batch_size=128,
-    num_epochs=10,
-    random_perm=True,
-    subnet_width=1024,
-    num_transforms=10,
-    lr_weight_decay=0.013,
-    noise_esp_decay=0.8,
-    subnet_num_layers=3,
-    model_architecture="nsf",
-    shrink_ratio=0.61,
-    ckpt_name="0930-0346",
-    nmr=(7, 3, 4),
-    enable_load_model=True,
-    device="cuda",
-)
+# DEFAULT_SOLVER_PARAM_M3 = SolverConfig(
+#     lr=0.00033,
+#     gamma=0.094,
+#     noise_esp=0.001,
+#     batch_size=128,
+#     num_epochs=10,
+#     random_perm=True,
+#     subnet_width=1024,
+#     num_transforms=10,
+#     lr_weight_decay=0.013,
+#     noise_esp_decay=0.8,
+#     subnet_num_layers=3,
+#     model_architecture="nsf",
+#     shrink_ratio=0.61,
+#     ckpt_name="0930-0346",
+#     nmr=(7, 3, 4),
+#     enable_load_model=True,
+#     device="cuda",
+# )
 
-DEFAULT_SOLVER_PARAM_M7 = SolverConfig(
-    lr=0.00036,
-    gamma=0.084,
-    noise_esp=0.0019,
-    batch_size=128,
-    num_epochs=15,
-    random_perm=True,
-    subnet_width=1150,
-    num_transforms=8,
-    lr_weight_decay=0.018,
-    noise_esp_decay=0.92,
-    subnet_num_layers=3,
-    model_architecture="nsf",
-    shrink_ratio=0.61,
-    ckpt_name="1107-1013",
-    nmr=(7, 7, 1),
-    enable_load_model=True,
-    device="cuda",
-)
+# DEFAULT_SOLVER_PARAM_M7 = SolverConfig(
+#     lr=0.00036,
+#     gamma=0.084,
+#     noise_esp=0.0019,
+#     batch_size=128,
+#     num_epochs=15,
+#     random_perm=True,
+#     subnet_width=1150,
+#     num_transforms=8,
+#     lr_weight_decay=0.018,
+#     noise_esp_decay=0.92,
+#     subnet_num_layers=3,
+#     model_architecture="nsf",
+#     shrink_ratio=0.61,
+#     ckpt_name="1107-1013",
+#     nmr=(7, 7, 1),
+#     enable_load_model=True,
+#     device="cuda",
+# )
 
 DEFAULT_SOLVER_PARAM_M7_NORM = SolverConfig(
     lr=0.00037,
@@ -117,7 +117,8 @@ DEFAULT_SOLVER_PARAM_M7_NORM = SolverConfig(
     noise_esp_decay=0.97,
     enable_normalize=True,
     subnet_num_layers=3,
-    ckpt_name="1130-0335",  # "1130-0044", "1129-2330", "1129-0817", "1130-0201", "1130-0248", "1130-0335", "1130-0422", "1130-0537", #"1130-1013", "1130-1452"
+    batch_size=1024,
+    ckpt_name="1202-1325",  # 1202-1325
 )
 
 

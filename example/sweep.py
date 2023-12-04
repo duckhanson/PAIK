@@ -23,7 +23,7 @@ sweep_config = {
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
         # "lr": {"values": get_range(40, 68, 1e-5)},
-        "lr": {"values": get_range(20, 50, 1e-7)},
+        "lr": {"values": get_range(1, 30, 1e-7)},
         "lr_weight_decay": {"values": get_range(15, 20, 1e-3)},
         "gamma": {"values": get_range(84, 87, 1e-3)},
         "noise_esp": {"values": get_range(17, 34, 1e-4)},

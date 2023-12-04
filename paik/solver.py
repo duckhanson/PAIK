@@ -277,12 +277,12 @@ class Solver:
         avg_l2_errs, avg_ang_errs = self.evaluate_solutions(J_hat, P)
 
         errors_time = round((time() - time_begin), 3) - inference_time
-        print(
-            tabulate(
-                [[inference_time, errors_time]],
-                headers=["inference time", "evaluation time"],
-            )
-        )
+        # print(
+        #     tabulate(
+        #         [[inference_time, errors_time]],
+        #         headers=["inference time", "evaluation time"],
+        #     )
+        # )
 
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 

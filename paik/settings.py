@@ -43,6 +43,7 @@ class SolverConfig:
     workdir: str = __current_workdir_path
 
     # training
+    # (N_train, max) = (1000_0000, 430_0000), (500_0000, 400_0000)
     N_train: int = 500_0000  # 2500_0000
     N_test: int = 5_0000  # 5_0000
 
@@ -63,47 +64,6 @@ class SolverConfig:
     traj_dir: str = f"{data_dir}/trajectory/"
 
     dir_paths: Tuple[str, str, str] = (data_dir, weight_dir, traj_dir)
-
-
-# DEFAULT_SOLVER_PARAM_M3 = SolverConfig(
-#     lr=0.00033,
-#     gamma=0.094,
-#     noise_esp=0.001,
-#     batch_size=128,
-#     num_epochs=10,
-#     random_perm=True,
-#     subnet_width=1024,
-#     num_transforms=10,
-#     lr_weight_decay=0.013,
-#     noise_esp_decay=0.8,
-#     subnet_num_layers=3,
-#     model_architecture="nsf",
-#     shrink_ratio=0.61,
-#     ckpt_name="0930-0346",
-#     nmr=(7, 3, 4),
-#     enable_load_model=True,
-#     device="cuda",
-# )
-
-# DEFAULT_SOLVER_PARAM_M7 = SolverConfig(
-#     lr=0.00036,
-#     gamma=0.084,
-#     noise_esp=0.0019,
-#     batch_size=128,
-#     num_epochs=15,
-#     random_perm=True,
-#     subnet_width=1150,
-#     num_transforms=8,
-#     lr_weight_decay=0.018,
-#     noise_esp_decay=0.92,
-#     subnet_num_layers=3,
-#     model_architecture="nsf",
-#     shrink_ratio=0.61,
-#     ckpt_name="1107-1013",
-#     nmr=(7, 7, 1),
-#     enable_load_model=True,
-#     device="cuda",
-# )
 
 DEFAULT_SOLVER_PARAM_M7_NORM = SolverConfig(
     lr=0.00037,

@@ -7,10 +7,10 @@ from paik.train import Trainer
 
 USE_WANDB = True
 PATIENCE = 5
-POSE_ERR_THRESH = 6e-3
+POSE_ERR_THRESH = 4e-3
 EXPERMENT_COUNT = 20
-NUM_EPOCHS = 25
-ENABLE_LODE_MODEL = False
+NUM_EPOCHS = 30
+ENABLE_LODE_MODEL = True
 
 
 def get_range(left_bound, right_bound, scale):
@@ -22,7 +22,8 @@ sweep_config = {
     "method": "bayes",
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
-        "lr": {"values": get_range(40, 68, 1e-5)},
+        # "lr": {"values": get_range(40, 68, 1e-5)},
+        "lr": {"values": get_range(20, 50, 1e-7)},
         "lr_weight_decay": {"values": get_range(15, 20, 1e-3)},
         "gamma": {"values": get_range(84, 87, 1e-3)},
         "noise_esp": {"values": get_range(17, 34, 1e-4)},

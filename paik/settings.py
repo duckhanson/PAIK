@@ -65,6 +65,7 @@ class SolverConfig:
 
     dir_paths: Tuple[str, str, str] = (data_dir, weight_dir, traj_dir)
 
+
 DEFAULT_SOLVER_PARAM_M7_NORM = SolverConfig(
     lr=0.00037,
     gamma=0.086,

@@ -19,10 +19,9 @@ def ikp(test_pafik: bool, test_ikflow: bool):
     if test_pafik:
         solver.shrink_ratio = 0.25
         avg_l2_errs, avg_ang_errs, avg_inference_time = solver.random_sample_solutions_with_evaluation(NUM_POSES, NUM_SOLS, return_time=True)  # type: ignore
-
         print(
             tabulate(
-                [[avg_l2_errs, avg_ang_errs, avg_inference_time]],
+                [[avg_l2_errs, np.rad2deg(avg_ang_errs), avg_inference_time]],
                 headers=["avg_l2_errs", "avg_ang_errs", "avg_inference_time"],
             )
         )
@@ -52,10 +51,10 @@ def ikp(test_pafik: bool, test_ikflow: bool):
             ) = ik_solver.solve(
                 p, n=NUM_SOLS, refine_solutions=False, return_detailed=True
             )  # type: ignore
-
+        
         print(
             tabulate(
-                [[l2_errs.mean(), ang_errs.mean(), time_diffs.mean()]],
+                [[l2_errs.mean(), np.rad2deg(ang_errs.mean()), time_diffs.mean()]],
                 headers=["avg_l2_errs", "avg_ang_errs", "avg_inference_time"],
             )
         )

@@ -33,6 +33,7 @@ def get_flow_model(
     r: int,
     random_perm: bool,
     enable_load_model: bool,
+    disable_posture_feature: bool,
     shce_patience: int,
 ):
     """
@@ -44,8 +45,8 @@ def get_flow_model(
     assert model_architecture in ["nsf"]
     # Build Generative model, NSF
     # Neural spline flow (NSF) with inputs 7 features and 3 + 4 + 1 context
-    num_conditions = m + r + 1
-
+    num_conditions = m + 1 if disable_posture_feature else m + r + 1
+    
     flow = change_flow_base(
         NSF(
             features=n,

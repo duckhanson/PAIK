@@ -8,21 +8,21 @@ from ikflow.utils import set_seed
 from ikflow.model_loading import get_ik_solver
 
 TEST_PAFIK = True
-TEST_IKFLOW = True
+TEST_IKFLOW = False
 NUM_POSES = 100  # 100
 NUM_SOLS = 1000  # 1000
-
+SUCCESS_THRESHOLD = 2e-4
 
 def ikp(test_pafik: bool, test_ikflow: bool):
     solver = Solver(solver_param=DEFAULT_SOLVER_PARAM_M7_NORM)
 
     if test_pafik:
         solver.shrink_ratio = 0.25
-        avg_l2_errs, avg_ang_errs, avg_inference_time = solver.random_sample_solutions_with_evaluation(NUM_POSES, NUM_SOLS, return_time=True)  # type: ignore
+        avg_l2_errs, avg_ang_errs, avg_inference_time, success_rate = solver.random_sample_solutions_with_evaluation(NUM_POSES, NUM_SOLS, return_time=True, return_success_rate=True, success_threshold=SUCCESS_THRESHOLD)  # type: ignore
         print(
             tabulate(
-                [[avg_l2_errs, np.rad2deg(avg_ang_errs), avg_inference_time]],
-                headers=["avg_l2_errs", "avg_ang_errs", "avg_inference_time"],
+                [[avg_l2_errs, np.rad2deg(avg_ang_errs), avg_inference_time, success_rate]],
+                headers=["avg_l2_errs", "avg_ang_errs", "avg_inference_time", "success_rate"],
             )
         )
 

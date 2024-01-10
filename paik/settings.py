@@ -30,6 +30,7 @@ class SolverConfig:
     num_epochs: int = 15
     shce_patience: int = 2
     posture_feature_scale: float = 1.0
+    disable_posture_feature: bool = False
 
     # inference
     ckpt_name: str = "1118-0317"

@@ -31,6 +31,7 @@ class Solver:
             solver_param.robot_name, robot_dirs=solver_param.dir_paths
         )
         self._device = solver_param.device
+        self._disable_posture_feature = solver_param.disable_posture_feature
         # Neural spline flow (NSF) with 3 sample features and 5 context features
         self._n, self._m, self._r = solver_param.nmr
         self._solver, self._optimizer, self._scheduler = get_flow_model(
@@ -50,6 +51,7 @@ class Solver:
             m=self._m,
             r=self._r,
             shce_patience=solver_param.shce_patience,
+            disable_posture_feature=self._disable_posture_feature,
         )  # type: ignore
         self._shrink_ratio = solver_param.shrink_ratio
         self._init_latent = torch.zeros((1, self.robot.n_dofs)).to(self._device)
@@ -197,12 +199,20 @@ class Solver:
         if isinstance(C, torch.Tensor):
             C = C.detach().cpu().numpy()
         return torch.from_numpy((C * self.__std_C + self.__mean_C).astype(np.float32))  # type: ignore
+    
+    def remove_posture_feature(self, C: np.ndarray | torch.Tensor):
+        assert self._disable_posture_feature
+        if isinstance(C, torch.Tensor):
+            C = C.detach().cpu().numpy()
+        C = np.column_stack((C[:, : self._m], C[:, -1]))  
+        return torch.from_numpy(C.astype(np.float32))
 
     def solve(
         self, P: np.ndarray, F: np.ndarray, num_sols: int, return_numpy: bool = False
     ):
         C = np.column_stack((P, F, np.zeros((len(F), 1)))).astype(np.float32)
         C = self.norm_C(C) if self._enable_normalize else torch.from_numpy(C)
+        C = self.remove_posture_feature(C) if self._disable_posture_feature else C
         C = C.to(self._device)
         with torch.inference_mode():
             J = self._solver(C).sample((num_sols,)).detach().cpu()
@@ -226,7 +236,8 @@ class Solver:
         P: np.ndarray,
         return_row: bool = False,
         return_col: bool = False,
-    ):
+        return_all: bool = False,
+    ) -> tuple[Any, Any]:
         if isinstance(J, torch.Tensor):
             J = J.detach().cpu().numpy()
 
@@ -257,11 +268,13 @@ class Solver:
             return l2_errs.mean(axis=0), ang_errs.mean(axis=0)
         elif return_col:
             return l2_errs.mean(axis=1), ang_errs.mean(axis=1)
+        elif return_all:
+            return l2_errs.flatten(), ang_errs.flatten()
         return l2_errs.mean(), ang_errs.mean()
 
     def random_sample_solutions_with_evaluation(
-        self, num_poses: int, num_sols: int, return_time: bool = False
-    ):
+        self, num_poses: int, num_sols: int, return_time: bool = False, return_success_rate: bool = False, success_threshold: float = 1e-4
+    ):# -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
         # Randomly sample poses from test set
         P = self._P_ts[np.random.choice(self._P_ts.shape[0], num_poses, replace=False)]
         time_begin = time()
@@ -274,9 +287,20 @@ class Solver:
 
         P = P if self._m == 7 else np.column_stack((P, np.ones(shape=(len(P), 4))))
 
-        avg_l2_errs, avg_ang_errs = self.evaluate_solutions(J_hat, P)
+        success_rate = 0
+        if return_success_rate:
+            l2_errs, ang_errs = self.evaluate_solutions(J_hat, P, return_all=True)
+            avg_l2_errs, avg_ang_errs = l2_errs.mean(), ang_errs.mean()
+            # success_rate = sum(np.where(l2_errs < success_threshold)) / (num_poses * num_sols)
+            df = pd.DataFrame({"l2_errs": l2_errs, "ang_errs": ang_errs})
+            # use df to get success rate where l2_errs < 1e-4
+            success_rate = df[df['l2_errs'] < success_threshold].count() / (num_poses * num_sols)
+            print(df.describe())
+        else:
+            avg_l2_errs, avg_ang_errs = self.evaluate_solutions(J_hat, P)
+        
 
-        errors_time = round((time() - time_begin), 3) - inference_time
+        # errors_time = round((time() - time_begin), 3) - inference_time
         # print(
         #     tabulate(
         #         [[inference_time, errors_time]],
@@ -286,7 +310,10 @@ class Solver:
 
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
+        results = [avg_l2_errs, avg_ang_errs]
         if return_time:
-            return avg_l2_errs, avg_ang_errs, avg_inference_time
-        else:
-            return avg_l2_errs, avg_ang_errs
+            results.append(avg_inference_time)
+        if return_success_rate:
+            results.append(success_rate)
+        
+        return tuple(results)

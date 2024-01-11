@@ -83,6 +83,23 @@ DEFAULT_SOLVER_PARAM_M7_NORM = SolverConfig(
     ckpt_name="1205-0023",  # 1202-1325, 1205-0023
 )
 
+DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES = SolverConfig(
+    lr=0.00037,
+    gamma=0.086,
+    noise_esp=0.0025,
+    random_perm=False,
+    shrink_ratio=0.68,
+    subnet_width=1024,
+    num_transforms=8,
+    lr_weight_decay=0.012,
+    noise_esp_decay=0.97,
+    enable_normalize=True,
+    subnet_num_layers=3,
+    batch_size=1024,
+    disable_posture_feature=True,
+    ckpt_name="0110-2317",  
+)
+
 
 if __name__ == "__main__":
     print(SolverConfig())

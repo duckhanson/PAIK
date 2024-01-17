@@ -11,11 +11,13 @@ TEST_PAFIK = True
 TEST_IKFLOW = False
 NUM_POSES = 100  # 100
 NUM_SOLS = 1000  # 1000
-SUCCESS_THRESHOLD = 2e-4
+SUCCESS_THRESHOLD = 5e-3
 DISABLE_POSTURE_FEATURE = False
 
 def ikp(test_pafik: bool, test_ikflow: bool):
-    solver = Solver(solver_param=DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES) if DISABLE_POSTURE_FEATURE else Solver(solver_param=DEFAULT_SOLVER_PARAM_M7_NORM)
+    solver_param = DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES if DISABLE_POSTURE_FEATURE else DEFAULT_SOLVER_PARAM_M7_NORM
+    solver_param.method_of_select_reference_posture = "knn"
+    solver = Solver(solver_param=solver_param) 
 
     if test_pafik:
         solver.shrink_ratio = 0.25

@@ -30,6 +30,7 @@ class Solver:
         self._robot = get_robot(
             solver_param.robot_name, robot_dirs=solver_param.dir_paths
         )
+        self._method_of_select_reference_posture = solver_param.method_of_select_reference_posture
         self._device = solver_param.device
         self._disable_posture_feature = solver_param.disable_posture_feature
         # Neural spline flow (NSF) with 3 sample features and 5 context features
@@ -272,6 +273,18 @@ class Solver:
         elif return_all:
             return l2_errs.flatten(), ang_errs.flatten()
         return l2_errs.mean(), ang_errs.mean()
+    
+    def select_reference_posture(self, P: np.ndarray):
+        if self._method_of_select_reference_posture == "knn":
+            return self._F[self.nearest_neighnbor_P.kneighbors(np.atleast_2d(P), n_neighbors=1, return_distance=False).flatten()] # type: ignore
+        elif self._method_of_select_reference_posture == "random":
+            mF, MF = np.min(self._F), np.max(self._F)
+            return np.random.rand(len(P), self._r) * (MF - mF) + mF
+        elif self._method_of_select_reference_posture == "pick":
+            # randomly pick one posture from train set
+            return self._F[np.random.randint(0, len(self._F), len(P))]
+        else:
+            raise NotImplementedError
 
     def random_sample_solutions_with_evaluation(
         self, num_poses: int, num_sols: int, return_time: bool = False, return_success_rate: bool = False, success_threshold: float = 1e-4
@@ -280,7 +293,7 @@ class Solver:
         P = self._P_ts[np.random.choice(self._P_ts.shape[0], num_poses, replace=False)]
         time_begin = time()
         # Data Preprocessing
-        F = self._F[self.nearest_neighnbor_P.kneighbors(np.atleast_2d(P), n_neighbors=1, return_distance=False).flatten()]  # type: ignore
+        F = self.select_reference_posture(P)
 
         # Begin inference
         J_hat = self.solve(P, F, num_sols, return_numpy=True)

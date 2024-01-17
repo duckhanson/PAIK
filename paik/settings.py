@@ -31,6 +31,8 @@ class SolverConfig:
     shce_patience: int = 2
     posture_feature_scale: float = 1.0
     disable_posture_feature: bool = False
+    methods_reference_posture: Tuple[str, str, str] = ("knn", "random", "pick")
+    method_of_select_reference_posture: str = methods_reference_posture[0]
 
     # inference
     ckpt_name: str = "1118-0317"
@@ -80,7 +82,7 @@ DEFAULT_SOLVER_PARAM_M7_NORM = SolverConfig(
     enable_normalize=True,
     subnet_num_layers=3,
     batch_size=1024,
-    ckpt_name="1205-0023",  # 1202-1325, 1205-0023
+    ckpt_name="1202-1325",  # 1202-1325, 1205-0023
 )
 
 DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES = SolverConfig(

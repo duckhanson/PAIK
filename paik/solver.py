@@ -16,7 +16,7 @@ from jrl.conversions import geodesic_distance_between_quaternions
 
 from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_NORM
 from paik.model import get_flow_model, get_robot
-from paik.file import load_numpy, save_numpy
+from paik.file import load_numpy, save_numpy, save_pickle
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 
@@ -63,6 +63,7 @@ class Solver:
 
         self._J_tr, self._P_tr, self._P_ts, self._F = self.__load_all_data()
         self.nearest_neighnbor_P = NearestNeighbors(n_neighbors=1).fit(self._P_tr)
+        save_pickle('./nearest_neighnbor_P', self.nearest_neighnbor_P)
 
         self._enable_normalize = solver_param.enable_normalize
         if self._enable_normalize:

@@ -8,7 +8,7 @@ from time import time
 from datetime import datetime
 from tabulate import tabulate
 from sklearn.neighbors import NearestNeighbors
-from paik.file import load_numpy, save_numpy
+from paik.file import load_numpy, save_numpy, save_pickle
 from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_NORM
 
 from paik.solver import Solver
@@ -27,6 +27,7 @@ class PathFollower(Solver):
         self.JP_knn = NearestNeighbors(n_neighbors=1).fit(
             np.column_stack([self._J_tr, self._P_tr])
         )
+        save_pickle('./JP_knn', self.JP_knn)
 
     def solve_path(
         self,

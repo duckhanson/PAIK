@@ -64,7 +64,7 @@ class Solver:
 
         self._J_tr, self._P_tr, self._P_ts, self._F = self.__load_all_data()
         self.nearest_neighnbor_P = NearestNeighbors(n_neighbors=1).fit(self._P_tr)
-        save_pickle('./nearest_neighnbor_P', self.nearest_neighnbor_P)
+        save_pickle('./weights/panda/nearest_neighnbor_P.pth', self.nearest_neighnbor_P)
 
         self._enable_normalize = solver_param.enable_normalize
         if self._enable_normalize:

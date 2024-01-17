@@ -27,7 +27,7 @@ class PathFollower(Solver):
         self.JP_knn = NearestNeighbors(n_neighbors=1).fit(
             np.column_stack([self._J_tr, self._P_tr])
         )
-        save_pickle('./JP_knn', self.JP_knn)
+        save_pickle('./weights/panda/JP_knn.pth', self.JP_knn)
 
     def solve_path(
         self,

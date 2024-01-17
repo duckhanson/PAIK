@@ -9,7 +9,6 @@ from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM, DEFAULT_SOLVER_PARAM_M7_
 NUM_POSES = 1
 NUM_SOLUTIONS = 10000
 
-
 def posture_sweep():
     solver = Solver(solver_param=DEFAULT_SOLVER_PARAM_M7_NORM)
     J, P, F = solver.get_random_JPF(num_samples=NUM_POSES)

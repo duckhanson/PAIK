@@ -97,7 +97,7 @@ DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES = SolverConfig(
     subnet_num_layers=3,
     batch_size=1024,
     disable_posture_feature=True,
-    ckpt_name="0110-2317",  
+    ckpt_name="0115-0234",  
 )
 
 

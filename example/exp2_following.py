@@ -4,7 +4,7 @@ import pandas as pd
 from time import time
 from tabulate import tabulate
 
-from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM
+from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM, DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES
 from paik.follower import PathFollower, max_joint_angle_change
 
 import torch
@@ -14,6 +14,7 @@ from ikflow.model_loading import get_ik_solver
 
 TEST_PAFIK = True
 TEST_IKFLOW = True
+DISABLE_POSTURE_FEATURE = False
 LOAD_TIME = ""
 NUM_STEPS = 10
 NUM_TRAJECTORIES = 500
@@ -21,7 +22,7 @@ DDJC_THRES = (40, 60, 80, 100)
 
 
 def path_following(test_pafik: bool, test_ikflow: bool):
-    solver = PathFollower(solver_param=DEFAULT_SOLVER_PARAM_M7_NORM)
+    solver = PathFollower(solver_param=DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES) if DISABLE_POSTURE_FEATURE else PathFollower(solver_param=DEFAULT_SOLVER_PARAM_M7_NORM)
 
     J, P = solver.sample_Jtraj_Ppath(load_time=LOAD_TIME, num_steps=NUM_STEPS)
 

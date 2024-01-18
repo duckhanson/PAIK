@@ -4,10 +4,14 @@ import matplotlib.pyplot as plt
 from tabulate import tabulate
 from paik.solver import Solver
 from paik.train import init_seeds
-from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM, DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES
+from paik.settings import (
+    DEFAULT_SOLVER_PARAM_M7_NORM,
+    DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES,
+)
 
 NUM_POSES = 1
 NUM_SOLUTIONS = 10000
+
 
 def posture_sweep():
     solver = Solver(solver_param=DEFAULT_SOLVER_PARAM_M7_NORM)
@@ -52,7 +56,7 @@ def posture_sweep():
     ax = query_df["config_errs"].plot.hist(bins=30)
     ax.set_xlabel("Config Error (rads)")
     plt.show()
-    
+
     ax2 = query_df.plot.scatter(x="config_errs", y="posture")
     ax2.set_xlabel("Config Error (rads)")
     ax2.set_ylabel("posture features")

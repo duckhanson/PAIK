@@ -79,7 +79,7 @@ class Trainer(Solver):
                 )
 
             C = self.remove_posture_feature(C) if self._disable_posture_feature else C
-            
+
             train_loader = DataLoader(
                 TensorDataset(J.to(self._device), C.to(self._device)),
                 batch_size=batch_size,

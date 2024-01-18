@@ -100,7 +100,7 @@ DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES = SolverConfig(
     subnet_num_layers=3,
     batch_size=1024,
     disable_posture_feature=True,
-    ckpt_name="0115-0234",  
+    ckpt_name="0115-0234",
 )
 
 DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE = SolverConfig(
@@ -118,7 +118,7 @@ DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE = SolverConfig(
     batch_size=1024,
     disable_posture_feature=False,
     extract_posture_feature_from_C_space=True,
-    ckpt_name="0118-0827",  
+    ckpt_name="0118-0827",
 )
 
 

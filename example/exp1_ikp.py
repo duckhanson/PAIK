@@ -3,7 +3,11 @@ import numpy as np
 import pandas as pd
 from tabulate import tabulate
 from paik.solver import Solver
-from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM, DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES, DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
+from paik.settings import (
+    DEFAULT_SOLVER_PARAM_M7_NORM,
+    DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES,
+    DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE,
+)
 from ikflow.utils import set_seed
 from ikflow.model_loading import get_ik_solver
 
@@ -15,20 +19,41 @@ SUCCESS_THRESHOLD = 5e-3
 DISABLE_POSTURE_FEATURE = False
 EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = True
 
+
 def ikp(test_pafik: bool, test_ikflow: bool):
     assert not (DISABLE_POSTURE_FEATURE and EXTRACT_POSTURE_FEATURE_FROM_C_SPACE)
-    solver_param = DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES if DISABLE_POSTURE_FEATURE else DEFAULT_SOLVER_PARAM_M7_NORM
-    solver_param = DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE if EXTRACT_POSTURE_FEATURE_FROM_C_SPACE else solver_param
+    solver_param = (
+        DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES
+        if DISABLE_POSTURE_FEATURE
+        else DEFAULT_SOLVER_PARAM_M7_NORM
+    )
+    solver_param = (
+        DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
+        if EXTRACT_POSTURE_FEATURE_FROM_C_SPACE
+        else solver_param
+    )
     solver_param.method_of_select_reference_posture = "knn"
-    solver = Solver(solver_param=solver_param) 
+    solver = Solver(solver_param=solver_param)
 
     if test_pafik:
         solver.shrink_ratio = 0.25
         avg_l2_errs, avg_ang_errs, avg_inference_time, success_rate = solver.random_sample_solutions_with_evaluation(NUM_POSES, NUM_SOLS, return_time=True, return_success_rate=True, success_threshold=SUCCESS_THRESHOLD)  # type: ignore
         print(
             tabulate(
-                [[avg_l2_errs, np.rad2deg(avg_ang_errs), avg_inference_time, success_rate]],
-                headers=["avg_l2_errs", "avg_ang_errs", "avg_inference_time", "success_rate"],
+                [
+                    [
+                        avg_l2_errs,
+                        np.rad2deg(avg_ang_errs),
+                        avg_inference_time,
+                        success_rate,
+                    ]
+                ],
+                headers=[
+                    "avg_l2_errs",
+                    "avg_ang_errs",
+                    "avg_inference_time",
+                    "success_rate",
+                ],
             )
         )
 
@@ -57,7 +82,7 @@ def ikp(test_pafik: bool, test_ikflow: bool):
             ) = ik_solver.solve(
                 p, n=NUM_SOLS, refine_solutions=False, return_detailed=True
             )  # type: ignore
-        
+
         print(
             tabulate(
                 [[l2_errs.mean(), np.rad2deg(ang_errs.mean()), time_diffs.mean()]],

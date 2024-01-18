@@ -30,8 +30,12 @@ class Solver:
         self._robot = get_robot(
             solver_param.robot_name, robot_dirs=solver_param.dir_paths
         )
-        self._extract_posture_feature_from_C_space = solver_param.extract_posture_feature_from_C_space
-        self._method_of_select_reference_posture = solver_param.method_of_select_reference_posture
+        self._extract_posture_feature_from_C_space = (
+            solver_param.extract_posture_feature_from_C_space
+        )
+        self._method_of_select_reference_posture = (
+            solver_param.method_of_select_reference_posture
+        )
         self._device = solver_param.device
         self._disable_posture_feature = solver_param.disable_posture_feature
         # Neural spline flow (NSF) with 3 sample features and 5 context features
@@ -65,7 +69,7 @@ class Solver:
 
         self._J_tr, self._P_tr, self._P_ts, self._F = self.__load_all_data()
         self.nearest_neighnbor_P = NearestNeighbors(n_neighbors=1).fit(self._P_tr)
-        save_pickle('./weights/panda/nearest_neighnbor_P.pth', self.nearest_neighnbor_P)
+        save_pickle("./weights/panda/nearest_neighnbor_P.pth", self.nearest_neighnbor_P)
 
         self._enable_normalize = solver_param.enable_normalize
         if self._enable_normalize:
@@ -129,7 +133,11 @@ class Solver:
 
         def get_posture_feature(J: np.ndarray, P: np.ndarray):
             assert self._r > 0
-            file_path = f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}-from-C-space.npy" if self._extract_posture_feature_from_C_space else f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}.npy"
+            file_path = (
+                f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}-from-C-space.npy"
+                if self._extract_posture_feature_from_C_space
+                else f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}.npy"
+            )
             F = load_numpy(file_path=file_path)
 
             GENERATE_NEW = F.shape != (len(J), self._r)
@@ -138,7 +146,11 @@ class Solver:
                 hnne = HNNE(dim=self._r)
                 # maximum number of data for hnne (11M), we use max_num_data_hnne to test
                 num_data = min(self.param.max_num_data_hnne, len(J))
-                S = J if self._extract_posture_feature_from_C_space else np.column_stack((J, P))
+                S = (
+                    J
+                    if self._extract_posture_feature_from_C_space
+                    else np.column_stack((J, P))
+                )
                 F = hnne.fit_transform(X=S[:num_data], dim=self._r, verbose=True)
                 # query nearest neighbors for the rest of J
                 if len(F) != len(J):
@@ -202,12 +214,12 @@ class Solver:
         if isinstance(C, torch.Tensor):
             C = C.detach().cpu().numpy()
         return torch.from_numpy((C * self.__std_C + self.__mean_C).astype(np.float32))  # type: ignore
-    
+
     def remove_posture_feature(self, C: np.ndarray | torch.Tensor):
         assert self._disable_posture_feature
         if isinstance(C, torch.Tensor):
             C = C.detach().cpu().numpy()
-        C = np.column_stack((C[:, : self._m], C[:, -1]))  
+        C = np.column_stack((C[:, : self._m], C[:, -1]))
         return torch.from_numpy(C.astype(np.float32))
 
     def solve(
@@ -274,10 +286,10 @@ class Solver:
         elif return_all:
             return l2_errs.flatten(), ang_errs.flatten()
         return l2_errs.mean(), ang_errs.mean()
-    
+
     def select_reference_posture(self, P: np.ndarray):
         if self._method_of_select_reference_posture == "knn":
-            return self._F[self.nearest_neighnbor_P.kneighbors(np.atleast_2d(P), n_neighbors=1, return_distance=False).flatten()] # type: ignore
+            return self._F[self.nearest_neighnbor_P.kneighbors(np.atleast_2d(P), n_neighbors=1, return_distance=False).flatten()]  # type: ignore
         elif self._method_of_select_reference_posture == "random":
             mF, MF = np.min(self._F), np.max(self._F)
             return np.random.rand(len(P), self._r) * (MF - mF) + mF
@@ -288,8 +300,13 @@ class Solver:
             raise NotImplementedError
 
     def random_sample_solutions_with_evaluation(
-        self, num_poses: int, num_sols: int, return_time: bool = False, return_success_rate: bool = False, success_threshold: float = 1e-4
-    ):# -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
+        self,
+        num_poses: int,
+        num_sols: int,
+        return_time: bool = False,
+        return_success_rate: bool = False,
+        success_threshold: float = 1e-4,
+    ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
         # Randomly sample poses from test set
         P = self._P_ts[np.random.choice(self._P_ts.shape[0], num_poses, replace=False)]
         time_begin = time()
@@ -309,11 +326,12 @@ class Solver:
             # success_rate = sum(np.where(l2_errs < success_threshold)) / (num_poses * num_sols)
             df = pd.DataFrame({"l2_errs": l2_errs, "ang_errs": ang_errs})
             # use df to get success rate where l2_errs < 1e-4
-            success_rate = df[df['l2_errs'] < success_threshold].count() / (num_poses * num_sols)
+            success_rate = df[df["l2_errs"] < success_threshold].count() / (
+                num_poses * num_sols
+            )
             print(df.describe())
         else:
             avg_l2_errs, avg_ang_errs = self.evaluate_solutions(J_hat, P)
-        
 
         # errors_time = round((time() - time_begin), 3) - inference_time
         # print(
@@ -330,5 +348,5 @@ class Solver:
             results.append(avg_inference_time)
         if return_success_rate:
             results.append(success_rate)
-        
+
         return tuple(results)

@@ -24,10 +24,8 @@ class PathFollower(Solver):
     def __init__(self, solver_param: SolverConfig) -> None:
         super().__init__(solver_param)
 
-        self.JP_knn = NearestNeighbors(n_neighbors=1).fit(
-            np.column_stack([self._J_tr, self._P_tr])
-        )
-        save_pickle('./weights/panda/JP_knn.pth', self.JP_knn)
+        self.J_knn = NearestNeighbors(n_neighbors=1).fit(self._J_tr)
+        save_pickle('./weights/panda/J_knn.pth', self.J_knn)
 
     def solve_path(
         self,
@@ -38,7 +36,7 @@ class PathFollower(Solver):
         return_evaluation: bool = False,
     ):
         self.shrink_ratio = 0.25
-        J_hat = self.solve(P, self._F[self.JP_knn.kneighbors(np.column_stack([J, P]), return_distance=False).flatten()], num_sols=num_traj, return_numpy=return_numpy)  # type: ignore
+        J_hat = self.solve(P, self._F[self.J_knn.kneighbors(J, return_distance=False).flatten()], num_sols=num_traj, return_numpy=return_numpy)  # type: ignore
         if not return_evaluation:
             return J_hat
 

@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from tabulate import tabulate
 from paik.solver import Solver
-from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM, DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES
+from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM, DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES, DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
 from ikflow.utils import set_seed
 from ikflow.model_loading import get_ik_solver
 
@@ -13,9 +13,12 @@ NUM_POSES = 100  # 100
 NUM_SOLS = 1000  # 1000
 SUCCESS_THRESHOLD = 5e-3
 DISABLE_POSTURE_FEATURE = False
+EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = True
 
 def ikp(test_pafik: bool, test_ikflow: bool):
+    assert not (DISABLE_POSTURE_FEATURE and EXTRACT_POSTURE_FEATURE_FROM_C_SPACE)
     solver_param = DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES if DISABLE_POSTURE_FEATURE else DEFAULT_SOLVER_PARAM_M7_NORM
+    solver_param = DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE if EXTRACT_POSTURE_FEATURE_FROM_C_SPACE else solver_param
     solver_param.method_of_select_reference_posture = "knn"
     solver = Solver(solver_param=solver_param) 
 

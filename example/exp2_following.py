@@ -4,7 +4,7 @@ import pandas as pd
 from time import time
 from tabulate import tabulate
 
-from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM, DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES
+from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM, DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES, DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
 from paik.follower import PathFollower, max_joint_angle_change
 
 import torch
@@ -13,8 +13,9 @@ from ikflow.utils import set_seed
 from ikflow.model_loading import get_ik_solver
 
 TEST_PAFIK = True
-TEST_IKFLOW = True
+TEST_IKFLOW = False
 DISABLE_POSTURE_FEATURE = False
+EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = True
 LOAD_TIME = ""
 NUM_STEPS = 10
 NUM_TRAJECTORIES = 500
@@ -22,7 +23,10 @@ DDJC_THRES = (40, 60, 80, 100)
 
 
 def path_following(test_pafik: bool, test_ikflow: bool):
-    solver = PathFollower(solver_param=DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES) if DISABLE_POSTURE_FEATURE else PathFollower(solver_param=DEFAULT_SOLVER_PARAM_M7_NORM)
+    assert not (DISABLE_POSTURE_FEATURE and EXTRACT_POSTURE_FEATURE_FROM_C_SPACE)
+    solver_param = DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES if DISABLE_POSTURE_FEATURE else DEFAULT_SOLVER_PARAM_M7_NORM
+    solver_param = DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE if EXTRACT_POSTURE_FEATURE_FROM_C_SPACE else solver_param
+    solver = PathFollower(solver_param=solver_param)
 
     J, P = solver.sample_Jtraj_Ppath(load_time=LOAD_TIME, num_steps=NUM_STEPS)
 

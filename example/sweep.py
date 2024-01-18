@@ -6,11 +6,12 @@ import wandb
 from paik.train import Trainer
 
 USE_WANDB = True
-PATIENCE = 5
+PATIENCE = 6
 POSE_ERR_THRESH = 4e-3
 EXPERMENT_COUNT = 20
-NUM_EPOCHS = 30
-DISABLE_POSTURE_FEATURE = True
+NUM_EPOCHS = 35
+DISABLE_POSTURE_FEATURE = False
+EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = True
 ENABLE_LODE_MODEL = False
 
 
@@ -23,7 +24,7 @@ sweep_config = {
     "method": "bayes",
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
-        "lr": {"values": get_range(40, 68, 1e-5)},
+        "lr": {"values": get_range(40, 75, 1e-5)},
         # "lr": {"values": get_range(10, 80, 1e-9)},
         "lr_weight_decay": {"values": get_range(15, 20, 1e-3)},
         "gamma": {"values": get_range(84, 87, 1e-3)},
@@ -49,6 +50,7 @@ def main() -> None:
     solver_param.shrink_ratio = wandb.config.shrink_ratio
     solver_param.enable_load_model = ENABLE_LODE_MODEL  # type: ignore
     solver_param.disable_posture_feature = DISABLE_POSTURE_FEATURE # type: ignore
+    solver_param.extract_posture_feature_from_C_space = EXTRACT_POSTURE_FEATURE_FROM_C_SPACE # type: ignore
 
     trainer = Trainer(solver_param=solver_param)
 

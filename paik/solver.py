@@ -30,6 +30,7 @@ class Solver:
         self._robot = get_robot(
             solver_param.robot_name, robot_dirs=solver_param.dir_paths
         )
+        self._extract_posture_feature_from_C_space = solver_param.extract_posture_feature_from_C_space
         self._method_of_select_reference_posture = solver_param.method_of_select_reference_posture
         self._device = solver_param.device
         self._disable_posture_feature = solver_param.disable_posture_feature
@@ -128,7 +129,7 @@ class Solver:
 
         def get_posture_feature(J: np.ndarray, P: np.ndarray):
             assert self._r > 0
-            file_path = f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}.npy"
+            file_path = f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}-from-C-space.npy" if self._extract_posture_feature_from_C_space else f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}.npy"
             F = load_numpy(file_path=file_path)
 
             GENERATE_NEW = F.shape != (len(J), self._r)
@@ -137,7 +138,7 @@ class Solver:
                 hnne = HNNE(dim=self._r)
                 # maximum number of data for hnne (11M), we use max_num_data_hnne to test
                 num_data = min(self.param.max_num_data_hnne, len(J))
-                S = np.column_stack((J, P))
+                S = J if self._extract_posture_feature_from_C_space else np.column_stack((J, P))
                 F = hnne.fit_transform(X=S[:num_data], dim=self._r, verbose=True)
                 # query nearest neighbors for the rest of J
                 if len(F) != len(J):

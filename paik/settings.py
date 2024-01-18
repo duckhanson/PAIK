@@ -33,6 +33,7 @@ class SolverConfig:
     disable_posture_feature: bool = False
     methods_reference_posture: Tuple[str, str, str] = ("knn", "random", "pick")
     method_of_select_reference_posture: str = methods_reference_posture[0]
+    extract_posture_feature_from_C_space: bool = False
 
     # inference
     ckpt_name: str = "1118-0317"
@@ -100,6 +101,24 @@ DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES = SolverConfig(
     batch_size=1024,
     disable_posture_feature=True,
     ckpt_name="0115-0234",  
+)
+
+DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE = SolverConfig(
+    lr=0.00037,
+    gamma=0.086,
+    noise_esp=0.0025,
+    random_perm=False,
+    shrink_ratio=0.68,
+    subnet_width=1024,
+    num_transforms=8,
+    lr_weight_decay=0.012,
+    noise_esp_decay=0.97,
+    enable_normalize=True,
+    subnet_num_layers=3,
+    batch_size=1024,
+    disable_posture_feature=False,
+    extract_posture_feature_from_C_space=True,
+    ckpt_name="0118-0827",  
 )
 
 

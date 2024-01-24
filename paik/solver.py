@@ -1,5 +1,6 @@
 # Import required packages
 from __future__ import annotations
+from typing import Tuple
 import os
 from time import time
 from datetime import datetime
@@ -61,7 +62,6 @@ class Solver:
         )  # type: ignore
         self._shrink_ratio = solver_param.shrink_ratio
         self._init_latent = torch.zeros((1, self.robot.n_dofs)).to(self._device)
-
         # load inference data
         assert (
             self._n == self._robot.n_dofs
@@ -69,7 +69,7 @@ class Solver:
 
         self._J_tr, self._P_tr, self._P_ts, self._F = self.__load_all_data()
         self.nearest_neighnbor_P = NearestNeighbors(n_neighbors=1).fit(self._P_tr)
-        save_pickle("./weights/panda/nearest_neighnbor_P.pth", self.nearest_neighnbor_P)
+        # save_pickle("./weights/panda/nearest_neighnbor_P.pth", self.nearest_neighnbor_P)
 
         self._enable_normalize = solver_param.enable_normalize
         if self._enable_normalize:
@@ -305,10 +305,13 @@ class Solver:
         num_sols: int,
         return_time: bool = False,
         return_success_rate: bool = False,
-        success_threshold: float = 1e-4,
+        success_threshold: Tuple[float, float] = (1e-4, 1e-4),
     ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
         # Randomly sample poses from test set
-        P = self._P_ts[np.random.choice(self._P_ts.shape[0], num_poses, replace=False)]
+        # P = self._P_ts[np.random.choice(self._P_ts.shape[0], num_poses, replace=False)]
+        _, P = self._robot.sample_joint_angles_and_poses(
+            n=num_poses, return_torch=False
+        )
         time_begin = time()
         # Data Preprocessing
         F = self.select_reference_posture(P)
@@ -324,9 +327,10 @@ class Solver:
             l2_errs, ang_errs = self.evaluate_solutions(J_hat, P, return_all=True)
             avg_l2_errs, avg_ang_errs = l2_errs.mean(), ang_errs.mean()
             # success_rate = sum(np.where(l2_errs < success_threshold)) / (num_poses * num_sols)
-            df = pd.DataFrame({"l2_errs": l2_errs, "ang_errs": ang_errs})
+            df = pd.DataFrame({"l2_errs": l2_errs, "ang_errs": np.rad2deg(ang_errs)})
             # use df to get success rate where l2_errs < 1e-4
-            success_rate = df[df["l2_errs"] < success_threshold].count() / (
+            df_query = df.query(f"l2_errs < {success_threshold[0]} & ang_errs < {success_threshold[1]}")
+            success_rate = df_query.count() / (
                 num_poses * num_sols
             )
             print(df.describe())

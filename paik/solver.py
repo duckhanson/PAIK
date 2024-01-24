@@ -329,10 +329,10 @@ class Solver:
             # success_rate = sum(np.where(l2_errs < success_threshold)) / (num_poses * num_sols)
             df = pd.DataFrame({"l2_errs": l2_errs, "ang_errs": np.rad2deg(ang_errs)})
             # use df to get success rate where l2_errs < 1e-4
-            df_query = df.query(f"l2_errs < {success_threshold[0]} & ang_errs < {success_threshold[1]}")
-            success_rate = df_query.count() / (
-                num_poses * num_sols
+            df_query = df.query(
+                f"l2_errs < {success_threshold[0]} & ang_errs < {success_threshold[1]}"
             )
+            success_rate = df_query.count() / (num_poses * num_sols)
             print(df.describe())
         else:
             avg_l2_errs, avg_ang_errs = self.evaluate_solutions(J_hat, P)

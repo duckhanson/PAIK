@@ -20,6 +20,7 @@ DISABLE_POSTURE_FEATURE = False
 EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = True
 METHOD_OF_SELECT_REFERENCE_POSTURE = "pick"
 
+
 def ikp(test_pafik: bool, test_ikflow: bool):
     assert not (DISABLE_POSTURE_FEATURE and EXTRACT_POSTURE_FEATURE_FROM_C_SPACE)
     solver_param = (

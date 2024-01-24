@@ -1,7 +1,10 @@
 import numpy as np
 import pandas as pd
 from paik.follower import PathFollower
-from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM, DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
+from paik.settings import (
+    DEFAULT_SOLVER_PARAM_M7_NORM,
+    DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE,
+)
 from ikflow.utils import set_seed
 from ikflow.model_loading import get_ik_solver
 

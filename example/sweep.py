@@ -29,7 +29,7 @@ sweep_config = {
         "gamma": {"values": get_range(84, 87, 1e-3)},
         "noise_esp": {"values": get_range(25, 34, 1e-4)},
         "noise_esp_decay": {"values": get_range(94, 100, 1e-2)},
-        "shrink_ratio": {"values": [.64, .65]},
+        "shrink_ratio": {"values": [0.64, 0.65]},
     },
 }
 

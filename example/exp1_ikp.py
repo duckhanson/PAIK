@@ -13,12 +13,12 @@ from ikflow.model_loading import get_ik_solver
 
 TEST_PAFIK = True
 TEST_IKFLOW = False
-NUM_POSES = 100  # 100
+NUM_POSES = 10000  # 100
 NUM_SOLS = 1000  # 1000
-SUCCESS_THRESHOLD = 5e-3
+SUCCESS_THRESHOLD = (5e-3, 2)
 DISABLE_POSTURE_FEATURE = False
 EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = True
-
+METHOD_OF_SELECT_REFERENCE_POSTURE = "pick"
 
 def ikp(test_pafik: bool, test_ikflow: bool):
     assert not (DISABLE_POSTURE_FEATURE and EXTRACT_POSTURE_FEATURE_FROM_C_SPACE)
@@ -32,7 +32,7 @@ def ikp(test_pafik: bool, test_ikflow: bool):
         if EXTRACT_POSTURE_FEATURE_FROM_C_SPACE
         else solver_param
     )
-    solver_param.method_of_select_reference_posture = "knn"
+    solver_param.method_of_select_reference_posture = METHOD_OF_SELECT_REFERENCE_POSTURE
     solver = Solver(solver_param=solver_param)
 
     if test_pafik:

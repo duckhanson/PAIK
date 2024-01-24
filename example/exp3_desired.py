@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from paik.follower import PathFollower
-from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM
+from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM, DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
 from ikflow.utils import set_seed
 from ikflow.model_loading import get_ik_solver
 
@@ -13,7 +13,7 @@ NUM_SOLUTIONS = 100
 
 
 def desired(test_pafik: bool, test_ikflow: bool):
-    solver = PathFollower(solver_param=DEFAULT_SOLVER_PARAM_M7_NORM)
+    solver = PathFollower(solver_param=DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE)
     solver.shrink_ratio = 0.0
     J_im, P_im, F_im = solver.get_random_JPF(num_samples=NUM_IMITATION_DATA)
     J_ta, P_ta, F_ta = solver.get_random_JPF(num_samples=NUM_TARGET_DATA)
@@ -26,7 +26,7 @@ def desired(test_pafik: bool, test_ikflow: bool):
         for i, (j_im, f_im) in enumerate(zip(J_im, F_im)):
             # F = np.full_like(F_ta, *f_im)
             j_im = np.tile(j_im, (NUM_TARGET_DATA, 1))
-            F = solver._F[solver.JP_knn.kneighbors(np.column_stack((np.atleast_2d(j_im), np.atleast_2d(P_ta))), return_distance=False).flatten()]  # type: ignore
+            F = solver._F[solver.J_knn.kneighbors(np.atleast_2d(j_im), return_distance=False).flatten()]  # type: ignore
             J = solver.solve(P=P_ta, F=F, num_sols=NUM_SOLUTIONS, return_numpy=True)
             l2_errs[i], ang_errs[i] = solver.evaluate_solutions(
                 J, P_ta, return_col=True

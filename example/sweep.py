@@ -6,10 +6,10 @@ import wandb
 from paik.train import Trainer
 
 USE_WANDB = True
-PATIENCE = 6
-POSE_ERR_THRESH = 4e-3
+PATIENCE = 7
+POSE_ERR_THRESH = 3.15e-3
 EXPERMENT_COUNT = 20
-NUM_EPOCHS = 35
+NUM_EPOCHS = 50
 DISABLE_POSTURE_FEATURE = False
 EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = True
 ENABLE_LODE_MODEL = False
@@ -24,13 +24,12 @@ sweep_config = {
     "method": "bayes",
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
-        "lr": {"values": get_range(40, 75, 1e-5)},
-        # "lr": {"values": get_range(10, 80, 1e-9)},
-        "lr_weight_decay": {"values": get_range(15, 20, 1e-3)},
+        "lr": {"values": get_range(40, 56, 1e-5)},
+        "lr_weight_decay": {"values": get_range(13, 17, 1e-3)},
         "gamma": {"values": get_range(84, 87, 1e-3)},
-        "noise_esp": {"values": get_range(17, 34, 1e-4)},
+        "noise_esp": {"values": get_range(25, 34, 1e-4)},
         "noise_esp_decay": {"values": get_range(94, 100, 1e-2)},
-        "shrink_ratio": {"values": get_range(58, 66, 1e-2)},
+        "shrink_ratio": {"values": [.64, .65]},
     },
 }
 
@@ -76,7 +75,7 @@ def main() -> None:
         use_wandb=USE_WANDB,
         patience=PATIENCE,
         pose_err_thres=POSE_ERR_THRESH,
-        num_eval_poses=100,
+        num_eval_poses=1000,
         num_eval_sols=100,
     )
 

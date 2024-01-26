@@ -59,6 +59,8 @@ class Solver:
             r=self._r,
             shce_patience=solver_param.shce_patience,
             disable_posture_feature=self._disable_posture_feature,
+            lr_amsgrad=solver_param.lr_amsgrad,
+            lr_beta=solver_param.lr_beta,
         )  # type: ignore
         self._shrink_ratio = solver_param.shrink_ratio
         self._init_latent = torch.zeros((1, self.robot.n_dofs)).to(self._device)

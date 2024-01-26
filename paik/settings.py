@@ -20,6 +20,8 @@ class SolverConfig:
     # training
     lr: float = 3.7e-4
     lr_weight_decay: float = 1.2e-2
+    lr_amsgrad: bool = False
+    lr_beta: Tuple[float, float] = (0.9, 0.999)
 
     noise_esp: float = 2.5e-3
     noise_esp_decay: float = 0.97
@@ -104,14 +106,15 @@ DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES = SolverConfig(
 )
 
 DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE = SolverConfig(
-    lr=0.00037,
+    lr=4e-4,
     gamma=0.086,
     noise_esp=0.0025,
     random_perm=False,
-    shrink_ratio=0.68,
+    shrink_ratio=0.65,
     subnet_width=1024,
     num_transforms=8,
-    lr_weight_decay=0.012,
+    lr_weight_decay=0.013,
+    shce_patience=2,
     noise_esp_decay=0.97,
     enable_normalize=True,
     subnet_num_layers=3,

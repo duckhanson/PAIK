@@ -1,5 +1,5 @@
 # Import required packages
-from paik.settings import DEFAULT_SOLVER_PARAM_M7_NORM
+from paik.settings import DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
 from datetime import datetime
 from tabulate import tabulate
 import wandb
@@ -8,8 +8,8 @@ from paik.train import Trainer
 USE_WANDB = True
 PATIENCE = 7
 POSE_ERR_THRESH = 3.15e-3
-EXPERMENT_COUNT = 20
-NUM_EPOCHS = 50
+EXPERMENT_COUNT = 15
+NUM_EPOCHS = 100
 DISABLE_POSTURE_FEATURE = False
 EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = True
 ENABLE_LODE_MODEL = False
@@ -21,15 +21,16 @@ def get_range(left_bound, right_bound, scale):
 
 sweep_config = {
     "name": "sweep",
-    "method": "bayes",
+    "method": "random",
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
-        "lr": {"values": get_range(40, 56, 1e-5)},
+        "lr": {"values": get_range(48, 56, 1e-5)},
         "lr_weight_decay": {"values": get_range(13, 17, 1e-3)},
         "gamma": {"values": get_range(84, 87, 1e-3)},
         "noise_esp": {"values": get_range(25, 34, 1e-4)},
-        "noise_esp_decay": {"values": get_range(94, 100, 1e-2)},
-        "shrink_ratio": {"values": [0.64, 0.65]},
+        "noise_esp_decay": {"values": get_range(95, 100, 1e-2)},
+        "lr_beta_l": {"values": get_range(82, 96, 1e-2)},
+        "lr_beta_h": {"values": get_range(91, 95, 1e-2)},
     },
 }
 
@@ -40,13 +41,13 @@ def main() -> None:
     # instead of defining hard values
     wandb.init(name=begin_time)
 
-    solver_param = DEFAULT_SOLVER_PARAM_M7_NORM
+    solver_param = DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
     solver_param.lr = wandb.config.lr
     solver_param.lr_weight_decay = wandb.config.lr_weight_decay
     solver_param.gamma = wandb.config.gamma
     solver_param.noise_esp = wandb.config.noise_esp
     solver_param.noise_esp_decay = wandb.config.noise_esp_decay
-    solver_param.shrink_ratio = wandb.config.shrink_ratio
+    solver_param.lr_beta = (wandb.config.lr_beta_l, wandb.config.lr_beta_h)
     solver_param.enable_load_model = ENABLE_LODE_MODEL  # type: ignore
     solver_param.disable_posture_feature = DISABLE_POSTURE_FEATURE  # type: ignore
     solver_param.extract_posture_feature_from_C_space = EXTRACT_POSTURE_FEATURE_FROM_C_SPACE  # type: ignore

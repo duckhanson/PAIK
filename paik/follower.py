@@ -76,11 +76,60 @@ class PathFollower(Solver):
 
         if len(P) == 0 or len(J) == 0:
             # endPoints = np.random.rand(2, cfg.m) # 2 for begin and end
-            rand_idxs = np.random.randint(low=0, high=len(self._J_tr), size=2)
-            endPoints = self._J_tr[rand_idxs]
+            # rand_idxs = np.random.randint(low=0, high=len(self._J_tr), size=2)
+            # endPoints = self._J_tr[rand_idxs]
+            endPoints, _ = self._robot.sample_joint_angles_and_poses(
+                n=2, return_torch=False
+            )
             Jtraj = trajectory.Trajectory(milestones=endPoints)  # type: ignore
             J = np.array([Jtraj.eval(i / num_steps) for i in range(num_steps)])
             P = self._robot.forward_kinematics(J[:, 0 : self._robot.n_dofs])
+
+            save_numpy(file_path=Jtraj_file_path, arr=J)
+            save_numpy(file_path=Ppath_file_path, arr=P)
+        return J, P
+    
+    
+    def sample_Jtraj_Ppath_multiple_trajectories(self, load_time: str = "", num_steps=20, num_traj=100, seed=47):
+        """
+        sample a path from P_ts
+
+        Parameters
+        ----------
+        load_time : str, optional
+            file name of load P, by default ""
+        num_steps : int, optional
+            length of the generated path, by default 20
+
+        Returns
+        -------
+        np.ndarray
+            array_like(num_steps, m)
+        """
+        np.random.seed(seed)
+
+        if load_time == "":
+            traj_dir = self.param.traj_dir + datetime.now().strftime("%m%d%H%M%S") + "/"
+        else:
+            traj_dir = self.param.traj_dir + load_time + "/"
+
+        Ppath_file_path = traj_dir + "Ppath.npy"
+        Jtraj_file_path = traj_dir + "Jtraj.npy"
+
+        P = load_numpy(file_path=Ppath_file_path)
+        J = load_numpy(file_path=Jtraj_file_path)
+
+        if len(P) == 0 or len(J) == 0:
+            J = np.empty((num_traj, num_steps, self._n))
+            P = np.empty((num_traj, num_steps, self._m))
+            
+            for i in range(num_traj):
+                endPoints, _ = self._robot.sample_joint_angles_and_poses(
+                    n=2, return_torch=False
+                )
+                Jtraj = trajectory.Trajectory(milestones=endPoints) # type: ignore        
+                J[i] = np.array([Jtraj.eval(i / num_steps) for i in range(num_steps)])
+                P[i] = self._robot.forward_kinematics(J[i, :, 0 : self._robot.n_dofs])
 
             save_numpy(file_path=Jtraj_file_path, arr=J)
             save_numpy(file_path=Ppath_file_path, arr=P)

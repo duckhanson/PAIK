@@ -37,8 +37,6 @@ sweep_config = {
 
 def main() -> None:
     begin_time = datetime.now().strftime("%m%d-%H%M")
-    # note that we define values from `wandb.config`
-    # instead of defining hard values
     wandb.init(name=begin_time)
 
     solver_param = DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE

@@ -64,7 +64,13 @@ def get_flow_model(
     )
     flow = flow.to(device)
 
-    optimizer = optim.AdamW(flow.parameters(), lr=lr, weight_decay=lr_weight_decay, amsgrad=lr_amsgrad, betas=lr_beta)
+    optimizer = optim.AdamW(
+        flow.parameters(),
+        lr=lr,
+        weight_decay=lr_weight_decay,
+        amsgrad=lr_amsgrad,
+        betas=lr_beta,
+    )
     if enable_load_model and os.path.exists(path=path_solver):
         try:
             state = torch.load(path_solver)
@@ -79,7 +85,12 @@ def get_flow_model(
 
     # Train to maximize the log-likelihood
     scheduler = ReduceLROnPlateau(
-        optimizer, mode="min", factor=gamma, patience=shce_patience, eps=1e-10, verbose=True
+        optimizer,
+        mode="min",
+        factor=gamma,
+        patience=shce_patience,
+        eps=1e-10,
+        verbose=True,
     )
 
     return flow, optimizer, scheduler

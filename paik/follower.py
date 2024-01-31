@@ -31,12 +31,12 @@ class PathFollower(Solver):
         self,
         J: np.ndarray,
         P: np.ndarray,
-        num_traj: int = 500,
+        num_sols: int = 500,
         return_numpy: bool = False,
         return_evaluation: bool = False,
     ):
         self.shrink_ratio = 0.25
-        J_hat = self.solve(P, self._F[self.J_knn.kneighbors(J, return_distance=False).flatten()], num_sols=num_traj, return_numpy=return_numpy)  # type: ignore
+        J_hat = self.solve(P, self._F[self.J_knn.kneighbors(J, return_distance=False).flatten()], num_sols=num_sols, return_numpy=return_numpy)  # type: ignore
         if not return_evaluation:
             return J_hat
 
@@ -88,9 +88,10 @@ class PathFollower(Solver):
             save_numpy(file_path=Jtraj_file_path, arr=J)
             save_numpy(file_path=Ppath_file_path, arr=P)
         return J, P
-    
-    
-    def sample_Jtraj_Ppath_multiple_trajectories(self, load_time: str = "", num_steps=20, num_traj=100, seed=47):
+
+    def sample_Jtraj_Ppath_multiple_trajectories(
+        self, load_time: str = "", num_steps=20, num_traj=100, seed=47
+    ):
         """
         sample a path from P_ts
 
@@ -122,12 +123,12 @@ class PathFollower(Solver):
         if len(P) == 0 or len(J) == 0:
             J = np.empty((num_traj, num_steps, self._n))
             P = np.empty((num_traj, num_steps, self._m))
-            
+
             for i in range(num_traj):
                 endPoints, _ = self._robot.sample_joint_angles_and_poses(
                     n=2, return_torch=False
                 )
-                Jtraj = trajectory.Trajectory(milestones=endPoints) # type: ignore        
+                Jtraj = trajectory.Trajectory(milestones=endPoints)  # type: ignore
                 J[i] = np.array([Jtraj.eval(i / num_steps) for i in range(num_steps)])
                 P[i] = self._robot.forward_kinematics(J[i, :, 0 : self._robot.n_dofs])
 

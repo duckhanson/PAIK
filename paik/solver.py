@@ -1,14 +1,10 @@
 # Import required packages
 from __future__ import annotations
 from typing import Tuple
-import os
 from time import time
-from datetime import datetime
-from matplotlib import axis
 import numpy as np
 import pandas as pd
 import torch
-from tabulate import tabulate
 
 from hnne import HNNE
 from sklearn.neighbors import NearestNeighbors

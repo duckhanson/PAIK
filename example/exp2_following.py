@@ -21,9 +21,9 @@ TEST_IKFLOW = True
 DISABLE_POSTURE_FEATURE = False
 EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = True
 LOAD_TIME = ""  # 0131005046
-NUM_STEPS = 50
-NUM_TRAJECTORIES = 100
-NUM_SOLS = 100
+NUM_STEPS = 10
+NUM_TRAJECTORIES = 1000
+NUM_SOLS = 1
 DDJC_THRES = (40, 80, 120)
 
 
@@ -121,7 +121,17 @@ def path_following(test_pafik: bool, test_ikflow: bool):
 
 
 def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
-    solver_param = DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
+    assert not (DISABLE_POSTURE_FEATURE and EXTRACT_POSTURE_FEATURE_FROM_C_SPACE)
+    solver_param = (
+        DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES
+        if DISABLE_POSTURE_FEATURE
+        else DEFAULT_SOLVER_PARAM_M7_NORM
+    )
+    solver_param = (
+        DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
+        if EXTRACT_POSTURE_FEATURE_FROM_C_SPACE
+        else solver_param
+    )
     solver = PathFollower(solver_param=solver_param)
 
     J, P = solver.sample_Jtraj_Ppath_multiple_trajectories(
@@ -190,7 +200,7 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
                 F_l2_err[i, j] = l2.mean()
                 F_ang_err[i, j] = ang.mean()
                 F_mjac[i, j] = max_joint_angle_change(sol)  # type: ignore
-                F_ddjc[i, j] = np.linalg.norm(sol - J, axis=-1).mean()
+                F_ddjc[i, j] = np.linalg.norm(sol - J[i], axis=-1).mean()
         avg_inference_time = round((time() - begin_time) / NUM_TRAJECTORIES, 3)
 
         F_df = pd.DataFrame(

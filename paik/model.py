@@ -71,17 +71,23 @@ def get_flow_model(
         amsgrad=lr_amsgrad,
         betas=lr_beta,
     )
+
     if enable_load_model and os.path.exists(path=path_solver):
         try:
             state = torch.load(path_solver)
-            flow.load_state_dict(state_dict=state["solver"])
-            optimizer.load_state_dict(state_dict=state["opt"])
-
-            print(f"Model load successfully from {path_solver}")
+            flow.load_state_dict(state["solver"])
+            print(f"[SUCCESS] model load (solver) from {path_solver}.")
+            optimizer.load_state_dict(state["opt"])
+            print(f"[SUCCESS] model load (opt) from {path_solver}.")
         except Exception as e:
-            print(f"[Warning] load error from {path_solver}, {e}.")
+            print(f"[WARNING]{e}")
+            print("[WARNING] try again will solve it :)")
+            torch.save(
+                {"solver": flow.state_dict(), "opt": optimizer.state_dict()},
+                path_solver,
+            )
     else:
-        print("Create a new model and start training.")
+        print("[WARNING] create a new model and start training.")
 
     # Train to maximize the log-likelihood
     scheduler = ReduceLROnPlateau(

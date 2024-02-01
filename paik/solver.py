@@ -4,6 +4,7 @@ from typing import Tuple
 import os
 from time import time
 from datetime import datetime
+from matplotlib import axis
 import numpy as np
 import pandas as pd
 import torch
@@ -14,10 +15,11 @@ from sklearn.neighbors import NearestNeighbors
 
 from jrl.evaluation import _get_target_pose_batch
 from jrl.conversions import geodesic_distance_between_quaternions
+from tqdm import trange
 
 from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_NORM
 from paik.model import get_flow_model, get_robot
-from paik.file import load_numpy, save_numpy, save_pickle
+from paik.file import load_numpy, save_numpy, save_pickle, load_pickle
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 
@@ -63,15 +65,23 @@ class Solver:
             lr_beta=solver_param.lr_beta,
         )  # type: ignore
         self._shrink_ratio = solver_param.shrink_ratio
-        self._init_latent = torch.zeros((1, self.robot.n_dofs)).to(self._device)
+        self._init_latent = torch.zeros((self.robot.n_dofs)).to(self._device)
         # load inference data
         assert (
             self._n == self._robot.n_dofs
         ), f"n should be {self._robot.n_dofs} as the robot"
 
         self._J_tr, self._P_tr, self._P_ts, self._F = self.__load_all_data()
-        self.nearest_neighnbor_P = NearestNeighbors(n_neighbors=1).fit(self._P_tr)
-        # save_pickle("./weights/panda/nearest_neighnbor_P.pth", self.nearest_neighnbor_P)
+
+        try:
+            self.nearest_neighnbor_P = load_pickle(
+                "./weights/panda/nearest_neighnbor_P.pth"
+            )
+        except:
+            self.nearest_neighnbor_P = NearestNeighbors(n_neighbors=1).fit(self._P_tr)
+            save_pickle(
+                "./weights/panda/nearest_neighnbor_P.pth", self.nearest_neighnbor_P
+            )
 
         self._enable_normalize = solver_param.enable_normalize
         if self._enable_normalize:
@@ -109,7 +119,7 @@ class Solver:
 
     @latent.setter
     def latent(self, value: torch.Tensor):
-        assert value.shape == (1, self._robot.n_dofs)
+        assert value.shape == (self._robot.n_dofs)
         self._init_latent = value
         self.__update_solver()
 
@@ -170,7 +180,7 @@ class Solver:
                     )  # type: ignore
 
                 save_numpy(file_path=file_path, arr=F)
-            print(f"F load successfully from {file_path}")
+            print(f"[SUCCESS] F load from {file_path}")
 
             return F
 
@@ -275,19 +285,17 @@ class Solver:
         J = np.expand_dims(J, axis=1) if len(J.shape) == 2 else J
         assert J.shape == (num_sols, num_poses, self._robot.n_dofs)
 
-        l2_errs = np.empty((num_poses, num_sols))
-        ang_errs = np.empty((num_poses, num_sols))
+        l2 = np.empty((num_poses, num_sols))
+        ang = np.empty((num_poses, num_sols))
         for i in range(num_poses):
-            l2_errs[i], ang_errs[i] = get_pose_errors(
-                J_hat=J[:, i, :], P=P[i]  # type: ignore
-            )
+            l2[i], ang[i] = get_pose_errors(J_hat=J[:, i, :], P=P[i])  # type: ignore
         if return_row:
-            return l2_errs.mean(axis=0), ang_errs.mean(axis=0)
+            return l2.mean(axis=0), ang.mean(axis=0)
         elif return_col:
-            return l2_errs.mean(axis=1), ang_errs.mean(axis=1)
+            return l2.mean(axis=1), ang.mean(axis=1)
         elif return_all:
-            return l2_errs.flatten(), ang_errs.flatten()
-        return l2_errs.mean(), ang_errs.mean()
+            return l2.flatten(), ang.flatten()
+        return l2.mean(), ang.mean()
 
     def select_reference_posture(self, P: np.ndarray):
         if self._method_of_select_reference_posture == "knn":
@@ -305,8 +313,58 @@ class Solver:
         self,
         num_poses: int,
         num_sols: int,
-        return_time: bool = False,
-        return_success_rate: bool = False,
+        success_threshold: Tuple[float, float] = (1e-4, 1e-4),
+        verbose: bool = True,
+    ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
+        # Randomly sample poses from test set
+        if verbose:
+            print("[START] random sampling for J and P.")
+        _, P = self._robot.sample_joint_angles_and_poses(
+            n=num_poses, return_torch=False
+        )
+        time_begin = time()
+        # Data Preprocessing
+        if verbose:
+            print("[START] select reference posture.")
+        F = self.select_reference_posture(P)
+
+        # Begin inference
+        if verbose:
+            print("[START] inference.")
+        J_hat = self.solve(P, F, num_sols, return_numpy=True)
+
+        if verbose:
+            print("[START] evaluation.")
+        l2, ang = self.evaluate_solutions(J_hat, P, return_all=True)
+        avg_l2, avg_ang = l2.mean(), ang.mean()
+        # success_rate = sum(np.where(l2 < success_threshold)) / (num_poses * num_sols)
+        df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
+        print(df.describe())
+
+        avg_inference_time = round((time() - time_begin) / num_poses, 3)
+
+        # use df to get success rate where l2 < 1e-4
+        return tuple(
+            [
+                avg_l2,
+                avg_ang,
+                avg_inference_time,
+                round(
+                    len(
+                        df.query(
+                            f"l2 < {success_threshold[0]} & ang < {success_threshold[1]}"
+                        )
+                    )
+                    / (num_poses * num_sols),
+                    3,
+                ),
+            ]
+        )
+
+    def random_sample_solutions_with_evaluation_loop(
+        self,
+        num_poses: int,
+        num_sols: int,
         success_threshold: Tuple[float, float] = (1e-4, 1e-4),
     ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
         # Randomly sample poses from test set
@@ -319,40 +377,30 @@ class Solver:
         F = self.select_reference_posture(P)
 
         # Begin inference
-        J_hat = self.solve(P, F, num_sols, return_numpy=True)
-        inference_time = round((time() - time_begin), 3)
+        J_hat = np.empty((num_sols, num_poses, self._robot.n_dofs))
+        for i in trange(num_poses):
+            J_hat[:, i, :] = self.solve(np.atleast_2d(P[i]), np.atleast_2d(F[i]), num_sols, return_numpy=True).squeeze(axis=1)  # type: ignore
 
-        P = P if self._m == 7 else np.column_stack((P, np.ones(shape=(len(P), 4))))
+        # J_hat = self.solve(P, F, num_sols, return_numpy=True)
 
-        success_rate = 0
-        if return_success_rate:
-            l2_errs, ang_errs = self.evaluate_solutions(J_hat, P, return_all=True)
-            avg_l2_errs, avg_ang_errs = l2_errs.mean(), ang_errs.mean()
-            # success_rate = sum(np.where(l2_errs < success_threshold)) / (num_poses * num_sols)
-            df = pd.DataFrame({"l2_errs": l2_errs, "ang_errs": np.rad2deg(ang_errs)})
-            # use df to get success rate where l2_errs < 1e-4
-            df_query = df.query(
-                f"l2_errs < {success_threshold[0]} & ang_errs < {success_threshold[1]}"
-            )
-            success_rate = df_query.count() / (num_poses * num_sols)
-            print(df.describe())
-        else:
-            avg_l2_errs, avg_ang_errs = self.evaluate_solutions(J_hat, P)
-
-        # errors_time = round((time() - time_begin), 3) - inference_time
-        # print(
-        #     tabulate(
-        #         [[inference_time, errors_time]],
-        #         headers=["inference time", "evaluation time"],
-        #     )
-        # )
-
+        l2, ang = self.evaluate_solutions(J_hat, P, return_all=True)
+        df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
+        print(df.describe())
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
-        results = [avg_l2_errs, avg_ang_errs]
-        if return_time:
-            results.append(avg_inference_time)
-        if return_success_rate:
-            results.append(success_rate)
-
-        return tuple(results)
+        return tuple(
+            [
+                l2.mean(),
+                ang.mean(),
+                avg_inference_time,
+                round(
+                    len(
+                        df.query(
+                            f"l2 < {success_threshold[0]} & ang < {success_threshold[1]}"
+                        )
+                    )
+                    / (num_poses * num_sols),
+                    3,
+                ),
+            ]
+        )

@@ -71,17 +71,12 @@ class Trainer(Solver):
             J = self._J_tr + noise_std * np.random.randn(*self._J_tr.shape)
             C = np.column_stack((self._P_tr, self._F, self.__std_scale * noise_std))
 
-            if self.param.enable_normalize:
-                J, C = self.norm_J(J), self.norm_C(C)
-            else:
-                J, C = torch.from_numpy(J.astype(np.float32)), torch.from_numpy(
-                    C.astype(np.float32)
-                )
-
+            J = self.norm_J(J) if self.param.enable_normalize else J
+            C = self.norm_C(C) if self.param.enable_normalize else C
             C = self.remove_posture_feature(C) if self._disable_posture_feature else C
 
             train_loader = DataLoader(
-                TensorDataset(J.to(self._device), C.to(self._device)),
+                TensorDataset(torch.from_numpy(J.astype(np.float32)).to(self._device), torch.from_numpy(C.astype(np.float32)).to(self._device)),
                 batch_size=batch_size,
                 shuffle=True,
                 drop_last=True,

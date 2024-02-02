@@ -199,71 +199,67 @@ class Solver:
         )
 
     # public methods
-    def norm_J(self, J: np.ndarray | torch.Tensor):
-        assert self._enable_normalize
-        if isinstance(J, torch.Tensor):
-            J = J.detach().cpu().numpy()
-        return torch.from_numpy(((J - self.__mean_J) / self.__std_J).astype(np.float32))
+    def norm_J(self, J: np.ndarray):
+        assert self._enable_normalize and isinstance(J, np.ndarray)
+        return ((J - self.__mean_J) / self.__std_J)
+    def norm_C(self, C: np.ndarray):
+        assert self._enable_normalize and isinstance(C, np.ndarray)
+        return ((C - self.__mean_C) / self.__std_C)
 
-    def norm_C(self, C: np.ndarray | torch.Tensor):
-        assert self._enable_normalize
-        if isinstance(C, torch.Tensor):
-            C = C.detach().cpu().numpy()
-        return torch.from_numpy(((C - self.__mean_C) / self.__std_C).astype(np.float32))  # type: ignore
+    def denorm_J(self, J: np.ndarray):
+        assert self._enable_normalize and isinstance(J, np.ndarray)
+        return (J * self.__std_J + self.__mean_J)
 
-    def denorm_J(self, J: np.ndarray | torch.Tensor):
-        assert self._enable_normalize
-        if isinstance(J, torch.Tensor):
-            J = J.detach().cpu().numpy()
-        return torch.from_numpy((J * self.__std_J + self.__mean_J).astype(np.float32))
+    def denorm_C(self, C: np.ndarray):
+        assert self._enable_normalize and isinstance(C, np.ndarray)
+        return (C * self.__std_C + self.__mean_C)
 
-    def denorm_C(self, C: np.ndarray | torch.Tensor):
-        assert self._enable_normalize
-        if isinstance(C, torch.Tensor):
-            C = C.detach().cpu().numpy()
-        return torch.from_numpy((C * self.__std_C + self.__mean_C).astype(np.float32))  # type: ignore
-
-    def remove_posture_feature(self, C: np.ndarray | torch.Tensor):
-        assert self._disable_posture_feature
-        if isinstance(C, torch.Tensor):
-            C = C.detach().cpu().numpy()
-        C = np.column_stack((C[:, : self._m], C[:, -1]))
-        return torch.from_numpy(C.astype(np.float32))
+    def remove_posture_feature(self, C: np.ndarray):
+        assert self._disable_posture_feature and isinstance(C, np.ndarray)
+        print('before remove posture feature', C.shape)
+        if len(C.shape) == 2:
+            C = np.column_stack((C[:, : self._m], C[:, -1]))
+        elif len(C.shape) == 3:
+            C = np.concatenate((C[:, :, : self._m], C[:, :, -1:]), axis=-1)
+        print('after remove posture feature', C.shape)
+        return C
 
     def solve(
-        self, P: np.ndarray, F: np.ndarray, num_sols: int, return_numpy: bool = False
+        self, P: np.ndarray, F: np.ndarray, num_sols: int
     ):
-        C = np.column_stack((P, F, np.zeros((len(F), 1)))).astype(np.float32)
-        C = self.norm_C(C) if self._enable_normalize else torch.from_numpy(C)
+        C = np.column_stack((P, F, np.zeros((len(F), 1))))
+        C = self.norm_C(C) if self._enable_normalize else C
         C = self.remove_posture_feature(C) if self._disable_posture_feature else C
+        C = torch.from_numpy(C.astype(np.float32)).to(self._device)
         with torch.inference_mode():
-            J = self._solver(C.to(self._device)).sample((num_sols,)).detach().cpu()
-
+            J = self._solver(C).sample((num_sols,))
+        J = J.detach().cpu().numpy()
         J = self.denorm_J(J) if self._enable_normalize else J
-        return J.numpy() if return_numpy else J
+        return J
     
     def solve_batch(
-        self, P: np.ndarray, F: np.ndarray, num_sols: int, return_numpy: bool = False, batch_size: int = 4000
+        self, P: np.ndarray, F: np.ndarray, num_sols: int, batch_size: int = 4000
     ):
-        C = np.repeat(np.expand_dims(np.column_stack((P, F, np.zeros((len(F), 1)))).astype(np.float32), axis=0), num_sols, axis=0)
-        C = self.norm_C(C) if self._enable_normalize else torch.from_numpy(C)
+        if len(P) * num_sols < batch_size:
+            return self.solve(P, F, num_sols)
+        C = np.repeat(np.expand_dims(np.column_stack((P, F, np.zeros((len(F), 1)))), axis=0), num_sols, axis=0)
+        C = self.norm_C(C) if self._enable_normalize else C
         C = self.remove_posture_feature(C) if self._disable_posture_feature else C
-        C = C.view(-1, C.shape[-1])
+        C = C.reshape(-1, C.shape[-1])
         complementary = batch_size - len(C) % batch_size
         complementary = 0 if complementary == batch_size else complementary
-        print('before adding complementary', C.shape, complementary)
-        C = torch.cat((C, C[:complementary]), dim=0) if complementary > 0 else C
-        print('after adding complementary', C.shape, complementary)
-        C = C.view(-1, batch_size, C.shape[-1]).to(self._device)
-        J = torch.empty((len(C), batch_size, self._robot.n_dofs), dtype=torch.float32).to(self._device)
+        C = np.concatenate((C, C[:complementary]), axis=0) if complementary > 0 else C
+        C = C.reshape(-1, batch_size, C.shape[-1])
+        C = torch.from_numpy(C.astype(np.float32)).to(self._device)
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs), device=self._device)
         with torch.inference_mode():
             for i in trange(len(C)):
                 J[i] = self._solver(C[i]).sample()
-        J = J.view(-1, self._robot.n_dofs)[:-complementary].detach().cpu() if complementary > 0 else J.view(-1, self._robot.n_dofs).detach().cpu()
-        J = J.view(num_sols, -1, self._robot.n_dofs)
-        print(J.shape)
+        J = J.detach().cpu().numpy()
+        J = J.reshape(-1, self._robot.n_dofs)[:-complementary] if complementary > 0 else J
+        J = J.reshape(num_sols, -1, self._robot.n_dofs)
         J = self.denorm_J(J) if self._enable_normalize else J
-        return J.numpy() if return_numpy else J
+        return J
 
     def get_random_JPF(self, num_samples: int):
         # Randomly sample poses from train set
@@ -347,7 +343,7 @@ class Solver:
         # Begin inference
         if verbose:
             print("[START] inference.")
-        J_hat = self.solve(P, F, num_sols, return_numpy=True)
+        J_hat = self.solve(P, F, num_sols)
 
         if verbose:
             print("[START] evaluation.")
@@ -381,7 +377,7 @@ class Solver:
         self,
         num_poses: int,
         num_sols: int,
-        batch_size: int,
+        batch_size: int = 5000,
         success_threshold: Tuple[float, float] = (1e-4, 1e-4),
     ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
         # Randomly sample poses from test set
@@ -394,7 +390,7 @@ class Solver:
         F = self.select_reference_posture(P)
 
         # Begin inference
-        J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size, return_numpy=True)
+        J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size)
             
 
         l2, ang = self.evaluate_solutions(J_hat, P, return_all=True)

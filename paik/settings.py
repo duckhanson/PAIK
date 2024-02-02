@@ -32,7 +32,7 @@ class SolverConfig:
     num_epochs: int = 15
     shce_patience: int = 2
     posture_feature_scale: float = 1.0
-    disable_posture_feature: bool = False
+    use_nsf_only: bool = False
     methods_reference_posture: Tuple[str, str, str] = ("knn", "random", "pick")
     method_of_select_reference_posture: str = methods_reference_posture[0]
 
@@ -44,7 +44,8 @@ class SolverConfig:
 
     # workdir
     __current_folder_path, _ = os.path.split(os.path.realpath(__file__))
-    __current_workdir_path, _ = os.path.split(os.path.realpath(__current_folder_path))
+    __current_workdir_path, _ = os.path.split(
+        os.path.realpath(__current_folder_path))
     workdir: str = __current_workdir_path
 
     # training
@@ -87,7 +88,7 @@ class SolverConfig:
 #     ckpt_name="1202-1325",  # 1202-1325, 1205-0023
 # )
 
-DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES = SolverConfig(
+DEFAULT_NSF = SolverConfig(
     lr=0.00037,
     gamma=0.086,
     noise_esp=0.0025,
@@ -100,11 +101,11 @@ DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES = SolverConfig(
     enable_normalize=True,
     subnet_num_layers=3,
     batch_size=1024,
-    disable_posture_feature=True,
+    use_nsf_only=True,
     ckpt_name="0115-0234",
 )
 
-DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE = SolverConfig(
+DEFULT_SOLVER = SolverConfig(
     lr=4e-4,
     gamma=0.086,
     noise_esp=0.0025,
@@ -118,7 +119,7 @@ DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE = SolverConfig(
     enable_normalize=True,
     subnet_num_layers=3,
     batch_size=1024,
-    disable_posture_feature=False,
+    use_nsf_only=False,
     ckpt_name="0126-1535",  # "0119-1047", "0118-0827", "0127-1246", "0126-1535"
 )
 

@@ -5,8 +5,8 @@ from time import time
 from tabulate import tabulate
 
 from paik.settings import (
-    DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES,
-    DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE,
+    DEFAULT_NSF,
+    DEFULT_SOLVER,
 )
 from paik.follower import PathFollower, max_joint_angle_change
 
@@ -17,7 +17,7 @@ from ikflow.model_loading import get_ik_solver
 
 TEST_PAFIK = True
 TEST_IKFLOW = True
-DISABLE_POSTURE_FEATURE = False
+USE_NSF_ONLY = False
 LOAD_TIME = ""  # 0131005046
 NUM_STEPS = 10
 NUM_TRAJECTORIES = 1000
@@ -27,9 +27,9 @@ DDJC_THRES = (40, 80, 120)
 
 def path_following(test_pafik: bool, test_ikflow: bool):
     solver_param = (
-        DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES
-        if DISABLE_POSTURE_FEATURE
-        else DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
+        DEFAULT_NSF
+        if USE_NSF_ONLY
+        else DEFULT_SOLVER
     )
     solver = PathFollower(solver_param=solver_param)
 
@@ -114,9 +114,9 @@ def path_following(test_pafik: bool, test_ikflow: bool):
 
 def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
     solver_param = (
-        DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES
-        if DISABLE_POSTURE_FEATURE
-        else DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
+        DEFAULT_NSF
+        if USE_NSF_ONLY
+        else DEFULT_SOLVER
     )
     solver = PathFollower(solver_param=solver_param)
 
@@ -152,7 +152,8 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
         print(
             tabulate(
                 [
-                    (thres, df.query(f"ddjc < {thres}")["ddjc"].count() / df.shape[0])
+                    (thres, df.query(f"ddjc < {thres}")[
+                     "ddjc"].count() / df.shape[0])
                     for thres in DDJC_THRES
                 ],
                 headers=["ddjc", "success rate"],
@@ -202,7 +203,8 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
                 [
                     (
                         thres,
-                        F_df.query(f"ddjc < {thres}")["ddjc"].count() / F_df.shape[0],
+                        F_df.query(f"ddjc < {thres}")[
+                            "ddjc"].count() / F_df.shape[0],
                     )
                     for thres in DDJC_THRES
                 ],
@@ -214,4 +216,5 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
 
 
 if __name__ == "__main__":
-    path_following_multiple_trajectory(test_pafik=TEST_PAFIK, test_ikflow=TEST_IKFLOW)
+    path_following_multiple_trajectory(
+        test_pafik=TEST_PAFIK, test_ikflow=TEST_IKFLOW)

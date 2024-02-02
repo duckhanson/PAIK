@@ -7,7 +7,7 @@ import numpy as np
 from tqdm import tqdm
 from pprint import pprint
 import wandb
-from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
+from paik.settings import SolverConfig, DEFULT_SOLVER
 from torch.utils.data import DataLoader, TensorDataset
 
 from paik.solver import Solver
@@ -56,7 +56,7 @@ class Trainer(Solver):
         # data generation
         assert self._device == "cuda", "device should be cuda"
 
-        update_noise_esp = lambda num_epochs: self.param.noise_esp * (
+        def update_noise_esp(num_epochs): return self.param.noise_esp * (
             self.__noise_esp_decay**num_epochs
         )
 
@@ -69,14 +69,17 @@ class Trainer(Solver):
             else:
                 noise_std = self.__noise_esp * np.random.rand(len(self._F), 1)
             J = self._J_tr + noise_std * np.random.randn(*self._J_tr.shape)
-            C = np.column_stack((self._P_tr, self._F, self.__std_scale * noise_std))
+            C = np.column_stack(
+                (self._P_tr, self._F, self.__std_scale * noise_std))
 
             J = self.norm_J(J) if self.param.enable_normalize else J
             C = self.norm_C(C) if self.param.enable_normalize else C
-            C = self.remove_posture_feature(C) if self._disable_posture_feature else C
+            C = self.remove_posture_feature(
+                C) if self._use_nsf_only else C
 
             train_loader = DataLoader(
-                TensorDataset(torch.from_numpy(J.astype(np.float32)).to(self._device), torch.from_numpy(C.astype(np.float32)).to(self._device)),
+                TensorDataset(torch.from_numpy(J.astype(np.float32)).to(
+                    self._device), torch.from_numpy(C.astype(np.float32)).to(self._device)),
                 batch_size=batch_size,
                 shuffle=True,
                 drop_last=True,
@@ -252,7 +255,7 @@ def main() -> None:
     if USE_WANDB:
         wandb.init(name=begin_time, notes=f"r=0")
 
-    solver_param = DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
+    solver_param = DEFULT_SOLVER
 
     trainer = Trainer(solver_param=solver_param)
 

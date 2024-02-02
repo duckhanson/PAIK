@@ -1,5 +1,5 @@
 # Import required packages
-from paik.settings import DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
+from paik.settings import DEFULT_SOLVER
 from datetime import datetime
 from tabulate import tabulate
 import wandb
@@ -10,7 +10,7 @@ PATIENCE = 7
 POSE_ERR_THRESH = 3.15e-3
 EXPERMENT_COUNT = 15
 NUM_EPOCHS = 100
-DISABLE_POSTURE_FEATURE = False
+USE_NSF_ONLY = False
 ENABLE_LODE_MODEL = False
 
 
@@ -38,7 +38,7 @@ def main() -> None:
     begin_time = datetime.now().strftime("%m%d-%H%M")
     wandb.init(name=begin_time)
 
-    solver_param = DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
+    solver_param = DEFULT_SOLVER
     solver_param.lr = wandb.config.lr
     solver_param.lr_weight_decay = wandb.config.lr_weight_decay
     solver_param.gamma = wandb.config.gamma
@@ -46,7 +46,7 @@ def main() -> None:
     solver_param.noise_esp_decay = wandb.config.noise_esp_decay
     solver_param.lr_beta = (wandb.config.lr_beta_l, wandb.config.lr_beta_h)
     solver_param.enable_load_model = ENABLE_LODE_MODEL  # type: ignore
-    solver_param.disable_posture_feature = DISABLE_POSTURE_FEATURE  # type: ignore
+    solver_param.use_nsf_only = USE_NSF_ONLY  # type: ignore
 
     trainer = Trainer(solver_param=solver_param)
 
@@ -55,7 +55,7 @@ def main() -> None:
         avg_ang_errs,
         avg_inference_time,  # type: ignore
     ) = trainer.random_sample_solutions_with_evaluation(
-        num_poses=100, num_sols=100, return_time=True
+        num_poses=100, num_sols=100
     )
 
     print(
@@ -80,7 +80,8 @@ def main() -> None:
 if __name__ == "__main__":
     project_name = "msik_ikflow_nsf_norm"
 
-    sweep_id = wandb.sweep(sweep=sweep_config, project=project_name, entity="luca_nthu")
+    sweep_id = wandb.sweep(
+        sweep=sweep_config, project=project_name, entity="luca_nthu")
     # Start sweep job.
     wandb.agent(sweep_id, function=main, count=EXPERMENT_COUNT)
     wandb.finish()

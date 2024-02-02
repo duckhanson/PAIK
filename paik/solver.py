@@ -13,7 +13,7 @@ from jrl.evaluation import _get_target_pose_batch
 from jrl.conversions import geodesic_distance_between_quaternions
 from tqdm import trange
 
-from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
+from paik.settings import SolverConfig, DEFULT_SOLVER
 from paik.model import get_flow_model, get_robot
 from paik.file import load_numpy, save_numpy, save_pickle, load_pickle
 from zuko.distributions import DiagNormal
@@ -23,7 +23,7 @@ from zuko.flows import Flow, Unconditional
 class Solver:
     def __init__(
         self,
-        solver_param: SolverConfig = DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE,
+        solver_param: SolverConfig = DEFULT_SOLVER,
     ) -> None:
         self.__solver_param = solver_param
         self._robot = get_robot(
@@ -33,7 +33,7 @@ class Solver:
             solver_param.method_of_select_reference_posture
         )
         self._device = solver_param.device
-        self._disable_posture_feature = solver_param.disable_posture_feature
+        self._use_nsf_only = solver_param.use_nsf_only
         # Neural spline flow (NSF) with 3 sample features and 5 context features
         self._n, self._m, self._r = solver_param.nmr
         self._solver, self._optimizer, self._scheduler = get_flow_model(
@@ -53,7 +53,7 @@ class Solver:
             m=self._m,
             r=self._r,
             shce_patience=solver_param.shce_patience,
-            disable_posture_feature=self._disable_posture_feature,
+            use_nsf_only=self._use_nsf_only,
             lr_amsgrad=solver_param.lr_amsgrad,
             lr_beta=solver_param.lr_beta,
         )  # type: ignore
@@ -71,7 +71,8 @@ class Solver:
                 "./weights/panda/nearest_neighnbor_P.pth"
             )
         except:
-            self.nearest_neighnbor_P = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self._P_tr)
+            self.nearest_neighnbor_P = NearestNeighbors(
+                n_neighbors=1, n_jobs=-1).fit(self._P_tr)
             save_pickle(
                 "./weights/panda/nearest_neighnbor_P.pth", self.nearest_neighnbor_P
             )
@@ -85,7 +86,7 @@ class Solver:
             self.__mean_C = np.concatenate((C.mean(axis=0), np.zeros((1))))
             std_C = np.concatenate((C.std(axis=0), np.ones((1))))
             scale = np.ones_like(self.__mean_C)
-            scale[self._m : self._m + self._r] *= solver_param.posture_feature_scale
+            scale[self._m: self._m + self._r] *= solver_param.posture_feature_scale
             self.__std_C = std_C / scale
 
     @property
@@ -149,7 +150,8 @@ class Solver:
                 hnne = HNNE(dim=self._r)
                 # maximum number of data for hnne (11M), we use max_num_data_hnne to test
                 num_data = min(self.param.max_num_data_hnne, len(J))
-                F = hnne.fit_transform(X=J[:num_data], dim=self._r, verbose=True)
+                F = hnne.fit_transform(
+                    X=J[:num_data], dim=self._r, verbose=True)
                 # query nearest neighbors for the rest of J
                 if len(F) != len(J):
                     knn = NearestNeighbors(n_neighbors=1)
@@ -192,6 +194,7 @@ class Solver:
     def norm_J(self, J: np.ndarray):
         assert self._enable_normalize and isinstance(J, np.ndarray)
         return ((J - self.__mean_J) / self.__std_J)
+
     def norm_C(self, C: np.ndarray):
         assert self._enable_normalize and isinstance(C, np.ndarray)
         return ((C - self.__mean_C) / self.__std_C)
@@ -205,7 +208,7 @@ class Solver:
         return (C * self.__std_C + self.__mean_C)
 
     def remove_posture_feature(self, C: np.ndarray):
-        assert self._disable_posture_feature and isinstance(C, np.ndarray)
+        assert self._use_nsf_only and isinstance(C, np.ndarray)
         print('before remove posture feature', C.shape)
         if len(C.shape) == 2:
             C = np.column_stack((C[:, : self._m], C[:, -1]))
@@ -219,34 +222,40 @@ class Solver:
     ):
         C = np.column_stack((P, F, np.zeros((len(F), 1))))
         C = self.norm_C(C) if self._enable_normalize else C
-        C = self.remove_posture_feature(C) if self._disable_posture_feature else C
+        C = self.remove_posture_feature(
+            C) if self._use_nsf_only else C
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
         with torch.inference_mode():
             J = self._solver(C).sample((num_sols,))
         J = J.detach().cpu().numpy()
         J = self.denorm_J(J) if self._enable_normalize else J
         return J
-    
+
     def solve_batch(
         self, P: np.ndarray, F: np.ndarray, num_sols: int, batch_size: int = 4000
     ):
         if len(P) * num_sols < batch_size:
             return self.solve(P, F, num_sols)
-        C = np.repeat(np.expand_dims(np.column_stack((P, F, np.zeros((len(F), 1)))), axis=0), num_sols, axis=0)
+        C = np.repeat(np.expand_dims(np.column_stack(
+            (P, F, np.zeros((len(F), 1)))), axis=0), num_sols, axis=0)
         C = self.norm_C(C) if self._enable_normalize else C
-        C = self.remove_posture_feature(C) if self._disable_posture_feature else C
+        C = self.remove_posture_feature(
+            C) if self._use_nsf_only else C
         C = C.reshape(-1, C.shape[-1])
         complementary = batch_size - len(C) % batch_size
         complementary = 0 if complementary == batch_size else complementary
-        C = np.concatenate((C, C[:complementary]), axis=0) if complementary > 0 else C
+        C = np.concatenate((C, C[:complementary]),
+                           axis=0) if complementary > 0 else C
         C = C.reshape(-1, batch_size, C.shape[-1])
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
-        J = torch.empty((len(C), batch_size, self._robot.n_dofs), device=self._device)
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
+                        device=self._device)
         with torch.inference_mode():
             for i in trange(len(C)):
                 J[i] = self._solver(C[i]).sample()
         J = J.detach().cpu().numpy()
-        J = J.reshape(-1, self._robot.n_dofs)[:-complementary] if complementary > 0 else J
+        J = J.reshape(-1, self._robot.n_dofs)[:-
+                                              complementary] if complementary > 0 else J
         J = J.reshape(num_sols, -1, self._robot.n_dofs)
         J = self.denorm_J(J) if self._enable_normalize else J
         return J
@@ -256,7 +265,8 @@ class Solver:
         J, P = self._robot.sample_joint_angles_and_poses(
             n=num_samples, return_torch=False
         )
-        F = self._F[self.nearest_neighnbor_P.kneighbors(np.atleast_2d(P), n_neighbors=1, return_distance=False).flatten()]  # type: ignore
+        F = self._F[self.nearest_neighnbor_P.kneighbors(np.atleast_2d(
+            P), n_neighbors=1, return_distance=False).flatten()]  # type: ignore
         return J, P, F
 
     def evaluate_solutions(
@@ -279,7 +289,8 @@ class Solver:
 
             # Positional Error
             l2_errors = np.linalg.norm(P_hat[:, :3] - P[:, :3], axis=1)
-            ang_errors = geodesic_distance_between_quaternions(P[:, 3:], P_hat[:, 3:])
+            ang_errors = geodesic_distance_between_quaternions(
+                P[:, 3:], P_hat[:, 3:])
             return l2_errors, ang_errors  # type: ignore
 
         num_poses = len(P)
@@ -290,7 +301,8 @@ class Solver:
         l2 = np.empty((num_poses, num_sols))
         ang = np.empty((num_poses, num_sols))
         for i in range(num_poses):
-            l2[i], ang[i] = get_pose_errors(J_hat=J[:, i, :], P=P[i])  # type: ignore
+            l2[i], ang[i] = get_pose_errors(
+                J_hat=J[:, i, :], P=P[i])  # type: ignore
         if return_row:
             return l2.mean(axis=0), ang.mean(axis=0)
         elif return_col:
@@ -301,7 +313,8 @@ class Solver:
 
     def select_reference_posture(self, P: np.ndarray):
         if self._method_of_select_reference_posture == "knn":
-            return self._F[self.nearest_neighnbor_P.kneighbors(np.atleast_2d(P), n_neighbors=1, return_distance=False).flatten()]  # type: ignore
+            # type: ignore
+            return self._F[self.nearest_neighnbor_P.kneighbors(np.atleast_2d(P), n_neighbors=1, return_distance=False).flatten()]
         elif self._method_of_select_reference_posture == "random":
             mF, MF = np.min(self._F), np.max(self._F)
             return np.random.rand(len(P), self._r) * (MF - mF) + mF
@@ -381,7 +394,6 @@ class Solver:
 
         # Begin inference
         J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size)
-            
 
         l2, ang = self.evaluate_solutions(J_hat, P, return_all=True)
         df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})

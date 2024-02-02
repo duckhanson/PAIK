@@ -6,7 +6,7 @@ from paik.solver import Solver
 from paik.train import init_seeds
 from paik.settings import (
     DEFAULT_SOLVER_PARAM_M7_NORM,
-    DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES,
+    DEFAULT_NSF,
 )
 
 NUM_POSES = 1
@@ -37,7 +37,8 @@ def posture_sweep():
         p = np.tile(p, (NUM_SOLUTIONS, 1))
         J = solver.solve(P=p, F=F, num_sols=1, return_numpy=True)
         config[i] = J.reshape((NUM_SOLUTIONS, 7))
-        l2_errs[i], ang_errs[i] = solver.evaluate_solutions(J, p, return_col=True)
+        l2_errs[i], ang_errs[i] = solver.evaluate_solutions(
+            J, p, return_col=True)
         config_errs[i] = np.abs(config[i] - config[i, pivot])
 
     df = pd.DataFrame(

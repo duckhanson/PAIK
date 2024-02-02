@@ -7,8 +7,8 @@ import torch
 from tqdm import trange
 from paik.solver import Solver
 from paik.settings import (
-    DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES,
-    DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE,
+    DEFAULT_NSF,
+    DEFULT_SOLVER,
 )
 from ikflow.utils import set_seed
 from ikflow.model_loading import get_ik_solver
@@ -20,15 +20,15 @@ NUM_POSES = 1000  # 100
 NUM_SOLS = 1000  # 1000
 BATCH_SIZE = 5000
 SUCCESS_THRESHOLD = (5e-3, 2)
-DISABLE_POSTURE_FEATURE = False
+USE_NSF_ONLY = False
 METHOD_OF_SELECT_REFERENCE_POSTURE = "knn"
 
 
 def ikp(test_pafik: bool, test_ikflow: bool):
     solver_param = (
-        DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES
-        if DISABLE_POSTURE_FEATURE
-        else DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
+        DEFAULT_NSF
+        if USE_NSF_ONLY
+        else DEFULT_SOLVER
     )
     solver_param.method_of_select_reference_posture = METHOD_OF_SELECT_REFERENCE_POSTURE
     solver = Solver(solver_param=solver_param)
@@ -36,7 +36,8 @@ def ikp(test_pafik: bool, test_ikflow: bool):
     if test_pafik:
         solver.shrink_ratio = 0.25
         # avg_l2, avg_ang, avg_inference_time, success_rate = solver.random_sample_solutions_with_evaluation(NUM_POSES, NUM_SOLS, success_threshold=SUCCESS_THRESHOLD)  # type: ignore
-        avg_l2, avg_ang, avg_inference_time, success_rate = solver.random_sample_solutions_with_evaluation_loop(NUM_POSES, NUM_SOLS, batch_size=BATCH_SIZE, success_threshold=SUCCESS_THRESHOLD)  # type: ignore
+        avg_l2, avg_ang, avg_inference_time, success_rate = solver.random_sample_solutions_with_evaluation_loop(
+            NUM_POSES, NUM_SOLS, batch_size=BATCH_SIZE, success_threshold=SUCCESS_THRESHOLD)  # type: ignore
         print(
             tabulate(
                 [
@@ -66,7 +67,8 @@ def ikp(test_pafik: bool, test_ikflow: bool):
 
         l2 = np.zeros((len(P), NUM_SOLS))
         ang = np.zeros((len(P), NUM_SOLS))
-        J = torch.empty((NUM_SOLS, len(P), 7), dtype=torch.float32, device="cpu")
+        J = torch.empty((NUM_SOLS, len(P), 7),
+                        dtype=torch.float32, device="cpu")
         begin = time.time()
         for i in trange(NUM_POSES):
             # (
@@ -79,12 +81,13 @@ def ikp(test_pafik: bool, test_ikflow: bool):
             # ) = ik_solver.solve(
             #     P[i], n=NUM_SOLS, refine_solutions=False, return_detailed=True
             # )  # type: ignore
-            
+
             J[:, i, :] = ik_solver.solve(
                 P[i], n=NUM_SOLS, refine_solutions=False, return_detailed=False
             ).cpu()  # type: ignore
 
-            l2[i], ang[i] = solution_pose_errors(ik_solver.robot, J[:, i, :], P[i])
+            l2[i], ang[i] = solution_pose_errors(
+                ik_solver.robot, J[:, i, :], P[i])
         avg_inference_time = round((time.time() - begin) / NUM_POSES, 3)
 
         print(

@@ -12,14 +12,15 @@ from paik.settings import (
 )
 from ikflow.utils import set_seed
 from ikflow.model_loading import get_ik_solver
+from jkinpylib.evaluation import solution_pose_errors
 
 TEST_PAFIK = True
 TEST_IKFLOW = False
-NUM_POSES = 500  # 100
+NUM_POSES = 1000  # 100
 NUM_SOLS = 1000  # 1000
 SUCCESS_THRESHOLD = (5e-3, 2)
-DISABLE_POSTURE_FEATURE = False
-EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = True
+DISABLE_POSTURE_FEATURE = True
+EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = False
 METHOD_OF_SELECT_REFERENCE_POSTURE = "knn"
 
 
@@ -71,24 +72,31 @@ def ikp(test_pafik: bool, test_ikflow: bool):
 
         l2 = np.zeros((len(P), NUM_SOLS))
         ang = np.zeros((len(P), NUM_SOLS))
+        J = np.zeros((NUM_SOLS, len(P), 7))
+        begin = time.time()
+        for i in trange(NUM_POSES):
+            # (
+            #     _,
+            #     l2[i],
+            #     ang[i],
+            #     _,
+            #     _,
+            #     _,
+            # ) = ik_solver.solve(
+            #     P[i], n=NUM_SOLS, refine_solutions=False, return_detailed=True
+            # )  # type: ignore
+            
+            J[:, i, :] = ik_solver.solve(
+                P[i], n=NUM_SOLS, refine_solutions=False, return_detailed=False
+            ).cpu().numpy()  # type: ignore
+        avg_inference_time = round((time.time() - begin) / NUM_POSES, 3)
 
-        time_diffs = np.zeros((len(P)))
-
-        for i, p in enumerate(P):
-            (
-                _,
-                l2[i],
-                ang[i],
-                _,
-                _,
-                time_diffs[i],  # type: ignore
-            ) = ik_solver.solve(
-                p, n=NUM_SOLS, refine_solutions=False, return_detailed=True
-            )  # type: ignore
+        l2, ang = solver.evaluate_solutions(J, P)  # type: ignore
+        # l2[i], ang[i] = solution_pose_errors(ik_solver.robot, J, P[i])
 
         print(
             tabulate(
-                [[l2.mean(), np.rad2deg(ang.mean()), time_diffs.mean()]],
+                [[l2.mean(), np.rad2deg(ang.mean()), avg_inference_time]],
                 headers=["avg_l2", "avg_ang", "avg_inference_time"],
             )
         )

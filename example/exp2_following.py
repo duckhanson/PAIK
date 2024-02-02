@@ -49,7 +49,7 @@ def path_following(test_pafik: bool, test_ikflow: bool):
     # if test_pafik:
     #     begin_time = time()
     #     J_hat, l2_errs, ang_errs, mjac_arr, ddjc = solver.solve_path(
-    #         J, P, num_traj=NUM_TRAJECTORIES, return_numpy=True, return_evaluation=True
+    #         J, P, num_traj=NUM_TRAJECTORIES, return_evaluation=True
     #     )
     #     end_time = time()
 
@@ -150,7 +150,6 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
                 np.atleast_2d(J[i]),
                 np.atleast_2d(P[i]),
                 num_sols=NUM_SOLS,
-                return_numpy=True,
                 return_evaluation=True,
             )
         avg_inference_time = round((time() - begin_time) / NUM_TRAJECTORIES, 3)

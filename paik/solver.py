@@ -1,6 +1,6 @@
 # Import required packages
 from __future__ import annotations
-from typing import Tuple
+from typing import Any, Tuple
 from time import time
 import numpy as np
 import pandas as pd
@@ -9,8 +9,6 @@ import torch
 from hnne import HNNE
 from sklearn.neighbors import NearestNeighbors
 
-from jrl.evaluation import _get_target_pose_batch
-from jrl.conversions import geodesic_distance_between_quaternions
 from tqdm import trange
 
 from paik.settings import SolverConfig, DEFULT_SOLVER
@@ -87,7 +85,7 @@ class Solver:
             self.__mean_C = np.concatenate((C.mean(axis=0), np.zeros((1))))
             std_C = np.concatenate((C.std(axis=0), np.ones((1))))
             scale = np.ones_like(self.__mean_C)
-            scale[self._m : self._m + self._r] *= solver_param.posture_feature_scale
+            scale[self._m: self._m + self._r] *= solver_param.posture_feature_scale
             self.__std_C = std_C / scale
 
     @property
@@ -149,7 +147,8 @@ class Solver:
                 hnne = HNNE(dim=self._r)
                 # maximum number of data for hnne (11M), we use max_num_data_hnne to test
                 num_data = min(self.param.max_num_data_hnne, len(J))
-                F = hnne.fit_transform(X=J[:num_data], dim=self._r, verbose=True)
+                F = hnne.fit_transform(
+                    X=J[:num_data], dim=self._r, verbose=True)
                 # query nearest neighbors for the rest of J
                 if len(F) != len(J):
                     knn = NearestNeighbors(n_neighbors=1)
@@ -232,7 +231,8 @@ class Solver:
         if len(P) * num_sols < batch_size:
             return self.solve(P, F, num_sols)
         C = np.repeat(
-            np.expand_dims(np.column_stack((P, F, np.zeros((len(F), 1)))), axis=0),
+            np.expand_dims(np.column_stack(
+                (P, F, np.zeros((len(F), 1)))), axis=0),
             num_sols,
             axis=0,
         )
@@ -241,10 +241,12 @@ class Solver:
         C = C.reshape(-1, C.shape[-1])
         complementary = batch_size - len(C) % batch_size
         complementary = 0 if complementary == batch_size else complementary
-        C = np.concatenate((C, C[:complementary]), axis=0) if complementary > 0 else C
+        C = np.concatenate((C, C[:complementary]),
+                           axis=0) if complementary > 0 else C
         C = C.reshape(-1, batch_size, C.shape[-1])
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
-        J = torch.empty((len(C), batch_size, self._robot.n_dofs), device=self._device)
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
+                        device=self._device)
         with torch.inference_mode():
             for i in trange(len(C)):
                 J[i] = self._solver(C[i]).sample()
@@ -272,39 +274,40 @@ class Solver:
 
     def evaluate_solutions(
         self,
-        J: np.ndarray | torch.Tensor,
+        J: np.ndarray,
         P: np.ndarray,
-        return_row: bool = False,
-        return_col: bool = False,
+        return_posewise_evalution: bool = False,
         return_all: bool = False,
     ) -> tuple[Any, Any]:
-        if isinstance(J, torch.Tensor):
-            J = J.detach().cpu().numpy()
-
-        def get_pose_errors(
-            J_hat: np.ndarray,
-            P: torch.Tensor | np.ndarray,
-        ) -> tuple[np.ndarray, np.ndarray]:
-            P = _get_target_pose_batch(P, J_hat.shape[0])
-            P_hat = self._robot.forward_kinematics(J_hat[:, : self._n])
-
-            # Positional Error
-            l2_errors = np.linalg.norm(P_hat[:, :3] - P[:, :3], axis=1)
-            ang_errors = geodesic_distance_between_quaternions(P[:, 3:], P_hat[:, 3:])
-            return l2_errors, ang_errors  # type: ignore
+        
+        def geometric_distance_between_quaternions(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
+            # from jrl.conversions
+            # Note: Decreasing this value to 1e-8 greates NaN gradients for nearby quaternions.
+            acos_clamp_epsilon = 1e-7
+            dot = np.clip(np.sum(q1 * q2, axis=1), -1, 1)
+            # Note: Updated by @jstmn on Feb24 2023
+            distance = 2 * \
+                np.arccos(np.clip(dot, -1 + acos_clamp_epsilon,
+                          1 - acos_clamp_epsilon))
+            # distance = 2 * np.arccos(dot)
+            distance = np.abs(np.remainder(
+                distance + np.pi, 2 * np.pi) - np.pi)
+            return distance
 
         num_poses = len(P)
         num_sols = len(J)
         J = np.expand_dims(J, axis=1) if len(J.shape) == 2 else J
         assert J.shape == (num_sols, num_poses, self._robot.n_dofs)
 
-        l2 = np.empty((num_poses, num_sols))
-        ang = np.empty((num_poses, num_sols))
-        for i in range(num_poses):
-            l2[i], ang[i] = get_pose_errors(J_hat=J[:, i, :], P=P[i])  # type: ignore
-        if return_row:
-            return l2.mean(axis=0), ang.mean(axis=0)
-        elif return_col:
+        P_expand = np.repeat(np.expand_dims(P, axis=0), len(
+            J), axis=0).reshape(-1, P.shape[-1])
+        P_hat = self._robot.forward_kinematics(
+            J.reshape(-1, self._n)).reshape(-1, P.shape[-1])
+        l2 = np.linalg.norm(P_expand[:, :3] - P_hat[:, :3], axis=1)
+        ang = geometric_distance_between_quaternions(
+            P_expand[:, 3:], P_hat[:, 3:]) # type: ignore
+        
+        if return_posewise_evalution:
             return l2.mean(axis=1), ang.mean(axis=1)
         elif return_all:
             return l2.flatten(), ang.flatten()

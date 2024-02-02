@@ -309,9 +309,9 @@ class Solver:
             P_expand[:, 3:], P_hat[:, 3:]) # type: ignore
         
         if return_posewise_evalution:
-            return l2.mean(axis=1), ang.mean(axis=1)
+            return l2.reshape(num_sols, num_poses).mean(axis=1), ang.reshape(num_sols, num_poses).mean(axis=1)
         elif return_all:
-            return l2.flatten(), ang.flatten()
+            return l2, ang
         return l2.mean(), ang.mean()
 
     def select_reference_posture(self, P: np.ndarray):

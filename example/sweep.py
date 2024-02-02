@@ -28,6 +28,7 @@ sweep_config = {
         "gamma": {"values": get_range(84, 87, 1e-3)},
         "noise_esp": {"values": get_range(25, 34, 1e-4)},
         "noise_esp_decay": {"values": get_range(95, 100, 1e-2)},
+        "num_bins": {"values": get_range(3, 9, 1)},
         "lr_beta_l": {"values": get_range(82, 96, 1e-2)},
         "lr_beta_h": {"values": get_range(91, 95, 1e-2)},
     },
@@ -47,6 +48,7 @@ def main() -> None:
     solver_param.lr_beta = (wandb.config.lr_beta_l, wandb.config.lr_beta_h)
     solver_param.enable_load_model = ENABLE_LODE_MODEL  # type: ignore
     solver_param.use_nsf_only = USE_NSF_ONLY  # type: ignore
+    solver_param.num_bins = wandb.config.num_bins
 
     trainer = Trainer(solver_param=solver_param)
 

@@ -16,6 +16,7 @@ class SolverConfig:
     shrink_ratio: float = 0.68
     subnet_width: int = 1024
     num_transforms: int = 8
+    num_bins: int = 10
 
     # training
     lr: float = 3.7e-4

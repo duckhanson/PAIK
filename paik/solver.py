@@ -36,6 +36,7 @@ class Solver:
         self._n, self._m, self._r = solver_param.nmr
         self._solver, self._optimizer, self._scheduler = get_flow_model(
             enable_load_model=solver_param.enable_load_model,
+            num_bins=solver_param.num_bins,
             num_transforms=solver_param.num_transforms,
             subnet_width=solver_param.subnet_width,
             subnet_num_layers=solver_param.subnet_num_layers,
@@ -404,13 +405,13 @@ class Solver:
         l2, ang = self.evaluate_solutions(J_hat, P, return_all=True)
         df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
         print(df.describe())
-        avg_inference_time = round((time() - time_begin) / num_poses, 3)
+        total_inference_time = round((time() - time_begin), 3)
 
         return tuple(
             [
                 l2.mean(),
                 ang.mean(),
-                avg_inference_time,
+                total_inference_time,
                 round(
                     len(
                         df.query(

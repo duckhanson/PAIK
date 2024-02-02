@@ -19,6 +19,7 @@ DEFAULT_ACTIVATION = LeakyReLU
 
 def get_flow_model(
     num_transforms: int,
+    num_bins: int,
     subnet_width: int,
     subnet_num_layers: int,
     shrink_ratio: float,
@@ -55,7 +56,7 @@ def get_flow_model(
             context=num_conditions,
             transforms=num_transforms,
             randperm=random_perm,
-            bins=10,
+            bins=num_bins,
             activation=DEFAULT_ACTIVATION,
             hidden_features=[subnet_width] * subnet_num_layers,
         ),

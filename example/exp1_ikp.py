@@ -3,6 +3,7 @@ import time
 import numpy as np
 import pandas as pd
 from tabulate import tabulate
+import torch
 from tqdm import trange
 from paik.solver import Solver
 from paik.settings import (
@@ -20,8 +21,8 @@ NUM_POSES = 1000  # 100
 NUM_SOLS = 1000  # 1000
 BATCH_SIZE = 5000
 SUCCESS_THRESHOLD = (5e-3, 2)
-DISABLE_POSTURE_FEATURE = True
-EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = False
+DISABLE_POSTURE_FEATURE = False
+EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = True
 METHOD_OF_SELECT_REFERENCE_POSTURE = "knn"
 
 
@@ -73,7 +74,7 @@ def ikp(test_pafik: bool, test_ikflow: bool):
 
         l2 = np.zeros((len(P), NUM_SOLS))
         ang = np.zeros((len(P), NUM_SOLS))
-        J = np.zeros((NUM_SOLS, len(P), 7))
+        J = torch.empty((NUM_SOLS, len(P), 7), dtype=torch.float32, device="cpu")
         begin = time.time()
         for i in trange(NUM_POSES):
             # (
@@ -89,10 +90,9 @@ def ikp(test_pafik: bool, test_ikflow: bool):
             
             J[:, i, :] = ik_solver.solve(
                 P[i], n=NUM_SOLS, refine_solutions=False, return_detailed=False
-            )  # type: ignore
+            ).cpu()  # type: ignore
 
             l2[i], ang[i] = solution_pose_errors(ik_solver.robot, J[:, i, :], P[i])
-        # l2, ang = solver.evaluate_solutions(J, P)  # type: ignore
         avg_inference_time = round((time.time() - begin) / NUM_POSES, 3)
 
         print(

@@ -16,10 +16,11 @@ from jkinpylib.evaluation import solution_pose_errors
 
 TEST_PAFIK = True
 TEST_IKFLOW = True
-NUM_POSES = 1000  # 100
-NUM_SOLS = 1000  # 1000
+NUM_POSES = 3000  # 100
+NUM_SOLS = 200  # 1000
 BATCH_SIZE = 5000
 SUCCESS_THRESHOLD = (5e-3, 2)
+STD = .25
 USE_NSF_ONLY = False
 METHOD_OF_SELECT_REFERENCE_POSTURE = "knn"
 
@@ -30,12 +31,12 @@ def ikp(test_pafik: bool, test_ikflow: bool):
     solver = Solver(solver_param=solver_param)
 
     if test_pafik:
-        solver.shrink_ratio = 0.25
-        # avg_l2, avg_ang, avg_inference_time, success_rate = solver.random_sample_solutions_with_evaluation(NUM_POSES, NUM_SOLS, success_threshold=SUCCESS_THRESHOLD)  # type: ignore
+        solver.shrink_ratio = STD
+        # avg_l2, avg_ang, total_inference_time, success_rate = solver.random_sample_solutions_with_evaluation(NUM_POSES, NUM_SOLS, success_threshold=SUCCESS_THRESHOLD)  # type: ignore
         (
             avg_l2,
             avg_ang,
-            avg_inference_time,
+            total_inference_time,
             success_rate,
         ) = solver.random_sample_solutions_with_evaluation_loop(
             NUM_POSES,
@@ -49,14 +50,14 @@ def ikp(test_pafik: bool, test_ikflow: bool):
                     [
                         avg_l2,
                         np.rad2deg(avg_ang),
-                        avg_inference_time,
+                        total_inference_time,
                         success_rate,
                     ]
                 ],
                 headers=[
                     "avg_l2",
                     "avg_ang",
-                    "avg_inference_time",
+                    "total_inference_time",
                     f"success_rate ({METHOD_OF_SELECT_REFERENCE_POSTURE})",
                 ],
             )
@@ -87,16 +88,33 @@ def ikp(test_pafik: bool, test_ikflow: bool):
             # )  # type: ignore
 
             J[:, i, :] = ik_solver.solve(
-                P[i], n=NUM_SOLS, refine_solutions=False, return_detailed=False
+                P[i], n=NUM_SOLS, latent_scale=STD, refine_solutions=False, return_detailed=False
             ).cpu()  # type: ignore
 
             l2[i], ang[i] = solution_pose_errors(ik_solver.robot, J[:, i, :], P[i])
-        avg_inference_time = round((time.time() - begin) / NUM_POSES, 3)
+        total_inference_time = round((time.time() - begin), 3)
 
         print(
             tabulate(
-                [[l2.mean(), np.rad2deg(ang.mean()), avg_inference_time]],
-                headers=["avg_l2", "avg_ang", "avg_inference_time"],
+                [[l2.mean(), np.rad2deg(ang.mean()), total_inference_time]],
+                headers=["avg_l2", "avg_ang", "total_inference_time"],
+            )
+        )
+        
+        
+        l2 = np.zeros((len(P), NUM_SOLS))
+        ang = np.zeros((len(P), NUM_SOLS))
+        J = torch.empty((NUM_SOLS, len(P), 7), dtype=torch.float32, device="cpu")
+        begin = time.time()
+        for i in trange(NUM_SOLS):
+            J[i, :, :] = ik_solver.solve_n_poses(P, latent_scale=STD, refine_solutions=False, return_detailed=False).cpu()
+            l2[:, i], ang[:, i] = solution_pose_errors(ik_solver.robot, J[i, :, :], P)
+        total_inference_time = round((time.time() - begin), 3)
+
+        print(
+            tabulate(
+                [[l2.mean(), np.rad2deg(ang.mean()), total_inference_time]],
+                headers=["avg_l2", "avg_ang", "total_inference_time"],
             )
         )
 

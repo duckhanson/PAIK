@@ -71,8 +71,8 @@ def ikp(test_pafik: bool, test_ikflow: bool):
 
         _, P, _ = solver.get_random_JPF(NUM_POSES)  # type: ignore
 
-        l2 = np.zeros((len(P), NUM_SOLS))
-        ang = np.zeros((len(P), NUM_SOLS))
+        l2 = np.zeros((NUM_SOLS, len(P)))
+        ang = np.zeros((NUM_SOLS, len(P)))
         J = torch.empty((NUM_SOLS, len(P), 7), dtype=torch.float32, device="cpu")
         begin = time.time()
         for i in trange(NUM_POSES):
@@ -91,7 +91,7 @@ def ikp(test_pafik: bool, test_ikflow: bool):
                 P[i], n=NUM_SOLS, latent_scale=STD, refine_solutions=False, return_detailed=False
             ).cpu()  # type: ignore
 
-            l2[i], ang[i] = solution_pose_errors(ik_solver.robot, J[:, i, :], P[i])
+            l2[:, i], ang[:, i] = solution_pose_errors(ik_solver.robot, J[:, i, :], P[i])
         total_inference_time = round((time.time() - begin), 3)
 
         print(
@@ -102,13 +102,13 @@ def ikp(test_pafik: bool, test_ikflow: bool):
         )
         
         
-        l2 = np.zeros((len(P), NUM_SOLS))
-        ang = np.zeros((len(P), NUM_SOLS))
+        l2 = np.zeros((NUM_SOLS, len(P)))
+        ang = np.zeros((NUM_SOLS, len(P)))
         J = torch.empty((NUM_SOLS, len(P), 7), dtype=torch.float32, device="cpu")
         begin = time.time()
         for i in trange(NUM_SOLS):
-            J[i, :, :] = ik_solver.solve_n_poses(P, latent_scale=STD, refine_solutions=False, return_detailed=False).cpu()
-            l2[:, i], ang[:, i] = solution_pose_errors(ik_solver.robot, J[i, :, :], P)
+            J[i] = ik_solver.solve_n_poses(P, latent_scale=STD, refine_solutions=False, return_detailed=False).cpu()
+            l2[i], ang[i] = solution_pose_errors(ik_solver.robot, J[i], P)
         total_inference_time = round((time.time() - begin), 3)
 
         print(

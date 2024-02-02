@@ -32,11 +32,10 @@ class PathFollower(Solver):
         J: np.ndarray,
         P: np.ndarray,
         num_sols: int = 500,
-        return_numpy: bool = False,
         return_evaluation: bool = False,
     ):
         self.shrink_ratio = 0.25
-        J_hat = self.solve(P, self._F[self.J_knn.kneighbors(J, return_distance=False).flatten()], num_sols=num_sols, return_numpy=return_numpy)  # type: ignore
+        J_hat = self.solve_batch(P, self._F[self.J_knn.kneighbors(J, return_distance=False).flatten()], num_sols=num_sols)  # type: ignore
         if not return_evaluation:
             return J_hat
         l2_errs, ang_errs = self.evaluate_solutions(J_hat, P, return_row=True)

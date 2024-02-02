@@ -121,7 +121,7 @@ DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE = SolverConfig(
     batch_size=1024,
     disable_posture_feature=False,
     extract_posture_feature_from_C_space=True,
-    ckpt_name="0127-1246",  # "0119-1047", "0118-0827", "0127-1246"
+    ckpt_name="0126-1535",  # "0119-1047", "0118-0827", "0127-1246", "0126-1535"
 )
 
 

@@ -54,6 +54,7 @@ def main() -> None:
         avg_l2_errs,
         avg_ang_errs,
         avg_inference_time,  # type: ignore
+        _,
     ) = trainer.random_sample_solutions_with_evaluation(
         num_poses=100, num_sols=100
     )

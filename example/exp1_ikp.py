@@ -25,19 +25,24 @@ METHOD_OF_SELECT_REFERENCE_POSTURE = "knn"
 
 
 def ikp(test_pafik: bool, test_ikflow: bool):
-    solver_param = (
-        DEFAULT_NSF
-        if USE_NSF_ONLY
-        else DEFULT_SOLVER
-    )
+    solver_param = DEFAULT_NSF if USE_NSF_ONLY else DEFULT_SOLVER
     solver_param.method_of_select_reference_posture = METHOD_OF_SELECT_REFERENCE_POSTURE
     solver = Solver(solver_param=solver_param)
 
     if test_pafik:
         solver.shrink_ratio = 0.25
         # avg_l2, avg_ang, avg_inference_time, success_rate = solver.random_sample_solutions_with_evaluation(NUM_POSES, NUM_SOLS, success_threshold=SUCCESS_THRESHOLD)  # type: ignore
-        avg_l2, avg_ang, avg_inference_time, success_rate = solver.random_sample_solutions_with_evaluation_loop(
-            NUM_POSES, NUM_SOLS, batch_size=BATCH_SIZE, success_threshold=SUCCESS_THRESHOLD)  # type: ignore
+        (
+            avg_l2,
+            avg_ang,
+            avg_inference_time,
+            success_rate,
+        ) = solver.random_sample_solutions_with_evaluation_loop(
+            NUM_POSES,
+            NUM_SOLS,
+            batch_size=BATCH_SIZE,
+            success_threshold=SUCCESS_THRESHOLD,
+        )  # type: ignore
         print(
             tabulate(
                 [
@@ -67,8 +72,7 @@ def ikp(test_pafik: bool, test_ikflow: bool):
 
         l2 = np.zeros((len(P), NUM_SOLS))
         ang = np.zeros((len(P), NUM_SOLS))
-        J = torch.empty((NUM_SOLS, len(P), 7),
-                        dtype=torch.float32, device="cpu")
+        J = torch.empty((NUM_SOLS, len(P), 7), dtype=torch.float32, device="cpu")
         begin = time.time()
         for i in trange(NUM_POSES):
             # (
@@ -86,8 +90,7 @@ def ikp(test_pafik: bool, test_ikflow: bool):
                 P[i], n=NUM_SOLS, refine_solutions=False, return_detailed=False
             ).cpu()  # type: ignore
 
-            l2[i], ang[i] = solution_pose_errors(
-                ik_solver.robot, J[:, i, :], P[i])
+            l2[i], ang[i] = solution_pose_errors(ik_solver.robot, J[:, i, :], P[i])
         avg_inference_time = round((time.time() - begin) / NUM_POSES, 3)
 
         print(

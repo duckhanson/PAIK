@@ -71,8 +71,9 @@ class Solver:
                 "./weights/panda/nearest_neighnbor_P.pth"
             )
         except:
-            self.nearest_neighnbor_P = NearestNeighbors(
-                n_neighbors=1, n_jobs=-1).fit(self._P_tr)
+            self.nearest_neighnbor_P = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(
+                self._P_tr
+            )
             save_pickle(
                 "./weights/panda/nearest_neighnbor_P.pth", self.nearest_neighnbor_P
             )
@@ -86,7 +87,7 @@ class Solver:
             self.__mean_C = np.concatenate((C.mean(axis=0), np.zeros((1))))
             std_C = np.concatenate((C.std(axis=0), np.ones((1))))
             scale = np.ones_like(self.__mean_C)
-            scale[self._m: self._m + self._r] *= solver_param.posture_feature_scale
+            scale[self._m : self._m + self._r] *= solver_param.posture_feature_scale
             self.__std_C = std_C / scale
 
     @property
@@ -139,9 +140,7 @@ class Solver:
 
         def get_posture_feature(J: np.ndarray, P: np.ndarray):
             assert self._r > 0
-            file_path = (
-                f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}-from-C-space.npy"
-            )
+            file_path = f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}-from-C-space.npy"
             F = load_numpy(file_path=file_path)
 
             GENERATE_NEW = F.shape != (len(J), self._r)
@@ -150,8 +149,7 @@ class Solver:
                 hnne = HNNE(dim=self._r)
                 # maximum number of data for hnne (11M), we use max_num_data_hnne to test
                 num_data = min(self.param.max_num_data_hnne, len(J))
-                F = hnne.fit_transform(
-                    X=J[:num_data], dim=self._r, verbose=True)
+                F = hnne.fit_transform(X=J[:num_data], dim=self._r, verbose=True)
                 # query nearest neighbors for the rest of J
                 if len(F) != len(J):
                     knn = NearestNeighbors(n_neighbors=1)
@@ -193,37 +191,34 @@ class Solver:
     # public methods
     def norm_J(self, J: np.ndarray):
         assert self._enable_normalize and isinstance(J, np.ndarray)
-        return ((J - self.__mean_J) / self.__std_J)
+        return (J - self.__mean_J) / self.__std_J
 
     def norm_C(self, C: np.ndarray):
         assert self._enable_normalize and isinstance(C, np.ndarray)
-        return ((C - self.__mean_C) / self.__std_C)
+        return (C - self.__mean_C) / self.__std_C
 
     def denorm_J(self, J: np.ndarray):
         assert self._enable_normalize and isinstance(J, np.ndarray)
-        return (J * self.__std_J + self.__mean_J)
+        return J * self.__std_J + self.__mean_J
 
     def denorm_C(self, C: np.ndarray):
         assert self._enable_normalize and isinstance(C, np.ndarray)
-        return (C * self.__std_C + self.__mean_C)
+        return C * self.__std_C + self.__mean_C
 
     def remove_posture_feature(self, C: np.ndarray):
         assert self._use_nsf_only and isinstance(C, np.ndarray)
-        print('before remove posture feature', C.shape)
+        print("before remove posture feature", C.shape)
         if len(C.shape) == 2:
             C = np.column_stack((C[:, : self._m], C[:, -1]))
         elif len(C.shape) == 3:
             C = np.concatenate((C[:, :, : self._m], C[:, :, -1:]), axis=-1)
-        print('after remove posture feature', C.shape)
+        print("after remove posture feature", C.shape)
         return C
 
-    def solve(
-        self, P: np.ndarray, F: np.ndarray, num_sols: int
-    ):
+    def solve(self, P: np.ndarray, F: np.ndarray, num_sols: int):
         C = np.column_stack((P, F, np.zeros((len(F), 1))))
         C = self.norm_C(C) if self._enable_normalize else C
-        C = self.remove_posture_feature(
-            C) if self._use_nsf_only else C
+        C = self.remove_posture_feature(C) if self._use_nsf_only else C
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
         with torch.inference_mode():
             J = self._solver(C).sample((num_sols,))
@@ -236,26 +231,29 @@ class Solver:
     ):
         if len(P) * num_sols < batch_size:
             return self.solve(P, F, num_sols)
-        C = np.repeat(np.expand_dims(np.column_stack(
-            (P, F, np.zeros((len(F), 1)))), axis=0), num_sols, axis=0)
+        C = np.repeat(
+            np.expand_dims(np.column_stack((P, F, np.zeros((len(F), 1)))), axis=0),
+            num_sols,
+            axis=0,
+        )
         C = self.norm_C(C) if self._enable_normalize else C
-        C = self.remove_posture_feature(
-            C) if self._use_nsf_only else C
+        C = self.remove_posture_feature(C) if self._use_nsf_only else C
         C = C.reshape(-1, C.shape[-1])
         complementary = batch_size - len(C) % batch_size
         complementary = 0 if complementary == batch_size else complementary
-        C = np.concatenate((C, C[:complementary]),
-                           axis=0) if complementary > 0 else C
+        C = np.concatenate((C, C[:complementary]), axis=0) if complementary > 0 else C
         C = C.reshape(-1, batch_size, C.shape[-1])
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
-        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
-                        device=self._device)
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs), device=self._device)
         with torch.inference_mode():
             for i in trange(len(C)):
                 J[i] = self._solver(C[i]).sample()
         J = J.detach().cpu().numpy()
-        J = J.reshape(-1, self._robot.n_dofs)[:-
-                                              complementary] if complementary > 0 else J
+        J = (
+            J.reshape(-1, self._robot.n_dofs)[:-complementary]
+            if complementary > 0
+            else J
+        )
         J = J.reshape(num_sols, -1, self._robot.n_dofs)
         J = self.denorm_J(J) if self._enable_normalize else J
         return J
@@ -265,8 +263,11 @@ class Solver:
         J, P = self._robot.sample_joint_angles_and_poses(
             n=num_samples, return_torch=False
         )
-        F = self._F[self.nearest_neighnbor_P.kneighbors(np.atleast_2d(
-            P), n_neighbors=1, return_distance=False).flatten()]  # type: ignore
+        F = self._F[
+            self.nearest_neighnbor_P.kneighbors(
+                np.atleast_2d(P), n_neighbors=1, return_distance=False
+            ).flatten()
+        ]  # type: ignore
         return J, P, F
 
     def evaluate_solutions(
@@ -289,8 +290,7 @@ class Solver:
 
             # Positional Error
             l2_errors = np.linalg.norm(P_hat[:, :3] - P[:, :3], axis=1)
-            ang_errors = geodesic_distance_between_quaternions(
-                P[:, 3:], P_hat[:, 3:])
+            ang_errors = geodesic_distance_between_quaternions(P[:, 3:], P_hat[:, 3:])
             return l2_errors, ang_errors  # type: ignore
 
         num_poses = len(P)
@@ -301,8 +301,7 @@ class Solver:
         l2 = np.empty((num_poses, num_sols))
         ang = np.empty((num_poses, num_sols))
         for i in range(num_poses):
-            l2[i], ang[i] = get_pose_errors(
-                J_hat=J[:, i, :], P=P[i])  # type: ignore
+            l2[i], ang[i] = get_pose_errors(J_hat=J[:, i, :], P=P[i])  # type: ignore
         if return_row:
             return l2.mean(axis=0), ang.mean(axis=0)
         elif return_col:
@@ -314,7 +313,11 @@ class Solver:
     def select_reference_posture(self, P: np.ndarray):
         if self._method_of_select_reference_posture == "knn":
             # type: ignore
-            return self._F[self.nearest_neighnbor_P.kneighbors(np.atleast_2d(P), n_neighbors=1, return_distance=False).flatten()]
+            return self._F[
+                self.nearest_neighnbor_P.kneighbors(
+                    np.atleast_2d(P), n_neighbors=1, return_distance=False
+                ).flatten()
+            ]
         elif self._method_of_select_reference_posture == "random":
             mF, MF = np.min(self._F), np.max(self._F)
             return np.random.rand(len(P), self._r) * (MF - mF) + mF

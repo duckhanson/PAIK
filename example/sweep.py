@@ -55,9 +55,7 @@ def main() -> None:
         avg_ang_errs,
         avg_inference_time,  # type: ignore
         _,
-    ) = trainer.random_sample_solutions_with_evaluation(
-        num_poses=100, num_sols=100
-    )
+    ) = trainer.random_sample_solutions_with_evaluation(num_poses=100, num_sols=100)
 
     print(
         tabulate(
@@ -81,8 +79,7 @@ def main() -> None:
 if __name__ == "__main__":
     project_name = "msik_ikflow_nsf_norm"
 
-    sweep_id = wandb.sweep(
-        sweep=sweep_config, project=project_name, entity="luca_nthu")
+    sweep_id = wandb.sweep(sweep=sweep_config, project=project_name, entity="luca_nthu")
     # Start sweep job.
     wandb.agent(sweep_id, function=main, count=EXPERMENT_COUNT)
     wandb.finish()

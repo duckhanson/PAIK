@@ -56,9 +56,8 @@ class Trainer(Solver):
         # data generation
         assert self._device == "cuda", "device should be cuda"
 
-        def update_noise_esp(num_epochs): return self.param.noise_esp * (
-            self.__noise_esp_decay**num_epochs
-        )
+        def update_noise_esp(num_epochs):
+            return self.param.noise_esp * (self.__noise_esp_decay**num_epochs)
 
         self._solver.train()
 
@@ -69,17 +68,17 @@ class Trainer(Solver):
             else:
                 noise_std = self.__noise_esp * np.random.rand(len(self._F), 1)
             J = self._J_tr + noise_std * np.random.randn(*self._J_tr.shape)
-            C = np.column_stack(
-                (self._P_tr, self._F, self.__std_scale * noise_std))
+            C = np.column_stack((self._P_tr, self._F, self.__std_scale * noise_std))
 
             J = self.norm_J(J) if self.param.enable_normalize else J
             C = self.norm_C(C) if self.param.enable_normalize else C
-            C = self.remove_posture_feature(
-                C) if self._use_nsf_only else C
+            C = self.remove_posture_feature(C) if self._use_nsf_only else C
 
             train_loader = DataLoader(
-                TensorDataset(torch.from_numpy(J.astype(np.float32)).to(
-                    self._device), torch.from_numpy(C.astype(np.float32)).to(self._device)),
+                TensorDataset(
+                    torch.from_numpy(J.astype(np.float32)).to(self._device),
+                    torch.from_numpy(C.astype(np.float32)).to(self._device),
+                ),
                 batch_size=batch_size,
                 shuffle=True,
                 drop_last=True,

@@ -15,9 +15,10 @@ from ikflow.model_loading import get_ik_solver
 from jkinpylib.evaluation import solution_pose_errors
 
 TEST_PAFIK = True
-TEST_IKFLOW = False
+TEST_IKFLOW = True
 NUM_POSES = 1000  # 100
 NUM_SOLS = 1000  # 1000
+BATCH_SIZE = 5000
 SUCCESS_THRESHOLD = (5e-3, 2)
 DISABLE_POSTURE_FEATURE = True
 EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = False
@@ -42,7 +43,7 @@ def ikp(test_pafik: bool, test_ikflow: bool):
     if test_pafik:
         solver.shrink_ratio = 0.25
         # avg_l2, avg_ang, avg_inference_time, success_rate = solver.random_sample_solutions_with_evaluation(NUM_POSES, NUM_SOLS, success_threshold=SUCCESS_THRESHOLD)  # type: ignore
-        avg_l2, avg_ang, avg_inference_time, success_rate = solver.random_sample_solutions_with_evaluation_loop(NUM_POSES, NUM_SOLS, success_threshold=SUCCESS_THRESHOLD)  # type: ignore
+        avg_l2, avg_ang, avg_inference_time, success_rate = solver.random_sample_solutions_with_evaluation_loop(NUM_POSES, NUM_SOLS, batch_size=BATCH_SIZE, success_threshold=SUCCESS_THRESHOLD)  # type: ignore
         print(
             tabulate(
                 [
@@ -88,11 +89,11 @@ def ikp(test_pafik: bool, test_ikflow: bool):
             
             J[:, i, :] = ik_solver.solve(
                 P[i], n=NUM_SOLS, refine_solutions=False, return_detailed=False
-            ).cpu().numpy()  # type: ignore
-        avg_inference_time = round((time.time() - begin) / NUM_POSES, 3)
+            )  # type: ignore
 
-        l2, ang = solver.evaluate_solutions(J, P)  # type: ignore
-        # l2[i], ang[i] = solution_pose_errors(ik_solver.robot, J, P[i])
+            l2[i], ang[i] = solution_pose_errors(ik_solver.robot, J[:, i, :], P[i])
+        # l2, ang = solver.evaluate_solutions(J, P)  # type: ignore
+        avg_inference_time = round((time.time() - begin) / NUM_POSES, 3)
 
         print(
             tabulate(

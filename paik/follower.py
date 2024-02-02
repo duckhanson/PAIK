@@ -9,7 +9,7 @@ from datetime import datetime
 from tabulate import tabulate
 from sklearn.neighbors import NearestNeighbors
 from paik.file import load_numpy, save_numpy, save_pickle
-from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_NORM
+from paik.settings import SolverConfig
 
 from paik.solver import Solver
 

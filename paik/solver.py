@@ -13,7 +13,7 @@ from jrl.evaluation import _get_target_pose_batch
 from jrl.conversions import geodesic_distance_between_quaternions
 from tqdm import trange
 
-from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_NORM
+from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
 from paik.model import get_flow_model, get_robot
 from paik.file import load_numpy, save_numpy, save_pickle, load_pickle
 from zuko.distributions import DiagNormal
@@ -23,14 +23,11 @@ from zuko.flows import Flow, Unconditional
 class Solver:
     def __init__(
         self,
-        solver_param: SolverConfig = DEFAULT_SOLVER_PARAM_M7_NORM,
+        solver_param: SolverConfig = DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE,
     ) -> None:
         self.__solver_param = solver_param
         self._robot = get_robot(
             solver_param.robot_name, robot_dirs=solver_param.dir_paths
-        )
-        self._extract_posture_feature_from_C_space = (
-            solver_param.extract_posture_feature_from_C_space
         )
         self._method_of_select_reference_posture = (
             solver_param.method_of_select_reference_posture
@@ -143,8 +140,6 @@ class Solver:
             assert self._r > 0
             file_path = (
                 f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}-from-C-space.npy"
-                if self._extract_posture_feature_from_C_space
-                else f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}.npy"
             )
             F = load_numpy(file_path=file_path)
 
@@ -154,22 +149,17 @@ class Solver:
                 hnne = HNNE(dim=self._r)
                 # maximum number of data for hnne (11M), we use max_num_data_hnne to test
                 num_data = min(self.param.max_num_data_hnne, len(J))
-                S = (
-                    J
-                    if self._extract_posture_feature_from_C_space
-                    else np.column_stack((J, P))
-                )
-                F = hnne.fit_transform(X=S[:num_data], dim=self._r, verbose=True)
+                F = hnne.fit_transform(X=J[:num_data], dim=self._r, verbose=True)
                 # query nearest neighbors for the rest of J
                 if len(F) != len(J):
                     knn = NearestNeighbors(n_neighbors=1)
-                    knn.fit(S[:num_data])
+                    knn.fit(J[:num_data])
                     F = np.row_stack(
                         (
                             F,
                             F[
                                 knn.kneighbors(
-                                    S[num_data:], n_neighbors=1, return_distance=False
+                                    J[num_data:], n_neighbors=1, return_distance=False
                                 ).flatten()  # type: ignore
                             ],
                         )

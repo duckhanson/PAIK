@@ -7,7 +7,7 @@ import numpy as np
 from tqdm import tqdm
 from pprint import pprint
 import wandb
-from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_NORM
+from paik.settings import SolverConfig, DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
 from torch.utils.data import DataLoader, TensorDataset
 
 from paik.solver import Solver
@@ -252,7 +252,7 @@ def main() -> None:
     if USE_WANDB:
         wandb.init(name=begin_time, notes=f"r=0")
 
-    solver_param = DEFAULT_SOLVER_PARAM_M7_NORM
+    solver_param = DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
 
     trainer = Trainer(solver_param=solver_param)
 

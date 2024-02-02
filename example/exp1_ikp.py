@@ -7,7 +7,6 @@ import torch
 from tqdm import trange
 from paik.solver import Solver
 from paik.settings import (
-    DEFAULT_SOLVER_PARAM_M7_NORM,
     DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES,
     DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE,
 )
@@ -22,21 +21,14 @@ NUM_SOLS = 1000  # 1000
 BATCH_SIZE = 5000
 SUCCESS_THRESHOLD = (5e-3, 2)
 DISABLE_POSTURE_FEATURE = False
-EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = True
 METHOD_OF_SELECT_REFERENCE_POSTURE = "knn"
 
 
 def ikp(test_pafik: bool, test_ikflow: bool):
-    assert not (DISABLE_POSTURE_FEATURE and EXTRACT_POSTURE_FEATURE_FROM_C_SPACE)
     solver_param = (
         DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES
         if DISABLE_POSTURE_FEATURE
-        else DEFAULT_SOLVER_PARAM_M7_NORM
-    )
-    solver_param = (
-        DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
-        if EXTRACT_POSTURE_FEATURE_FROM_C_SPACE
-        else solver_param
+        else DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
     )
     solver_param.method_of_select_reference_posture = METHOD_OF_SELECT_REFERENCE_POSTURE
     solver = Solver(solver_param=solver_param)

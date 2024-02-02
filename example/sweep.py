@@ -11,7 +11,6 @@ POSE_ERR_THRESH = 3.15e-3
 EXPERMENT_COUNT = 15
 NUM_EPOCHS = 100
 DISABLE_POSTURE_FEATURE = False
-EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = True
 ENABLE_LODE_MODEL = False
 
 
@@ -48,7 +47,6 @@ def main() -> None:
     solver_param.lr_beta = (wandb.config.lr_beta_l, wandb.config.lr_beta_h)
     solver_param.enable_load_model = ENABLE_LODE_MODEL  # type: ignore
     solver_param.disable_posture_feature = DISABLE_POSTURE_FEATURE  # type: ignore
-    solver_param.extract_posture_feature_from_C_space = EXTRACT_POSTURE_FEATURE_FROM_C_SPACE  # type: ignore
 
     trainer = Trainer(solver_param=solver_param)
 

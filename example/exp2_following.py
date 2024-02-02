@@ -5,7 +5,6 @@ from time import time
 from tabulate import tabulate
 
 from paik.settings import (
-    DEFAULT_SOLVER_PARAM_M7_NORM,
     DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES,
     DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE,
 )
@@ -19,7 +18,6 @@ from ikflow.model_loading import get_ik_solver
 TEST_PAFIK = True
 TEST_IKFLOW = True
 DISABLE_POSTURE_FEATURE = False
-EXTRACT_POSTURE_FEATURE_FROM_C_SPACE = True
 LOAD_TIME = ""  # 0131005046
 NUM_STEPS = 10
 NUM_TRAJECTORIES = 1000
@@ -28,16 +26,10 @@ DDJC_THRES = (40, 80, 120)
 
 
 def path_following(test_pafik: bool, test_ikflow: bool):
-    assert not (DISABLE_POSTURE_FEATURE and EXTRACT_POSTURE_FEATURE_FROM_C_SPACE)
     solver_param = (
         DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES
         if DISABLE_POSTURE_FEATURE
-        else DEFAULT_SOLVER_PARAM_M7_NORM
-    )
-    solver_param = (
-        DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
-        if EXTRACT_POSTURE_FEATURE_FROM_C_SPACE
-        else solver_param
+        else DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
     )
     solver = PathFollower(solver_param=solver_param)
 
@@ -121,16 +113,10 @@ def path_following(test_pafik: bool, test_ikflow: bool):
 
 
 def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
-    assert not (DISABLE_POSTURE_FEATURE and EXTRACT_POSTURE_FEATURE_FROM_C_SPACE)
     solver_param = (
         DEFAULT_SOLVER_PARAM_M7_DISABLE_POSTURE_FEATURES
         if DISABLE_POSTURE_FEATURE
-        else DEFAULT_SOLVER_PARAM_M7_NORM
-    )
-    solver_param = (
-        DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
-        if EXTRACT_POSTURE_FEATURE_FROM_C_SPACE
-        else solver_param
+        else DEFAULT_SOLVER_PARAM_M7_EXTRACT_FROM_C_SPACE
     )
     solver = PathFollower(solver_param=solver_param)
 

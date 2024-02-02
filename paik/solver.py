@@ -74,7 +74,7 @@ class Solver:
                 "./weights/panda/nearest_neighnbor_P.pth"
             )
         except:
-            self.nearest_neighnbor_P = NearestNeighbors(n_neighbors=1).fit(self._P_tr)
+            self.nearest_neighnbor_P = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self._P_tr)
             save_pickle(
                 "./weights/panda/nearest_neighnbor_P.pth", self.nearest_neighnbor_P
             )
@@ -236,13 +236,33 @@ class Solver:
         C = np.column_stack((P, F, np.zeros((len(F), 1)))).astype(np.float32)
         C = self.norm_C(C) if self._enable_normalize else torch.from_numpy(C)
         C = self.remove_posture_feature(C) if self._disable_posture_feature else C
-        C = C.to(self._device)
         with torch.inference_mode():
-            J = self._solver(C).sample((num_sols,)).detach().cpu()
+            J = self._solver(C.to(self._device)).sample((num_sols,)).detach().cpu()
 
-        if self._enable_normalize:
-            J = self.denorm_J(J)
-
+        J = self.denorm_J(J) if self._enable_normalize else J
+        return J.numpy() if return_numpy else J
+    
+    def solve_batch(
+        self, P: np.ndarray, F: np.ndarray, num_sols: int, return_numpy: bool = False, batch_size: int = 4000
+    ):
+        C = np.repeat(np.expand_dims(np.column_stack((P, F, np.zeros((len(F), 1)))).astype(np.float32), axis=0), num_sols, axis=0)
+        C = self.norm_C(C) if self._enable_normalize else torch.from_numpy(C)
+        C = self.remove_posture_feature(C) if self._disable_posture_feature else C
+        C = C.view(-1, C.shape[-1])
+        complementary = batch_size - len(C) % batch_size
+        complementary = 0 if complementary == batch_size else complementary
+        print('before adding complementary', C.shape, complementary)
+        C = torch.cat((C, C[:complementary]), dim=0) if complementary > 0 else C
+        print('after adding complementary', C.shape, complementary)
+        C = C.view(-1, batch_size, C.shape[-1]).to(self._device)
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs), dtype=torch.float32).to(self._device)
+        with torch.inference_mode():
+            for i in trange(len(C)):
+                J[i] = self._solver(C[i]).sample()
+        J = J.view(-1, self._robot.n_dofs)[:-complementary].detach().cpu() if complementary > 0 else J.view(-1, self._robot.n_dofs).detach().cpu()
+        J = J.view(num_sols, -1, self._robot.n_dofs)
+        print(J.shape)
+        J = self.denorm_J(J) if self._enable_normalize else J
         return J.numpy() if return_numpy else J
 
     def get_random_JPF(self, num_samples: int):
@@ -361,6 +381,7 @@ class Solver:
         self,
         num_poses: int,
         num_sols: int,
+        batch_size: int,
         success_threshold: Tuple[float, float] = (1e-4, 1e-4),
     ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
         # Randomly sample poses from test set
@@ -373,11 +394,8 @@ class Solver:
         F = self.select_reference_posture(P)
 
         # Begin inference
-        J_hat = np.empty((num_sols, num_poses, self._robot.n_dofs))
-        for i in trange(num_poses):
-            J_hat[:, i, :] = self.solve(np.atleast_2d(P[i]), np.atleast_2d(F[i]), num_sols, return_numpy=True).squeeze(axis=1)  # type: ignore
-
-        # J_hat = self.solve(P, F, num_sols, return_numpy=True)
+        J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size, return_numpy=True)
+            
 
         l2, ang = self.evaluate_solutions(J_hat, P, return_all=True)
         df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})

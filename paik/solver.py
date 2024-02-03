@@ -248,7 +248,7 @@ class Solver:
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
         J = torch.empty((len(C), batch_size, self._robot.n_dofs),
                         device=self._device)
-        
+
         if verbose:
             with torch.inference_mode():
                 for i in trange(len(C)):
@@ -257,7 +257,7 @@ class Solver:
             with torch.inference_mode():
                 for i in range(len(C)):
                     J[i] = self._solver(C[i]).sample()
-                    
+
         J = J.detach().cpu().numpy()
         J = (
             J.reshape(-1, self._robot.n_dofs)[:-complementary]
@@ -287,7 +287,7 @@ class Solver:
         return_posewise_evalution: bool = False,
         return_all: bool = False,
     ) -> tuple[Any, Any]:
-        
+
         def geometric_distance_between_quaternions(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
             # from jrl.conversions
             # Note: Decreasing this value to 1e-8 greates NaN gradients for nearby quaternions.
@@ -313,8 +313,8 @@ class Solver:
             J.reshape(-1, self._n)).reshape(-1, P.shape[-1])
         l2 = np.linalg.norm(P_expand[:, :3] - P_hat[:, :3], axis=1)
         ang = geometric_distance_between_quaternions(
-            P_expand[:, 3:], P_hat[:, 3:]) # type: ignore
-        
+            P_expand[:, 3:], P_hat[:, 3:])  # type: ignore
+
         if return_posewise_evalution:
             return l2.reshape(num_sols, num_poses).mean(axis=1), ang.reshape(num_sols, num_poses).mean(axis=1)
         elif return_all:
@@ -338,7 +338,7 @@ class Solver:
         else:
             raise NotImplementedError
 
-    def random_sample_solutions_with_evaluation_loop(
+    def ikp_iterative_evalute(
         self,
         num_poses: int,
         num_sols: int,
@@ -357,7 +357,8 @@ class Solver:
         F = self.select_reference_posture(P)
 
         # Begin inference
-        J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size, verbose=verbose)
+        J_hat = self.solve_batch(
+            P, F, num_sols, batch_size=batch_size, verbose=verbose)
 
         l2, ang = self.evaluate_solutions(J_hat, P, return_all=True)
         avg_inference_time = round((time() - time_begin) / num_poses, 3)

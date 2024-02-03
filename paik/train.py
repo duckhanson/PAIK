@@ -68,7 +68,8 @@ class Trainer(Solver):
             else:
                 noise_std = self.__noise_esp * np.random.rand(len(self._F), 1)
             J = self._J_tr + noise_std * np.random.randn(*self._J_tr.shape)
-            C = np.column_stack((self._P_tr, self._F, self.__std_scale * noise_std))
+            C = np.column_stack(
+                (self._P_tr, self._F, self.__std_scale * noise_std))
 
             J = self.norm_J(J) if self.param.enable_normalize else J
             C = self.norm_C(C) if self.param.enable_normalize else C
@@ -104,7 +105,7 @@ class Trainer(Solver):
             print(
                 f"using shrink_ratio: {self.shrink_ratio} (fixed), where original shrink_ratio: {self.param.shrink_ratio} (training)"
             )
-            avg_pos_errs, avg_ori_errs, _, _ = self.random_sample_solutions_with_evaluation_loop(  # type: ignore
+            avg_pos_errs, avg_ori_errs, _, _ = self.ikp_iterative_evalute(  # type: ignore
                 num_poses=num_eval_poses, num_sols=num_eval_sols, verbose=False
             )  # type: ignore
             self.shrink_ratio = self.param.shrink_ratio  # type: ignore

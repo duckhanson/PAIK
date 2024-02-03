@@ -68,8 +68,7 @@ class Trainer(Solver):
             else:
                 noise_std = self.__noise_esp * np.random.rand(len(self._F), 1)
             J = self._J_tr + noise_std * np.random.randn(*self._J_tr.shape)
-            C = np.column_stack(
-                (self._P_tr, self._F, self.__std_scale * noise_std))
+            C = np.column_stack((self._P_tr, self._F, self.__std_scale * noise_std))
 
             J = self.norm_J(J) if self.param.enable_normalize else J
             C = self.norm_C(C) if self.param.enable_normalize else C

@@ -36,12 +36,16 @@ class PathFollower(Solver):
         return_evaluation: bool = False,
     ):
         self.shrink_ratio = std
-        J_hat = self.solve_batch(P, self._F[self.J_knn.kneighbors(
-            J, return_distance=False).flatten()], num_sols=num_sols)  # type: ignore
+        J_hat = self.solve_batch(
+            P,
+            self._F[self.J_knn.kneighbors(J, return_distance=False).flatten()],
+            num_sols=num_sols,
+        )  # type: ignore
         if not return_evaluation:
             return J_hat
         l2_errs, ang_errs = self.pose_error_evalute(
-            J_hat, P, return_posewise_evalution=True)
+            J_hat, P, return_posewise_evalution=True
+        )
         mjac_arr = np.array([max_joint_angle_change(qs) for qs in J_hat])
         ddjc = np.linalg.norm(J_hat - J, axis=-1).mean(axis=-1)
         return J_hat, l2_errs, ang_errs, mjac_arr, ddjc
@@ -84,7 +88,7 @@ class PathFollower(Solver):
             )
             Jtraj = trajectory.Trajectory(milestones=endPoints)  # type: ignore
             J = np.array([Jtraj.eval(i / num_steps) for i in range(num_steps)])
-            P = self._robot.forward_kinematics(J[:, 0: self._robot.n_dofs])
+            P = self._robot.forward_kinematics(J[:, 0 : self._robot.n_dofs])
 
             save_numpy(file_path=Jtraj_file_path, arr=J)
             save_numpy(file_path=Ppath_file_path, arr=P)
@@ -129,12 +133,9 @@ class PathFollower(Solver):
                 endPoints, _ = self._robot.sample_joint_angles_and_poses(
                     n=2, return_torch=False
                 )
-                Jtraj = trajectory.Trajectory(
-                    milestones=endPoints)  # type: ignore
-                J[i] = np.array([Jtraj.eval(i / num_steps)
-                                for i in range(num_steps)])
-                P[i] = self._robot.forward_kinematics(
-                    J[i, :, 0: self._robot.n_dofs])
+                Jtraj = trajectory.Trajectory(milestones=endPoints)  # type: ignore
+                J[i] = np.array([Jtraj.eval(i / num_steps) for i in range(num_steps)])
+                P[i] = self._robot.forward_kinematics(J[i, :, 0 : self._robot.n_dofs])
 
             save_numpy(file_path=Jtraj_file_path, arr=J)
             save_numpy(file_path=Ppath_file_path, arr=P)

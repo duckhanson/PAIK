@@ -81,8 +81,7 @@ def main() -> None:
 if __name__ == "__main__":
     project_name = "msik_ikflow_nsf_norm"
 
-    sweep_id = wandb.sweep(
-        sweep=sweep_config, project=project_name, entity="luca_nthu")
+    sweep_id = wandb.sweep(sweep=sweep_config, project=project_name, entity="luca_nthu")
     # Start sweep job.
     wandb.agent(sweep_id, function=main, count=EXPERMENT_COUNT)
     wandb.finish()

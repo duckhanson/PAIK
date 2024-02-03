@@ -18,13 +18,13 @@ from jkinpylib.evaluation import solution_pose_errors
 
 
 TEST_PAFIK = True
-TEST_IKFLOW = False
-USE_NSF_ONLY = True
+TEST_IKFLOW = True
+USE_NSF_ONLY = False
 LOAD_TIME = ""  # 0131005046
 NUM_STEPS = 20
 NUM_TRAJECTORIES = 10000
 NUM_SOLS = 1
-STD = 0.25
+STD = 0.01
 DDJC_THRES = (40, 80, 120)
 
 def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
@@ -40,6 +40,7 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
         begin_time = time()
         J = Jt.reshape(-1, Jt.shape[-1])
         P = Pt.reshape(-1, Pt.shape[-1])
+        solver.shrink_ratio = STD
         J_hat = solver.solve_batch(P, solver._F[solver.J_knn.kneighbors(
             J, return_distance=False).flatten()], num_sols=1)  # type: ignore
         l2, ang = solver.evaluate_solutions(

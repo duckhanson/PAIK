@@ -35,7 +35,8 @@ class Solver:
         # Neural spline flow (NSF) with 3 sample features and 5 context features
         self._n, self._m, self._r = solver_param.n, solver_param.m, solver_param.r
         self._solver, self._optimizer, self._scheduler = get_flow_model(
-            solver_param)  # type: ignore
+            solver_param
+        )  # type: ignore
         self._base_std = solver_param.base_std
         self._init_latent = torch.zeros((self.robot.n_dofs)).to(self._device)
         # load inference data
@@ -137,7 +138,7 @@ class Solver:
         self.__mean_C = np.concatenate((C.mean(axis=0), np.zeros((1))))
         std_C = np.concatenate((C.std(axis=0), np.ones((1))))
         scale = np.ones_like(self.__mean_C)
-        scale[self._m: self._m + self._r] *= self.__solver_param.posture_feature_scale
+        scale[self._m : self._m + self._r] *= self.__solver_param.posture_feature_scale
         self.__std_C = std_C / scale
 
         return J, P, F
@@ -149,8 +150,7 @@ class Solver:
                 DiagNormal,
                 torch.zeros((self._robot.n_dofs,), device=self._device)
                 + self._init_latent,
-                torch.ones((self._robot.n_dofs,), device=self._device)
-                * self._base_std,
+                torch.ones((self._robot.n_dofs,), device=self._device) * self._base_std,
                 buffer=True,
             ),  # type: ignore
         )
@@ -202,8 +202,7 @@ class Solver:
             return self.solve(P, F, num_sols)
         C = self.norm_C(
             np.repeat(
-                np.expand_dims(np.column_stack(
-                    (P, F, np.zeros((len(F), 1)))), axis=0),
+                np.expand_dims(np.column_stack((P, F, np.zeros((len(F), 1)))), axis=0),
                 num_sols,
                 axis=0,
             )
@@ -212,12 +211,10 @@ class Solver:
         C = C.reshape(-1, C.shape[-1])
         complementary = batch_size - len(C) % batch_size
         complementary = 0 if complementary == batch_size else complementary
-        C = np.concatenate((C, C[:complementary]),
-                           axis=0) if complementary > 0 else C
+        C = np.concatenate((C, C[:complementary]), axis=0) if complementary > 0 else C
         C = C.reshape(-1, batch_size, C.shape[-1])
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
-        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
-                        device=self._device)
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs), device=self._device)
 
         if verbose:
             with torch.inference_mode():
@@ -236,28 +233,14 @@ class Solver:
         )
         return self.denorm_J(J.reshape(num_sols, -1, self._robot.n_dofs))
 
-    def pose_error_evalute(
+    def evaluate_pose_error(
         self,
         J: np.ndarray,
         P: np.ndarray,
         return_posewise_evalution: bool = False,
         return_all: bool = False,
     ) -> tuple[Any, Any]:
-        def geometric_distance_between_quaternions(
-            q1: np.ndarray, q2: np.ndarray
-        ) -> np.ndarray:
-            # from jrl.conversions
-            # Note: Decreasing this value to 1e-8 greates NaN gradients for nearby quaternions.
-            acos_clamp_epsilon = 1e-7
-            dot = np.clip(np.sum(q1 * q2, axis=1), -1, 1)
-            # Note: Updated by @jstmn on Feb24 2023
-            distance = 2 * np.arccos(
-                np.clip(dot, -1 + acos_clamp_epsilon, 1 - acos_clamp_epsilon)
-            )
-            # distance = 2 * np.arccos(dot)
-            distance = np.abs(np.remainder(
-                distance + np.pi, 2 * np.pi) - np.pi)
-            return distance
+        assert len(J.shape) == 2 or len(J.shape) == 3
 
         num_poses = len(P)
         num_sols = len(J)
@@ -271,9 +254,28 @@ class Solver:
             -1, P.shape[-1]
         )
         l2 = np.linalg.norm(P_expand[:, :3] - P_hat[:, :3], axis=1)
-        ang = geometric_distance_between_quaternions(
-            P_expand[:, 3:], P_hat[:, 3:]
-        )  # type: ignore
+        # geometric_distance_between_quaternions
+        q1, q2 = P_expand[:, 3:], P_hat[:, 3:]
+        # from jrl.conversions
+        # Note: Decreasing this value to 1e-8 greates NaN gradients for nearby quaternions.
+        acos_clamp_epsilon = 1e-7
+        # Note: Updated by @jstmn on Feb24 2023
+        # ang = 2 * np.arccos(dot)
+        ang = np.abs(
+            np.remainder(
+                2
+                * np.arccos(
+                    np.clip(
+                        np.clip(np.sum(q1 * q2, axis=1), -1, 1),
+                        -1 + acos_clamp_epsilon,
+                        1 - acos_clamp_epsilon,
+                    )
+                )
+                + np.pi,
+                2 * np.pi,
+            )
+            - np.pi
+        )
 
         if return_posewise_evalution:
             return l2.reshape(num_sols, num_poses).mean(axis=1), ang.reshape(
@@ -300,7 +302,7 @@ class Solver:
         else:
             raise NotImplementedError
 
-    def ikp_iterative_evalute(
+    def evaluate_ikp_iterative(
         self,
         num_poses: int,
         num_sols: int,
@@ -319,10 +321,9 @@ class Solver:
         F = self.select_reference_posture(P)
 
         # Begin inference
-        J_hat = self.solve_batch(
-            P, F, num_sols, batch_size=batch_size, verbose=verbose)
+        J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size, verbose=verbose)
 
-        l2, ang = self.pose_error_evalute(J_hat, P, return_all=True)
+        l2, ang = self.evaluate_pose_error(J_hat, P, return_all=True)
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
         df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})

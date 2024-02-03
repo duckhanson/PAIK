@@ -7,7 +7,9 @@ from typing import Tuple
 class SolverConfig:
     # robot
     robot_name: str = "panda"
-    nmr: Tuple[int, int, int] = (7, 7, 1)
+    n: int = 7
+    m: int = 7
+    r: int = 1
 
     # model
     subnet_num_layers: int = 3

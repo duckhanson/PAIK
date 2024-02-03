@@ -33,7 +33,7 @@ class Solver:
         self._device = solver_param.device
         self._use_nsf_only = solver_param.use_nsf_only
         # Neural spline flow (NSF) with 3 sample features and 5 context features
-        self._n, self._m, self._r = solver_param.nmr
+        self._n, self._m, self._r = solver_param.n, solver_param.m, solver_param.r
         self._solver, self._optimizer, self._scheduler = get_flow_model(
             enable_load_model=solver_param.enable_load_model,
             num_bins=solver_param.num_bins,

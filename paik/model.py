@@ -38,7 +38,7 @@ def get_flow_model(config: SolverConfig):
             hidden_features=[config.subnet_width] * config.subnet_num_layers,
         ),
         n=config.n,
-        shrink_ratio=config.shrink_ratio,
+        base_std=config.base_std,
     )
     flow = flow.to(config.device)
 
@@ -80,7 +80,7 @@ def get_flow_model(config: SolverConfig):
     return flow, optimizer, scheduler
 
 
-def change_flow_base(flow: NSF | Flow, n: int, shrink_ratio: float):
+def change_flow_base(flow: NSF | Flow, n: int, base_std: float):
     """
     shrink normal distribution model
 
@@ -94,7 +94,7 @@ def change_flow_base(flow: NSF | Flow, n: int, shrink_ratio: float):
         base=Unconditional(
             DiagNormal,
             torch.zeros((n,)),
-            torch.ones((n,)) * shrink_ratio,
+            torch.ones((n,)) * base_std,
             buffer=True,
         ),  # type: ignore
     )

@@ -27,7 +27,7 @@ METHOD_OF_SELECT_REFERENCE_POSTURE = "knn"
 
 def ikp(test_pafik: bool, test_ikflow: bool):
     solver_param = DEFAULT_NSF if USE_NSF_ONLY else DEFULT_SOLVER
-    solver_param.method_of_select_reference_posture = METHOD_OF_SELECT_REFERENCE_POSTURE
+    solver_param.select_reference_posture_method = METHOD_OF_SELECT_REFERENCE_POSTURE
     solver = Solver(solver_param=solver_param)
 
     if test_pafik:
@@ -75,7 +75,8 @@ def ikp(test_pafik: bool, test_ikflow: bool):
         if NUM_POSES < NUM_SOLS:
             l2 = np.zeros((NUM_SOLS, len(P)))
             ang = np.zeros((NUM_SOLS, len(P)))
-            J = torch.empty((NUM_SOLS, len(P), 7), dtype=torch.float32, device="cpu")
+            J = torch.empty((NUM_SOLS, len(P), 7),
+                            dtype=torch.float32, device="cpu")
             begin = time.time()
             for i in trange(NUM_POSES):
                 J[:, i, :] = ik_solver.solve(
@@ -100,7 +101,8 @@ def ikp(test_pafik: bool, test_ikflow: bool):
         else:
             l2 = np.zeros((NUM_SOLS, len(P)))
             ang = np.zeros((NUM_SOLS, len(P)))
-            J = torch.empty((NUM_SOLS, len(P), 7), dtype=torch.float32, device="cpu")
+            J = torch.empty((NUM_SOLS, len(P), 7),
+                            dtype=torch.float32, device="cpu")
             begin = time.time()
             for i in trange(NUM_SOLS):
                 J[i] = ik_solver.solve_n_poses(

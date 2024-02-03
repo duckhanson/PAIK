@@ -67,9 +67,11 @@ class Trainer(Solver):
                 noise_std = np.zeros((len(self._F), 1))
             else:
                 noise_std = self.__noise_esp * np.random.rand(len(self._F), 1)
-            J = self.norm_J(self._J_tr + noise_std * np.random.randn(*self._J_tr.shape))
+            J = self.norm_J(self._J_tr + noise_std *
+                            np.random.randn(*self._J_tr.shape))
             C = self.norm_C(
-                np.column_stack((self._P_tr, self._F, self.__std_scale * noise_std))
+                np.column_stack(
+                    (self._P_tr, self._F, self.__std_scale * noise_std))
             )
             C = self.remove_posture_feature(C) if self._use_nsf_only else C
 
@@ -99,14 +101,10 @@ class Trainer(Solver):
 
             self.__noise_esp = update_noise_esp(ep)
 
-            self.shrink_ratio = 0.25
-            print(
-                f"using shrink_ratio: {self.shrink_ratio} (fixed), where original shrink_ratio: {self.param.shrink_ratio} (training)"
-            )
             avg_pos_errs, avg_ori_errs, _, _ = self.ikp_iterative_evalute(  # type: ignore
                 num_poses=num_eval_poses, num_sols=num_eval_sols, verbose=False
             )  # type: ignore
-            self.shrink_ratio = self.param.shrink_ratio  # type: ignore
+            self.base_std = self.param.base_std  # type: ignore
 
             self._scheduler.step(avg_pos_errs)  # type: ignore
 

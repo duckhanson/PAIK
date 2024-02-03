@@ -15,7 +15,7 @@ class SolverConfig:
     subnet_num_layers: int = 3
     model_architecture: str = "nsf"
     randperm: bool = False
-    shrink_ratio: float = 0.68
+    base_std: float = 0.68
     subnet_width: int = 1024
     num_transforms: int = 8
     num_bins: int = 10
@@ -36,8 +36,7 @@ class SolverConfig:
     shce_patience: int = 2
     posture_feature_scale: float = 1.0
     use_nsf_only: bool = False
-    methods_reference_posture: Tuple[str, str, str] = ("knn", "random", "pick")
-    method_of_select_reference_posture: str = methods_reference_posture[0]
+    select_reference_posture_method: str = "knn"
 
     # inference
     ckpt_name: str = "1118-0317"
@@ -46,7 +45,8 @@ class SolverConfig:
 
     # workdir
     __current_folder_path, _ = os.path.split(os.path.realpath(__file__))
-    __current_workdir_path, _ = os.path.split(os.path.realpath(__current_folder_path))
+    __current_workdir_path, _ = os.path.split(
+        os.path.realpath(__current_folder_path))
     workdir: str = __current_workdir_path
 
     # training
@@ -74,7 +74,7 @@ class SolverConfig:
 #     gamma=0.086,
 #     noise_esp=0.0025,
 #     randperm=False,
-#     shrink_ratio=0.68,
+#     base_std=0.68,
 #     subnet_width=1024,
 #     num_transforms=8,
 #     lr_weight_decay=0.012,
@@ -89,7 +89,7 @@ DEFAULT_NSF = SolverConfig(
     gamma=0.086,
     noise_esp=0.0025,
     randperm=False,
-    shrink_ratio=0.68,
+    base_std=0.68,
     subnet_width=1024,
     num_transforms=8,
     lr_weight_decay=0.012,
@@ -105,7 +105,7 @@ DEFULT_SOLVER = SolverConfig(
     gamma=0.086,
     noise_esp=0.0025,
     randperm=False,
-    shrink_ratio=0.65,
+    base_std=0.65,
     subnet_width=1024,
     num_transforms=8,
     lr_weight_decay=0.013,

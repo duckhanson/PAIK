@@ -77,17 +77,7 @@ class Solver:
                 "./weights/panda/nearest_neighnbor_P.pth", self.nearest_neighnbor_P
             )
 
-        self._enable_normalize = solver_param.enable_normalize
-        if self._enable_normalize:
-            self.__mean_J, self.__std_J = self._J_tr.mean(axis=0), self._J_tr.std(
-                axis=0
-            )
-            C = np.column_stack((self._P_tr, self._F))
-            self.__mean_C = np.concatenate((C.mean(axis=0), np.zeros((1))))
-            std_C = np.concatenate((C.std(axis=0), np.ones((1))))
-            scale = np.ones_like(self.__mean_C)
-            scale[self._m: self._m + self._r] *= solver_param.posture_feature_scale
-            self.__std_C = std_C / scale
+        
 
     @property
     def latent(self):
@@ -158,6 +148,17 @@ class Solver:
 
             save_numpy(file_path=path_F, arr=F)
         print(f"[SUCCESS] F load from {path_F}")
+        
+        # for normalization
+        self.__mean_J, self.__std_J = J.mean(axis=0), J.std(
+            axis=0
+        )
+        C = np.column_stack((P, F))
+        self.__mean_C = np.concatenate((C.mean(axis=0), np.zeros((1))))
+        std_C = np.concatenate((C.std(axis=0), np.ones((1))))
+        scale = np.ones_like(self.__mean_C)
+        scale[self._m: self._m + self._r] *= self.__solver_param.posture_feature_scale
+        self.__std_C = std_C / scale
 
         return J, P, F
 
@@ -176,19 +177,19 @@ class Solver:
 
     # public methods
     def norm_J(self, J: np.ndarray):
-        assert self._enable_normalize and isinstance(J, np.ndarray)
+        assert isinstance(J, np.ndarray)
         return (J - self.__mean_J) / self.__std_J
 
     def norm_C(self, C: np.ndarray):
-        assert self._enable_normalize and isinstance(C, np.ndarray)
+        assert isinstance(C, np.ndarray)
         return (C - self.__mean_C) / self.__std_C
 
     def denorm_J(self, J: np.ndarray):
-        assert self._enable_normalize and isinstance(J, np.ndarray)
+        assert isinstance(J, np.ndarray)
         return J * self.__std_J + self.__mean_J
 
     def denorm_C(self, C: np.ndarray):
-        assert self._enable_normalize and isinstance(C, np.ndarray)
+        assert isinstance(C, np.ndarray)
         return C * self.__std_C + self.__mean_C
 
     def remove_posture_feature(self, C: np.ndarray):
@@ -202,15 +203,12 @@ class Solver:
         return C
 
     def solve(self, P: np.ndarray, F: np.ndarray, num_sols: int):
-        C = np.column_stack((P, F, np.zeros((len(F), 1))))
-        C = self.norm_C(C) if self._enable_normalize else C
+        C = self.norm_C(np.column_stack((P, F, np.zeros((len(F), 1)))))
         C = self.remove_posture_feature(C) if self._use_nsf_only else C
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
         with torch.inference_mode():
             J = self._solver(C).sample((num_sols,))
-        J = J.detach().cpu().numpy()
-        J = self.denorm_J(J) if self._enable_normalize else J
-        return J
+        return self.denorm_J(J.detach().cpu().numpy())
 
     def solve_batch(
         self,
@@ -222,13 +220,12 @@ class Solver:
     ):
         if len(P) * num_sols < batch_size:
             return self.solve(P, F, num_sols)
-        C = np.repeat(
+        C = self.norm_C(np.repeat(
             np.expand_dims(np.column_stack(
                 (P, F, np.zeros((len(F), 1)))), axis=0),
             num_sols,
             axis=0,
-        )
-        C = self.norm_C(C) if self._enable_normalize else C
+        ))
         C = self.remove_posture_feature(C) if self._use_nsf_only else C
         C = C.reshape(-1, C.shape[-1])
         complementary = batch_size - len(C) % batch_size
@@ -255,9 +252,7 @@ class Solver:
             if complementary > 0
             else J
         )
-        J = J.reshape(num_sols, -1, self._robot.n_dofs)
-        J = self.denorm_J(J) if self._enable_normalize else J
-        return J
+        return self.denorm_J(J.reshape(num_sols, -1, self._robot.n_dofs))
 
     def pose_error_evalute(
         self,

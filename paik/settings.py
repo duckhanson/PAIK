@@ -40,7 +40,6 @@ class SolverConfig:
     # inference
     ckpt_name: str = "1118-0317"
     enable_load_model: bool = True
-    enable_normalize: bool = True
     device: str = "cuda"
 
     # workdir
@@ -78,7 +77,6 @@ class SolverConfig:
 #     num_transforms=8,
 #     lr_weight_decay=0.012,
 #     noise_esp_decay=0.97,
-#     enable_normalize=True,
 #     subnet_num_layers=3,
 #     batch_size=1024,
 #     ckpt_name="1202-1325",  # 1202-1325, 1205-0023
@@ -94,7 +92,6 @@ DEFAULT_NSF = SolverConfig(
     num_transforms=8,
     lr_weight_decay=0.012,
     noise_esp_decay=0.97,
-    enable_normalize=True,
     subnet_num_layers=3,
     batch_size=1024,
     use_nsf_only=True,
@@ -112,7 +109,6 @@ DEFULT_SOLVER = SolverConfig(
     lr_weight_decay=0.013,
     shce_patience=2,
     noise_esp_decay=0.97,
-    enable_normalize=True,
     subnet_num_layers=3,
     batch_size=1024,
     use_nsf_only=False,

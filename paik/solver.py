@@ -280,7 +280,7 @@ class Solver:
         ]  # type: ignore
         return J, P, F
 
-    def evaluate_solutions(
+    def pose_error_evalute(
         self,
         J: np.ndarray,
         P: np.ndarray,
@@ -360,7 +360,7 @@ class Solver:
         J_hat = self.solve_batch(
             P, F, num_sols, batch_size=batch_size, verbose=verbose)
 
-        l2, ang = self.evaluate_solutions(J_hat, P, return_all=True)
+        l2, ang = self.pose_error_evalute(J_hat, P, return_all=True)
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
         df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})

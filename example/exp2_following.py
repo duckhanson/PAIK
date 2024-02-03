@@ -27,6 +27,7 @@ NUM_SOLS = 1
 STD = 0.01
 DDJC_THRES = (40, 80, 120)
 
+
 def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
     solver_param = DEFAULT_NSF if USE_NSF_ONLY else DEFULT_SOLVER
     solver = PathFollower(solver_param=solver_param)
@@ -43,11 +44,13 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
         solver.shrink_ratio = STD
         J_hat = solver.solve_batch(P, solver._F[solver.J_knn.kneighbors(
             J, return_distance=False).flatten()], num_sols=1)  # type: ignore
-        l2, ang = solver.evaluate_solutions(
+        l2, ang = solver.pose_error_evalute(
             J_hat, P, return_all=True)
-        ddjc = np.linalg.norm(J_hat - J, axis=-1).reshape(NUM_TRAJECTORIES, NUM_STEPS)
-        mjac = np.array([max_joint_angle_change(qs) for qs in J_hat.reshape(NUM_TRAJECTORIES, NUM_STEPS, -1)])
-        
+        ddjc = np.linalg.norm(
+            J_hat - J, axis=-1).reshape(NUM_TRAJECTORIES, NUM_STEPS)
+        mjac = np.array([max_joint_angle_change(qs)
+                        for qs in J_hat.reshape(NUM_TRAJECTORIES, NUM_STEPS, -1)])
+
         avg_inference_time = round((time() - begin_time) / NUM_TRAJECTORIES, 3)
         l2 = l2.reshape(NUM_TRAJECTORIES, NUM_STEPS).mean(axis=-1)
         ang = ang.reshape(NUM_TRAJECTORIES, NUM_STEPS).mean(axis=-1)
@@ -64,7 +67,8 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
         print(
             tabulate(
                 [
-                    (thres, df.query(f"ddjc < {thres}")["ddjc"].count() / df.shape[0])
+                    (thres, df.query(f"ddjc < {thres}")[
+                     "ddjc"].count() / df.shape[0])
                     for thres in DDJC_THRES
                 ],
                 headers=["ddjc", "success rate"],
@@ -85,11 +89,14 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
         ddjc = np.empty((NUM_TRAJECTORIES, NUM_STEPS))
 
         begin_time = time()
-        J_hat = torch.empty((NUM_TRAJECTORIES, NUM_STEPS, Jt.shape[-1]), dtype=torch.float32, device="cpu")
+        J_hat = torch.empty((NUM_TRAJECTORIES, NUM_STEPS,
+                            Jt.shape[-1]), dtype=torch.float32, device="cpu")
         for i in trange(NUM_STEPS):
-            J_hat[:, i, :] = ik_solver.solve_n_poses(Pt[:, i], latent_scale=STD, refine_solutions=False, return_detailed=False).cpu()  # type: ignore
-            l2[:, i], ang[:, i] = solution_pose_errors(ik_solver.robot, J_hat[:, i, :], Pt[:, i])
-        
+            J_hat[:, i, :] = ik_solver.solve_n_poses(
+                Pt[:, i], latent_scale=STD, refine_solutions=False, return_detailed=False).cpu()  # type: ignore
+            l2[:, i], ang[:, i] = solution_pose_errors(
+                ik_solver.robot, J_hat[:, i, :], Pt[:, i])
+
         ddjc = np.linalg.norm(J_hat - Jt, axis=-1)
         mjac = np.array([max_joint_angle_change(qs) for qs in J_hat])
 
@@ -110,7 +117,8 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
                 [
                     (
                         thres,
-                        df.query(f"ddjc < {thres}")["ddjc"].count() / df.shape[0],
+                        df.query(f"ddjc < {thres}")[
+                            "ddjc"].count() / df.shape[0],
                     )
                     for thres in DDJC_THRES
                 ],
@@ -121,4 +129,5 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
 
 
 if __name__ == "__main__":
-    path_following_multiple_trajectory(test_pafik=TEST_PAFIK, test_ikflow=TEST_IKFLOW)
+    path_following_multiple_trajectory(
+        test_pafik=TEST_PAFIK, test_ikflow=TEST_IKFLOW)

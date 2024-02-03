@@ -36,7 +36,7 @@ class Solver:
         self._n, self._m, self._r = solver_param.n, solver_param.m, solver_param.r
         self._solver, self._optimizer, self._scheduler = get_flow_model(
             solver_param)  # type: ignore
-        self._shrink_ratio = solver_param.base_std
+        self._base_std = solver_param.base_std
         self._init_latent = torch.zeros((self.robot.n_dofs)).to(self._device)
         # load inference data
         assert (
@@ -63,7 +63,7 @@ class Solver:
 
     @property
     def base_std(self):
-        return self._shrink_ratio
+        return self._base_std
 
     @property
     def robot(self):
@@ -76,7 +76,7 @@ class Solver:
     @base_std.setter
     def base_std(self, value: float):
         assert value >= 0 and value < 1
-        self._shrink_ratio = value
+        self._base_std = value
         self.__update_solver()
 
     @latent.setter
@@ -150,7 +150,7 @@ class Solver:
                 torch.zeros((self._robot.n_dofs,), device=self._device)
                 + self._init_latent,
                 torch.ones((self._robot.n_dofs,), device=self._device)
-                * self._shrink_ratio,
+                * self._base_std,
                 buffer=True,
             ),  # type: ignore
         )

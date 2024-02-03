@@ -119,57 +119,47 @@ class Solver:
 
     # private methods
     def __load_all_data(self):
-        def get_JP_data():
-            N = self.param.N
-            path_J = f"{self.param.train_dir}/J-{N}-{self._n}-{self._m}-{self._r}.npy"
-            path_P = f"{self.param.train_dir}/P-{N}-{self._n}-{self._m}-{self._r}.npy"
+        path_J = f"{self.param.train_dir}/J-{self.param.N}-{self._n}-{self._m}-{self._r}.npy"
+        path_P = f"{self.param.train_dir}/P-{self.param.N}-{self._n}-{self._m}-{self._r}.npy"
+        J = load_numpy(file_path=path_J)
+        P = load_numpy(file_path=path_P)
 
-            J = load_numpy(file_path=path_J)
-            P = load_numpy(file_path=path_P)
+        if len(J) != self.param.N or len(P) != self.param.N:
+            J, P = self._robot.sample_joint_angles_and_poses(
+                n=self.param.N, return_torch=False
+            )
+            save_numpy(file_path=path_J, arr=J)
+            save_numpy(file_path=path_P, arr=P[:, : self._m])
+        
+        assert self._r > 0
+        path_F = f"{self.param.train_dir}/F-{self.param.N}-{self._n}-{self._m}-{self._r}-from-C-space.npy"
+        F = load_numpy(file_path=path_F)
 
-            if len(J) != N or len(P) != N:
-                J, P = self._robot.sample_joint_angles_and_poses(
-                    n=N, return_torch=False
-                )
-                save_numpy(file_path=path_J, arr=J)
-                save_numpy(file_path=path_P, arr=P[:, : self._m])
+        if F.shape != (len(J), self._r):
+            # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
+            hnne = HNNE(dim=self._r)
+            # maximum number of data for hnne (11M), we use max_num_data_hnne to test
+            num_data = min(self.param.max_num_data_hnne, len(J))
+            F = hnne.fit_transform(X=J[:num_data], dim=self._r, verbose=True)
+            # query nearest neighbors for the rest of J
+            if len(F) != len(J):
+                knn = NearestNeighbors(n_neighbors=1)
+                knn.fit(J[:num_data])
+                F = np.row_stack(
+                    (
+                        F,
+                        F[
+                            knn.kneighbors(
+                                J[num_data:], n_neighbors=1, return_distance=False
+                            ).flatten()  # type: ignore
+                        ],
+                    )
+                )  # type: ignore
 
-            return J, P
-
-        def get_posture_feature(J: np.ndarray):
-            assert self._r > 0
-            file_path = f"{self.param.train_dir}/F-{self.param.N}-{self._n}-{self._m}-{self._r}-from-C-space.npy"
-            F = load_numpy(file_path=file_path)
-
-            if F.shape != (len(J), self._r):
-                # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
-                hnne = HNNE(dim=self._r)
-                # maximum number of data for hnne (11M), we use max_num_data_hnne to test
-                num_data = min(self.param.max_num_data_hnne, len(J))
-                F = hnne.fit_transform(X=J[:num_data], dim=self._r, verbose=True)
-                # query nearest neighbors for the rest of J
-                if len(F) != len(J):
-                    knn = NearestNeighbors(n_neighbors=1)
-                    knn.fit(J[:num_data])
-                    F = np.row_stack(
-                        (
-                            F,
-                            F[
-                                knn.kneighbors(
-                                    J[num_data:], n_neighbors=1, return_distance=False
-                                ).flatten()  # type: ignore
-                            ],
-                        )
-                    )  # type: ignore
-
-                save_numpy(file_path=file_path, arr=F)
-            print(f"[SUCCESS] F load from {file_path}")
-
-            return F
-
-        J_train, P_train = get_JP_data()
-        F = get_posture_feature(J=J_train)
-        return J_train, P_train, F
+            save_numpy(file_path=path_F, arr=F)
+        print(f"[SUCCESS] F load from {path_F}")
+        
+        return J, P, F
 
     def __update_solver(self):
         self._solver = Flow(

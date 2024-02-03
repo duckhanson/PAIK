@@ -227,7 +227,7 @@ class Solver:
         return J
 
     def solve_batch(
-        self, P: np.ndarray, F: np.ndarray, num_sols: int, batch_size: int = 4000
+        self, P: np.ndarray, F: np.ndarray, num_sols: int, batch_size: int = 4000, verbose: bool = True
     ):
         if len(P) * num_sols < batch_size:
             return self.solve(P, F, num_sols)
@@ -248,9 +248,16 @@ class Solver:
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
         J = torch.empty((len(C), batch_size, self._robot.n_dofs),
                         device=self._device)
-        with torch.inference_mode():
-            for i in trange(len(C)):
-                J[i] = self._solver(C[i]).sample()
+        
+        if verbose:
+            with torch.inference_mode():
+                for i in trange(len(C)):
+                    J[i] = self._solver(C[i]).sample()
+        else:
+            with torch.inference_mode():
+                for i in range(len(C)):
+                    J[i] = self._solver(C[i]).sample()
+                    
         J = J.detach().cpu().numpy()
         J = (
             J.reshape(-1, self._robot.n_dofs)[:-complementary]
@@ -331,67 +338,17 @@ class Solver:
         else:
             raise NotImplementedError
 
-    def random_sample_solutions_with_evaluation(
-        self,
-        num_poses: int,
-        num_sols: int,
-        success_threshold: Tuple[float, float] = (1e-4, 1e-4),
-        verbose: bool = True,
-    ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
-        # Randomly sample poses from test set
-        if verbose:
-            print("[START] random sampling for J and P.")
-        _, P = self._robot.sample_joint_angles_and_poses(
-            n=num_poses, return_torch=False
-        )
-        time_begin = time()
-        # Data Preprocessing
-        if verbose:
-            print("[START] select reference posture.")
-        F = self.select_reference_posture(P)
-
-        # Begin inference
-        if verbose:
-            print("[START] inference.")
-        J_hat = self.solve(P, F, num_sols)
-
-        if verbose:
-            print("[START] evaluation.")
-        l2, ang = self.evaluate_solutions(J_hat, P, return_all=True)
-        avg_l2, avg_ang = l2.mean(), ang.mean()
-        # success_rate = sum(np.where(l2 < success_threshold)) / (num_poses * num_sols)
-        df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
-        print(df.describe())
-
-        avg_inference_time = round((time() - time_begin) / num_poses, 3)
-
-        # use df to get success rate where l2 < 1e-4
-        return tuple(
-            [
-                avg_l2,
-                avg_ang,
-                avg_inference_time,
-                round(
-                    len(
-                        df.query(
-                            f"l2 < {success_threshold[0]} & ang < {success_threshold[1]}"
-                        )
-                    )
-                    / (num_poses * num_sols),
-                    3,
-                ),
-            ]
-        )
-
     def random_sample_solutions_with_evaluation_loop(
         self,
         num_poses: int,
         num_sols: int,
         batch_size: int = 5000,
+        std: float = 0.25,
         success_threshold: Tuple[float, float] = (1e-4, 1e-4),
+        verbose: bool = True,
     ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
+        self.shrink_ratio = std
         # Randomly sample poses from test set
-        # P = self._P_ts[np.random.choice(self._P_ts.shape[0], num_poses, replace=False)]
         _, P = self._robot.sample_joint_angles_and_poses(
             n=num_poses, return_torch=False
         )
@@ -400,18 +357,19 @@ class Solver:
         F = self.select_reference_posture(P)
 
         # Begin inference
-        J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size)
+        J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size, verbose=verbose)
 
         l2, ang = self.evaluate_solutions(J_hat, P, return_all=True)
+        avg_inference_time = round((time() - time_begin) / num_poses, 3)
+
         df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
         print(df.describe())
-        total_inference_time = round((time() - time_begin), 3)
 
         return tuple(
             [
                 l2.mean(),
                 ang.mean(),
-                total_inference_time,
+                avg_inference_time,
                 round(
                     len(
                         df.query(

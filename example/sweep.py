@@ -57,7 +57,7 @@ def main() -> None:
         avg_ang_errs,
         avg_inference_time,  # type: ignore
         _,
-    ) = trainer.random_sample_solutions_with_evaluation(num_poses=100, num_sols=1000)
+    ) = trainer.random_sample_solutions_with_evaluation_loop(num_poses=100, num_sols=1000, verbose=False)
 
     print(
         tabulate(

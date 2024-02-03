@@ -104,8 +104,8 @@ class Trainer(Solver):
             print(
                 f"using shrink_ratio: {self.shrink_ratio} (fixed), where original shrink_ratio: {self.param.shrink_ratio} (training)"
             )
-            avg_pos_errs, avg_ori_errs, _, _ = self.random_sample_solutions_with_evaluation(  # type: ignore
-                num_poses=num_eval_poses, num_sols=num_eval_sols
+            avg_pos_errs, avg_ori_errs, _, _ = self.random_sample_solutions_with_evaluation_loop(  # type: ignore
+                num_poses=num_eval_poses, num_sols=num_eval_sols, verbose=False
             )  # type: ignore
             self.shrink_ratio = self.param.shrink_ratio  # type: ignore
 

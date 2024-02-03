@@ -63,7 +63,7 @@ class Solver:
             self._n == self._robot.n_dofs
         ), f"n should be {self._robot.n_dofs} as the robot"
 
-        self._J_tr, self._P_tr, self._P_ts, self._F = self.__load_all_data()
+        self._J_tr, self._P_tr, self._F = self.__load_all_data()
 
         try:
             self.nearest_neighnbor_P = load_pickle(
@@ -86,7 +86,7 @@ class Solver:
             self.__mean_C = np.concatenate((C.mean(axis=0), np.zeros((1))))
             std_C = np.concatenate((C.std(axis=0), np.ones((1))))
             scale = np.ones_like(self.__mean_C)
-            scale[self._m: self._m + self._r] *= solver_param.posture_feature_scale
+            scale[self._m : self._m + self._r] *= solver_param.posture_feature_scale
             self.__std_C = std_C / scale
 
     @property
@@ -119,11 +119,10 @@ class Solver:
 
     # private methods
     def __load_all_data(self):
-        def get_JP_data(train: bool):
-            N = self.param.N_train if train else self.param.N_test
-            _dir = self.param.train_dir if train else self.param.val_dir
-            path_J = f"{_dir}/J-{N}-{self._n}-{self._m}-{self._r}.npy"
-            path_P = f"{_dir}/P-{N}-{self._n}-{self._m}-{self._r}.npy"
+        def get_JP_data():
+            N = self.param.N
+            path_J = f"{self.param.train_dir}/J-{N}-{self._n}-{self._m}-{self._r}.npy"
+            path_P = f"{self.param.train_dir}/P-{N}-{self._n}-{self._m}-{self._r}.npy"
 
             J = load_numpy(file_path=path_J)
             P = load_numpy(file_path=path_P)
@@ -137,19 +136,17 @@ class Solver:
 
             return J, P
 
-        def get_posture_feature(J: np.ndarray, P: np.ndarray):
+        def get_posture_feature(J: np.ndarray):
             assert self._r > 0
-            file_path = f"{self.param.train_dir}/F-{self.param.N_train}-{self._n}-{self._m}-{self._r}-from-C-space.npy"
+            file_path = f"{self.param.train_dir}/F-{self.param.N}-{self._n}-{self._m}-{self._r}-from-C-space.npy"
             F = load_numpy(file_path=file_path)
 
-            GENERATE_NEW = F.shape != (len(J), self._r)
-            if GENERATE_NEW:
+            if F.shape != (len(J), self._r):
                 # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
                 hnne = HNNE(dim=self._r)
                 # maximum number of data for hnne (11M), we use max_num_data_hnne to test
                 num_data = min(self.param.max_num_data_hnne, len(J))
-                F = hnne.fit_transform(
-                    X=J[:num_data], dim=self._r, verbose=True)
+                F = hnne.fit_transform(X=J[:num_data], dim=self._r, verbose=True)
                 # query nearest neighbors for the rest of J
                 if len(F) != len(J):
                     knn = NearestNeighbors(n_neighbors=1)
@@ -170,10 +167,9 @@ class Solver:
 
             return F
 
-        J_train, P_train = get_JP_data(train=True)
-        _, P_test = get_JP_data(train=False)
-        F = get_posture_feature(J=J_train, P=P_train)
-        return J_train, P_train, P_test, F
+        J_train, P_train = get_JP_data()
+        F = get_posture_feature(J=J_train)
+        return J_train, P_train, F
 
     def __update_solver(self):
         self._solver = Flow(
@@ -227,13 +223,17 @@ class Solver:
         return J
 
     def solve_batch(
-        self, P: np.ndarray, F: np.ndarray, num_sols: int, batch_size: int = 4000, verbose: bool = True
+        self,
+        P: np.ndarray,
+        F: np.ndarray,
+        num_sols: int,
+        batch_size: int = 4000,
+        verbose: bool = True,
     ):
         if len(P) * num_sols < batch_size:
             return self.solve(P, F, num_sols)
         C = np.repeat(
-            np.expand_dims(np.column_stack(
-                (P, F, np.zeros((len(F), 1)))), axis=0),
+            np.expand_dims(np.column_stack((P, F, np.zeros((len(F), 1)))), axis=0),
             num_sols,
             axis=0,
         )
@@ -242,12 +242,10 @@ class Solver:
         C = C.reshape(-1, C.shape[-1])
         complementary = batch_size - len(C) % batch_size
         complementary = 0 if complementary == batch_size else complementary
-        C = np.concatenate((C, C[:complementary]),
-                           axis=0) if complementary > 0 else C
+        C = np.concatenate((C, C[:complementary]), axis=0) if complementary > 0 else C
         C = C.reshape(-1, batch_size, C.shape[-1])
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
-        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
-                        device=self._device)
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs), device=self._device)
 
         if verbose:
             with torch.inference_mode():
@@ -275,19 +273,19 @@ class Solver:
         return_posewise_evalution: bool = False,
         return_all: bool = False,
     ) -> tuple[Any, Any]:
-
-        def geometric_distance_between_quaternions(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
+        def geometric_distance_between_quaternions(
+            q1: np.ndarray, q2: np.ndarray
+        ) -> np.ndarray:
             # from jrl.conversions
             # Note: Decreasing this value to 1e-8 greates NaN gradients for nearby quaternions.
             acos_clamp_epsilon = 1e-7
             dot = np.clip(np.sum(q1 * q2, axis=1), -1, 1)
             # Note: Updated by @jstmn on Feb24 2023
-            distance = 2 * \
-                np.arccos(np.clip(dot, -1 + acos_clamp_epsilon,
-                          1 - acos_clamp_epsilon))
+            distance = 2 * np.arccos(
+                np.clip(dot, -1 + acos_clamp_epsilon, 1 - acos_clamp_epsilon)
+            )
             # distance = 2 * np.arccos(dot)
-            distance = np.abs(np.remainder(
-                distance + np.pi, 2 * np.pi) - np.pi)
+            distance = np.abs(np.remainder(distance + np.pi, 2 * np.pi) - np.pi)
             return distance
 
         num_poses = len(P)
@@ -295,16 +293,21 @@ class Solver:
         J = np.expand_dims(J, axis=1) if len(J.shape) == 2 else J
         assert J.shape == (num_sols, num_poses, self._robot.n_dofs)
 
-        P_expand = np.repeat(np.expand_dims(P, axis=0), len(
-            J), axis=0).reshape(-1, P.shape[-1])
-        P_hat = self._robot.forward_kinematics(
-            J.reshape(-1, self._n)).reshape(-1, P.shape[-1])
+        P_expand = np.repeat(np.expand_dims(P, axis=0), len(J), axis=0).reshape(
+            -1, P.shape[-1]
+        )
+        P_hat = self._robot.forward_kinematics(J.reshape(-1, self._n)).reshape(
+            -1, P.shape[-1]
+        )
         l2 = np.linalg.norm(P_expand[:, :3] - P_hat[:, :3], axis=1)
         ang = geometric_distance_between_quaternions(
-            P_expand[:, 3:], P_hat[:, 3:])  # type: ignore
+            P_expand[:, 3:], P_hat[:, 3:]
+        )  # type: ignore
 
         if return_posewise_evalution:
-            return l2.reshape(num_sols, num_poses).mean(axis=1), ang.reshape(num_sols, num_poses).mean(axis=1)
+            return l2.reshape(num_sols, num_poses).mean(axis=1), ang.reshape(
+                num_sols, num_poses
+            ).mean(axis=1)
         elif return_all:
             return l2, ang
         return l2.mean(), ang.mean()
@@ -345,8 +348,7 @@ class Solver:
         F = self.select_reference_posture(P)
 
         # Begin inference
-        J_hat = self.solve_batch(
-            P, F, num_sols, batch_size=batch_size, verbose=verbose)
+        J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size, verbose=verbose)
 
         l2, ang = self.pose_error_evalute(J_hat, P, return_all=True)
         avg_inference_time = round((time() - time_begin) / num_poses, 3)

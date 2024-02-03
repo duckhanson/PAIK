@@ -49,18 +49,14 @@ class SolverConfig:
     workdir: str = __current_workdir_path
 
     # training
-    # (N_train, max) = (1000_0000, 430_0000), (500_0000, 400_0000)
-    N_train: int = 500_0000  # 2500_0000
-    N_test: int = 5_0000  # 5_0000
+    # (N, max) = (1000_0000, 430_0000), (500_0000, 400_0000)
+    N: int = 500_0000  # 2500_0000
 
     # data
     data_dir: str = f"{workdir}/data/{robot_name}"
 
     # train
     train_dir: str = f"{data_dir}/train"
-
-    # val
-    val_dir: str = f"{data_dir}/val"
 
     # hnne parameter
     weight_dir: str = f"{workdir}/weights/{robot_name}"

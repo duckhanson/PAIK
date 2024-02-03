@@ -34,28 +34,7 @@ class Solver:
         self._use_nsf_only = solver_param.use_nsf_only
         # Neural spline flow (NSF) with 3 sample features and 5 context features
         self._n, self._m, self._r = solver_param.n, solver_param.m, solver_param.r
-        self._solver, self._optimizer, self._scheduler = get_flow_model(
-            enable_load_model=solver_param.enable_load_model,
-            num_bins=solver_param.num_bins,
-            num_transforms=solver_param.num_transforms,
-            subnet_width=solver_param.subnet_width,
-            subnet_num_layers=solver_param.subnet_num_layers,
-            shrink_ratio=solver_param.shrink_ratio,
-            lr=solver_param.lr,
-            lr_weight_decay=solver_param.lr_weight_decay,
-            gamma=solver_param.gamma,
-            device=self._device,
-            model_architecture=solver_param.model_architecture,
-            random_perm=solver_param.random_perm,
-            path_solver=f"{solver_param.weight_dir}/{solver_param.ckpt_name}.pth",
-            n=self._n,
-            m=self._m,
-            r=self._r,
-            shce_patience=solver_param.shce_patience,
-            use_nsf_only=self._use_nsf_only,
-            lr_amsgrad=solver_param.lr_amsgrad,
-            lr_beta=solver_param.lr_beta,
-        )  # type: ignore
+        self._solver, self._optimizer, self._scheduler = get_flow_model(solver_param)  # type: ignore
         self._shrink_ratio = solver_param.shrink_ratio
         self._init_latent = torch.zeros((self.robot.n_dofs)).to(self._device)
         # load inference data
@@ -76,8 +55,6 @@ class Solver:
             save_pickle(
                 "./weights/panda/nearest_neighnbor_P.pth", self.nearest_neighnbor_P
             )
-
-        
 
     @property
     def latent(self):
@@ -148,7 +125,7 @@ class Solver:
 
             save_numpy(file_path=path_F, arr=F)
         print(f"[SUCCESS] F load from {path_F}")
-        
+
         # for normalization
         self.__mean_J, self.__std_J = J.mean(axis=0), J.std(
             axis=0

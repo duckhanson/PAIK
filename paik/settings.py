@@ -14,7 +14,7 @@ class SolverConfig:
     # model
     subnet_num_layers: int = 3
     model_architecture: str = "nsf"
-    random_perm: bool = False
+    randperm: bool = False
     shrink_ratio: float = 0.68
     subnet_width: int = 1024
     num_transforms: int = 8
@@ -46,7 +46,8 @@ class SolverConfig:
 
     # workdir
     __current_folder_path, _ = os.path.split(os.path.realpath(__file__))
-    __current_workdir_path, _ = os.path.split(os.path.realpath(__current_folder_path))
+    __current_workdir_path, _ = os.path.split(
+        os.path.realpath(__current_folder_path))
     workdir: str = __current_workdir_path
 
     # training
@@ -73,7 +74,7 @@ class SolverConfig:
 #     lr=0.00037,
 #     gamma=0.086,
 #     noise_esp=0.0025,
-#     random_perm=False,
+#     randperm=False,
 #     shrink_ratio=0.68,
 #     subnet_width=1024,
 #     num_transforms=8,
@@ -88,7 +89,7 @@ DEFAULT_NSF = SolverConfig(
     lr=0.00037,
     gamma=0.086,
     noise_esp=0.0025,
-    random_perm=False,
+    randperm=False,
     shrink_ratio=0.68,
     subnet_width=1024,
     num_transforms=8,
@@ -104,7 +105,7 @@ DEFULT_SOLVER = SolverConfig(
     lr=4e-4,
     gamma=0.086,
     noise_esp=0.0025,
-    random_perm=False,
+    randperm=False,
     shrink_ratio=0.65,
     subnet_width=1024,
     num_transforms=8,

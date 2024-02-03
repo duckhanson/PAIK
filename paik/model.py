@@ -11,33 +11,11 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 from zuko.flows.spline import NSF
-
+from paik.settings import SolverConfig
 from jrl.robots import Panda
 
-DEFAULT_ACTIVATION = LeakyReLU
-
-
 def get_flow_model(
-    num_transforms: int,
-    num_bins: int,
-    subnet_width: int,
-    subnet_num_layers: int,
-    shrink_ratio: float,
-    lr: float,
-    lr_weight_decay: float,
-    gamma: float,
-    model_architecture: str,
-    device: str,
-    path_solver: str,
-    n: int,
-    m: int,
-    r: int,
-    random_perm: bool,
-    enable_load_model: bool,
-    use_nsf_only: bool,
-    shce_patience: int,
-    lr_amsgrad: bool,
-    lr_beta: Tuple[float, float],
+    config: SolverConfig
 ):
     """
     Return nsf model and optimizer
@@ -45,35 +23,35 @@ def get_flow_model(
     :return: (nsf, AdamW, StepLR)
     :rtype: tuple
     """
-    assert model_architecture in ["nsf"]
+    assert config.model_architecture in ["nsf"]
     # Build Generative model, NSF
     # Neural spline flow (NSF) with inputs 7 features and 3 + 4 + 1 context
-    num_conditions = m + 1 if use_nsf_only else m + r + 1
 
     flow = change_flow_base(
         NSF(
-            features=n,
-            context=num_conditions,
-            transforms=num_transforms,
-            randperm=random_perm,
-            bins=num_bins,
-            activation=DEFAULT_ACTIVATION,
-            hidden_features=[subnet_width] * subnet_num_layers,
+            features=config.n,
+            # number of conditions
+            context=config.m + 1 if config.use_nsf_only else config.m + config.r + 1,
+            transforms=config.num_transforms,
+            randperm=config.randperm,
+            bins=config.num_bins,
+            activation=LeakyReLU,
+            hidden_features=[config.subnet_width] * config.subnet_num_layers,
         ),
-        n=n,
-        shrink_ratio=shrink_ratio,
+        n=config.n,
+        shrink_ratio=config.shrink_ratio,
     )
-    flow = flow.to(device)
+    flow = flow.to(config.device)
 
     optimizer = optim.AdamW(
         flow.parameters(),
-        lr=lr,
-        weight_decay=lr_weight_decay,
-        amsgrad=lr_amsgrad,
-        betas=lr_beta,
+        lr=config.lr,
+        weight_decay=config.lr_weight_decay,
+        amsgrad=config.lr_amsgrad,
+        betas=config.lr_beta,
     )
-
-    if enable_load_model and os.path.exists(path=path_solver):
+    path_solver=f"{config.weight_dir}/{config.ckpt_name}.pth"
+    if config.enable_load_model and os.path.exists(path=path_solver):
         try:
             state = torch.load(path_solver)
             flow.load_state_dict(state["solver"])
@@ -94,8 +72,8 @@ def get_flow_model(
     scheduler = ReduceLROnPlateau(
         optimizer,
         mode="min",
-        factor=gamma,
-        patience=shce_patience,
+        factor=config.gamma,
+        patience=config.shce_patience,
         eps=1e-10,
         verbose=True,
     )

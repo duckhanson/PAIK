@@ -268,18 +268,6 @@ class Solver:
         J = self.denorm_J(J) if self._enable_normalize else J
         return J
 
-    def get_random_JPF(self, num_samples: int):
-        # Randomly sample poses from train set
-        J, P = self._robot.sample_joint_angles_and_poses(
-            n=num_samples, return_torch=False
-        )
-        F = self._F[
-            self.nearest_neighnbor_P.kneighbors(
-                np.atleast_2d(P), n_neighbors=1, return_distance=False
-            ).flatten()
-        ]  # type: ignore
-        return J, P, F
-
     def pose_error_evalute(
         self,
         J: np.ndarray,

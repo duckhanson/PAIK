@@ -68,7 +68,9 @@ def ikp(test_pafik: bool, test_ikflow: bool):
         # Build IKFlowSolver and set weights
         ik_solver, _ = get_ik_solver("panda__full__lp191_5.25m")
 
-        _, P, _ = solver.get_random_JPF(NUM_POSES)  # type: ignore
+        _, P = solver._robot.sample_joint_angles_and_poses(
+            n=NUM_POSES, return_torch=False
+        )
 
         if NUM_POSES < NUM_SOLS:
             l2 = np.zeros((NUM_SOLS, len(P)))

@@ -43,13 +43,11 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
         solver.base_std = STD
         J_hat = solver.solve_batch(
             P,
-            solver._F[solver.J_knn.kneighbors(
-                J, return_distance=False).flatten()],
+            solver._F[solver.J_knn.kneighbors(J, return_distance=False).flatten()],
             num_sols=1,
         )  # type: ignore
-        l2, ang = solver.pose_error_evalute(J_hat, P, return_all=True)
-        ddjc = np.linalg.norm(
-            J_hat - J, axis=-1).reshape(NUM_TRAJECTORIES, NUM_STEPS)
+        l2, ang = solver.evaluate_pose_error(J_hat, P, return_all=True)
+        ddjc = np.linalg.norm(J_hat - J, axis=-1).reshape(NUM_TRAJECTORIES, NUM_STEPS)
         mjac = np.array(
             [
                 max_joint_angle_change(qs)
@@ -73,8 +71,7 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
         print(
             tabulate(
                 [
-                    (thres, df.query(f"ddjc < {thres}")[
-                     "ddjc"].count() / df.shape[0])
+                    (thres, df.query(f"ddjc < {thres}")["ddjc"].count() / df.shape[0])
                     for thres in DDJC_THRES
                 ],
                 headers=["ddjc", "success rate"],
@@ -131,8 +128,7 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
                 [
                     (
                         thres,
-                        df.query(f"ddjc < {thres}")[
-                            "ddjc"].count() / df.shape[0],
+                        df.query(f"ddjc < {thres}")["ddjc"].count() / df.shape[0],
                     )
                     for thres in DDJC_THRES
                 ],
@@ -143,5 +139,4 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
 
 
 if __name__ == "__main__":
-    path_following_multiple_trajectory(
-        test_pafik=TEST_PAFIK, test_ikflow=TEST_IKFLOW)
+    path_following_multiple_trajectory(test_pafik=TEST_PAFIK, test_ikflow=TEST_IKFLOW)

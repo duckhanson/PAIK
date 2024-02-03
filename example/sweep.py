@@ -57,7 +57,7 @@ def main() -> None:
         avg_ang_errs,
         avg_inference_time,  # type: ignore
         _,
-    ) = trainer.ikp_iterative_evalute(num_poses=100, num_sols=1000, verbose=False)
+    ) = trainer.evaluate_ikp_iterative(num_poses=100, num_sols=1000, verbose=False)
 
     print(
         tabulate(

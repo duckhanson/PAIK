@@ -36,7 +36,7 @@ def ikp(test_pafik: bool, test_ikflow: bool):
             avg_ang,
             avg_inference_time,
             success_rate,
-        ) = solver.ikp_iterative_evalute(
+        ) = solver.evaluate_ikp_iterative(
             NUM_POSES,
             NUM_SOLS,
             std=STD,
@@ -75,8 +75,7 @@ def ikp(test_pafik: bool, test_ikflow: bool):
         if NUM_POSES < NUM_SOLS:
             l2 = np.zeros((NUM_SOLS, len(P)))
             ang = np.zeros((NUM_SOLS, len(P)))
-            J = torch.empty((NUM_SOLS, len(P), 7),
-                            dtype=torch.float32, device="cpu")
+            J = torch.empty((NUM_SOLS, len(P), 7), dtype=torch.float32, device="cpu")
             begin = time.time()
             for i in trange(NUM_POSES):
                 J[:, i, :] = ik_solver.solve(
@@ -101,8 +100,7 @@ def ikp(test_pafik: bool, test_ikflow: bool):
         else:
             l2 = np.zeros((NUM_SOLS, len(P)))
             ang = np.zeros((NUM_SOLS, len(P)))
-            J = torch.empty((NUM_SOLS, len(P), 7),
-                            dtype=torch.float32, device="cpu")
+            J = torch.empty((NUM_SOLS, len(P), 7), dtype=torch.float32, device="cpu")
             begin = time.time()
             for i in trange(NUM_SOLS):
                 J[i] = ik_solver.solve_n_poses(

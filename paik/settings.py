@@ -46,8 +46,7 @@ class SolverConfig:
 
     # workdir
     __current_folder_path, _ = os.path.split(os.path.realpath(__file__))
-    __current_workdir_path, _ = os.path.split(
-        os.path.realpath(__current_folder_path))
+    __current_workdir_path, _ = os.path.split(os.path.realpath(__current_folder_path))
     workdir: str = __current_workdir_path
 
     # training

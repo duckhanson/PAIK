@@ -14,9 +14,8 @@ from zuko.flows.spline import NSF
 from paik.settings import SolverConfig
 from jrl.robots import Panda
 
-def get_flow_model(
-    config: SolverConfig
-):
+
+def get_flow_model(config: SolverConfig):
     """
     Return nsf model and optimizer
 
@@ -50,7 +49,7 @@ def get_flow_model(
         amsgrad=config.lr_amsgrad,
         betas=config.lr_beta,
     )
-    path_solver=f"{config.weight_dir}/{config.ckpt_name}.pth"
+    path_solver = f"{config.weight_dir}/{config.ckpt_name}.pth"
     if config.enable_load_model and os.path.exists(path=path_solver):
         try:
             state = torch.load(path_solver)

@@ -67,8 +67,10 @@ class Trainer(Solver):
                 noise_std = np.zeros((len(self._F), 1))
             else:
                 noise_std = self.__noise_esp * np.random.rand(len(self._F), 1)
-            J = self.norm_J(self._J_tr + noise_std * np.random.randn(*self._J_tr.shape)) 
-            C = self.norm_C(np.column_stack((self._P_tr, self._F, self.__std_scale * noise_std)))
+            J = self.norm_J(self._J_tr + noise_std * np.random.randn(*self._J_tr.shape))
+            C = self.norm_C(
+                np.column_stack((self._P_tr, self._F, self.__std_scale * noise_std))
+            )
             C = self.remove_posture_feature(C) if self._use_nsf_only else C
 
             train_loader = DataLoader(

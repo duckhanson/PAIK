@@ -86,8 +86,12 @@ class Solver:
 
     # private methods
     def __load_training_data(self):
-        path_J = f"{self.param.train_dir}/J-{self.param.N}-{self._n}-{self._m}-{self._r}.npy"
-        path_P = f"{self.param.train_dir}/P-{self.param.N}-{self._n}-{self._m}-{self._r}.npy"
+        path_J = (
+            f"{self.param.train_dir}/J-{self.param.N}-{self._n}-{self._m}-{self._r}.npy"
+        )
+        path_P = (
+            f"{self.param.train_dir}/P-{self.param.N}-{self._n}-{self._m}-{self._r}.npy"
+        )
         J = load_numpy(file_path=path_J)
         P = load_numpy(file_path=path_P)
 
@@ -127,14 +131,12 @@ class Solver:
         print(f"[SUCCESS] F load from {path_F}")
 
         # for normalization
-        self.__mean_J, self.__std_J = J.mean(axis=0), J.std(
-            axis=0
-        )
+        self.__mean_J, self.__std_J = J.mean(axis=0), J.std(axis=0)
         C = np.column_stack((P, F))
         self.__mean_C = np.concatenate((C.mean(axis=0), np.zeros((1))))
         std_C = np.concatenate((C.std(axis=0), np.ones((1))))
         scale = np.ones_like(self.__mean_C)
-        scale[self._m: self._m + self._r] *= self.__solver_param.posture_feature_scale
+        scale[self._m : self._m + self._r] *= self.__solver_param.posture_feature_scale
         self.__std_C = std_C / scale
 
         return J, P, F
@@ -197,22 +199,21 @@ class Solver:
     ):
         if len(P) * num_sols < batch_size:
             return self.solve(P, F, num_sols)
-        C = self.norm_C(np.repeat(
-            np.expand_dims(np.column_stack(
-                (P, F, np.zeros((len(F), 1)))), axis=0),
-            num_sols,
-            axis=0,
-        ))
+        C = self.norm_C(
+            np.repeat(
+                np.expand_dims(np.column_stack((P, F, np.zeros((len(F), 1)))), axis=0),
+                num_sols,
+                axis=0,
+            )
+        )
         C = self.remove_posture_feature(C) if self._use_nsf_only else C
         C = C.reshape(-1, C.shape[-1])
         complementary = batch_size - len(C) % batch_size
         complementary = 0 if complementary == batch_size else complementary
-        C = np.concatenate((C, C[:complementary]),
-                           axis=0) if complementary > 0 else C
+        C = np.concatenate((C, C[:complementary]), axis=0) if complementary > 0 else C
         C = C.reshape(-1, batch_size, C.shape[-1])
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
-        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
-                        device=self._device)
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs), device=self._device)
 
         if verbose:
             with torch.inference_mode():
@@ -250,8 +251,7 @@ class Solver:
                 np.clip(dot, -1 + acos_clamp_epsilon, 1 - acos_clamp_epsilon)
             )
             # distance = 2 * np.arccos(dot)
-            distance = np.abs(np.remainder(
-                distance + np.pi, 2 * np.pi) - np.pi)
+            distance = np.abs(np.remainder(distance + np.pi, 2 * np.pi) - np.pi)
             return distance
 
         num_poses = len(P)
@@ -314,8 +314,7 @@ class Solver:
         F = self.select_reference_posture(P)
 
         # Begin inference
-        J_hat = self.solve_batch(
-            P, F, num_sols, batch_size=batch_size, verbose=verbose)
+        J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size, verbose=verbose)
 
         l2, ang = self.pose_error_evalute(J_hat, P, return_all=True)
         avg_inference_time = round((time() - time_begin) / num_poses, 3)

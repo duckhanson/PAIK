@@ -26,8 +26,8 @@ def get_flow_model(config: SolverConfig):
     # Build Generative model, NSF
     # Neural spline flow (NSF) with inputs 7 features and 3 + 4 + 1 context
 
-    flow = change_flow_base(
-        NSF(
+    flow = Flow(
+        transforms=NSF(
             features=config.n,
             # number of conditions
             context=config.m + 1 if config.use_nsf_only else config.m + config.r + 1,
@@ -36,11 +36,14 @@ def get_flow_model(config: SolverConfig):
             bins=config.num_bins,
             activation=LeakyReLU,
             hidden_features=[config.subnet_width] * config.subnet_num_layers,
-        ),
-        n=config.n,
-        base_std=config.base_std,
-    )
-    flow = flow.to(config.device)
+        ).transforms,  # type: ignore
+        base=Unconditional(
+            DiagNormal,
+            torch.zeros((config.n,)),
+            torch.ones((config.n,)) * config.base_std,
+            buffer=True,
+        ),  # type: ignore
+    ).to(config.device)
 
     optimizer = optim.AdamW(
         flow.parameters(),
@@ -78,27 +81,6 @@ def get_flow_model(config: SolverConfig):
     )
 
     return flow, optimizer, scheduler
-
-
-def change_flow_base(flow: NSF | Flow, n: int, base_std: float):
-    """
-    shrink normal distribution model
-
-    :param flow: _description_
-    :type flow: NSF
-    :return: _description_
-    :rtype: _type_
-    """
-    return Flow(
-        transforms=flow.transforms,  # type: ignore
-        base=Unconditional(
-            DiagNormal,
-            torch.zeros((n,)),
-            torch.ones((n,)) * base_std,
-            buffer=True,
-        ),  # type: ignore
-    )
-
 
 def get_robot(robot_name: str, robot_dirs: Tuple[str, str, str]):
     # def create_robot_dirs(dir_paths) -> None:

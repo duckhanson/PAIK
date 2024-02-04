@@ -3,10 +3,7 @@ import numpy as np
 from tabulate import tabulate
 from tqdm import trange
 from pafik.solver import Solver
-from pafik.settings import (
-    DEFAULT_NSF,
-    DEFULT_SOLVER,
-)
+from pafik.settings import DEFAULT_NSF, DEFULT_SOLVER
 
 NUM_POSES = 3000  # 100
 NUM_SOLS = 400  # 1000
@@ -24,12 +21,7 @@ def ikp():
     solver_param.select_reference_posture_method = METHOD_OF_SELECT_REFERENCE_POSTURE
     solver = Solver(solver_param=solver_param)
 
-    (
-        avg_l2,
-        avg_ang,
-        avg_inference_time,
-        success_rate,
-    ) = solver.evaluate_ikp_iterative(
+    (avg_l2, avg_ang, avg_inference_time, success_rate) = solver.evaluate_ikp_iterative(
         NUM_POSES,
         NUM_SOLS,
         std=STD,
@@ -38,14 +30,7 @@ def ikp():
     )  # type: ignore
     print(
         tabulate(
-            [
-                [
-                    avg_l2,
-                    np.rad2deg(avg_ang),
-                    avg_inference_time,
-                    success_rate,
-                ]
-            ],
+            [[avg_l2, np.rad2deg(avg_ang), avg_inference_time, success_rate]],
             headers=[
                 "avg_l2",
                 "avg_ang",
@@ -54,6 +39,7 @@ def ikp():
             ],
         )
     )
+
 
 if __name__ == "__main__":
     ikp()

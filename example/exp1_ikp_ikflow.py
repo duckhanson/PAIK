@@ -16,6 +16,7 @@ NUM_POSES = 3000  # 100
 NUM_SOLS = 400  # 1000
 STD = 0.1
 
+
 def ikp():
     set_seed()
 
@@ -26,8 +27,7 @@ def ikp():
     )
     l2 = np.zeros((NUM_SOLS, len(P)))
     ang = np.zeros((NUM_SOLS, len(P)))
-    J = torch.empty((NUM_SOLS, len(P), 7),
-                    dtype=torch.float32, device="cpu")
+    J = torch.empty((NUM_SOLS, len(P), 7), dtype=torch.float32, device="cpu")
     begin = time.time()
     if NUM_POSES < NUM_SOLS:
         for i in trange(NUM_POSES):

@@ -66,11 +66,11 @@ class SolverConfig:
     traj_dir: str = f"{data_dir}/trajectory/"
 
     dir_paths: Tuple[str, str, str] = (data_dir, weight_dir, traj_dir)
-    
+
     @property
     def workdir(self):
         return self._workdir
-    
+
     @workdir.setter
     def workdir(self, value: str):
         self._workdir = value

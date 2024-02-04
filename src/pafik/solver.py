@@ -20,10 +20,7 @@ from zuko.flows import Flow, Unconditional
 
 
 class Solver:
-    def __init__(
-        self,
-        solver_param: SolverConfig = DEFULT_SOLVER,
-    ) -> None:
+    def __init__(self, solver_param: SolverConfig = DEFULT_SOLVER) -> None:
         self.__solver_param = solver_param
         self._robot = get_robot(
             solver_param.robot_name, robot_dirs=solver_param.dir_paths
@@ -56,7 +53,8 @@ class Solver:
                 self._P_tr
             )
             save_pickle(
-                f"{solver_param.weight_dir}/nearest_neighnbor_P.pth", self.nearest_neighnbor_P
+                f"{solver_param.weight_dir}/nearest_neighnbor_P.pth",
+                self.nearest_neighnbor_P,
             )
 
     @property
@@ -89,7 +87,9 @@ class Solver:
 
     # private methods
     def __load_training_data(self):
-        assert isdir(self.param.train_dir), f"{self.param.train_dir} not found, please change workdir to the project root!"
+        assert isdir(
+            self.param.train_dir
+        ), f"{self.param.train_dir} not found, please change workdir to the project root!"
         path_J = (
             f"{self.param.train_dir}/J-{self.param.N}-{self._n}-{self._m}-{self._r}.npy"
         )
@@ -140,7 +140,7 @@ class Solver:
         self.__mean_C = np.concatenate((C.mean(axis=0), np.zeros((1))))
         std_C = np.concatenate((C.std(axis=0), np.ones((1))))
         scale = np.ones_like(self.__mean_C)
-        scale[self._m: self._m + self._r] *= self.__solver_param.posture_feature_scale
+        scale[self._m : self._m + self._r] *= self.__solver_param.posture_feature_scale
         self.__std_C = std_C / scale
 
         return J, P, F
@@ -152,8 +152,7 @@ class Solver:
                 DiagNormal,
                 torch.zeros((self._robot.n_dofs,), device=self._device)
                 + self._init_latent,
-                torch.ones((self._robot.n_dofs,),
-                           device=self._device) * self._base_std,
+                torch.ones((self._robot.n_dofs,), device=self._device) * self._base_std,
                 buffer=True,
             ),  # type: ignore
         )
@@ -205,8 +204,7 @@ class Solver:
             return self.solve(P, F, num_sols)
         C = self.norm_C(
             np.repeat(
-                np.expand_dims(np.column_stack(
-                    (P, F, np.zeros((len(F), 1)))), axis=0),
+                np.expand_dims(np.column_stack((P, F, np.zeros((len(F), 1)))), axis=0),
                 num_sols,
                 axis=0,
             )
@@ -215,12 +213,10 @@ class Solver:
         C = C.reshape(-1, C.shape[-1])
         complementary = batch_size - len(C) % batch_size
         complementary = 0 if complementary == batch_size else complementary
-        C = np.concatenate((C, C[:complementary]),
-                           axis=0) if complementary > 0 else C
+        C = np.concatenate((C, C[:complementary]), axis=0) if complementary > 0 else C
         C = C.reshape(-1, batch_size, C.shape[-1])
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
-        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
-                        device=self._device)
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs), device=self._device)
 
         if verbose:
             with torch.inference_mode():
@@ -284,9 +280,10 @@ class Solver:
         )
 
         if return_posewise_evalution:
-            return l2.reshape(num_sols, num_poses).mean(axis=1), ang.reshape(
-                num_sols, num_poses
-            ).mean(axis=1)
+            return (
+                l2.reshape(num_sols, num_poses).mean(axis=1),
+                ang.reshape(num_sols, num_poses).mean(axis=1),
+            )
         elif return_all:
             return l2, ang
         return l2.mean(), ang.mean()
@@ -327,8 +324,7 @@ class Solver:
         F = self.select_reference_posture(P)
 
         # Begin inference
-        J_hat = self.solve_batch(
-            P, F, num_sols, batch_size=batch_size, verbose=verbose)
+        J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size, verbose=verbose)
 
         l2, ang = self.evaluate_pose_error(J_hat, P, return_all=True)
         avg_inference_time = round((time() - time_begin) / num_poses, 3)

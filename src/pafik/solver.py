@@ -48,14 +48,14 @@ class Solver:
 
         try:
             self.nearest_neighnbor_P = load_pickle(
-                "./weights/panda/nearest_neighnbor_P.pth"
+                f"{solver_param.weight_dir}/nearest_neighnbor_P.pth"
             )
         except:
             self.nearest_neighnbor_P = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(
                 self._P_tr
             )
             save_pickle(
-                "./weights/panda/nearest_neighnbor_P.pth", self.nearest_neighnbor_P
+                f"{solver_param.weight_dir}/nearest_neighnbor_P.pth", self.nearest_neighnbor_P
             )
 
     @property

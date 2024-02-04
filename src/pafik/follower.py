@@ -8,10 +8,10 @@ from time import time
 from datetime import datetime
 from tabulate import tabulate
 from sklearn.neighbors import NearestNeighbors
-from paik.file import load_numpy, save_numpy, save_pickle
-from paik.settings import SolverConfig
+from pafik.file import load_numpy, save_numpy, save_pickle
+from pafik.settings import SolverConfig
 
-from paik.solver import Solver
+from pafik.solver import Solver
 
 
 def max_joint_angle_change(qs: torch.Tensor | np.ndarray):
@@ -88,7 +88,7 @@ class PathFollower(Solver):
             )
             Jtraj = trajectory.Trajectory(milestones=endPoints)  # type: ignore
             J = np.array([Jtraj.eval(i / num_steps) for i in range(num_steps)])
-            P = self._robot.forward_kinematics(J[:, 0 : self._robot.n_dofs])
+            P = self._robot.forward_kinematics(J[:, 0: self._robot.n_dofs])
 
             save_numpy(file_path=Jtraj_file_path, arr=J)
             save_numpy(file_path=Ppath_file_path, arr=P)
@@ -133,9 +133,12 @@ class PathFollower(Solver):
                 endPoints, _ = self._robot.sample_joint_angles_and_poses(
                     n=2, return_torch=False
                 )
-                Jtraj = trajectory.Trajectory(milestones=endPoints)  # type: ignore
-                J[i] = np.array([Jtraj.eval(i / num_steps) for i in range(num_steps)])
-                P[i] = self._robot.forward_kinematics(J[i, :, 0 : self._robot.n_dofs])
+                Jtraj = trajectory.Trajectory(
+                    milestones=endPoints)  # type: ignore
+                J[i] = np.array([Jtraj.eval(i / num_steps)
+                                for i in range(num_steps)])
+                P[i] = self._robot.forward_kinematics(
+                    J[i, :, 0: self._robot.n_dofs])
 
             save_numpy(file_path=Jtraj_file_path, arr=J)
             save_numpy(file_path=Ppath_file_path, arr=P)

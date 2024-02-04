@@ -113,7 +113,7 @@ DEFULT_SOLVER = SolverConfig(
     subnet_num_layers=3,
     batch_size=1024,
     use_nsf_only=False,
-    ckpt_name="0126-1535",  # "0119-1047", "0118-0827", "0127-1246", "0126-1535"
+    ckpt_name="0126-1535",  # "0119-1047", "0118-0827", "0126-1535"
 )
 
 

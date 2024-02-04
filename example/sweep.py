@@ -1,9 +1,9 @@
 # Import required packages
-from paik.settings import DEFULT_SOLVER
+from pafik.settings import DEFULT_SOLVER
 from datetime import datetime
 from tabulate import tabulate
 import wandb
-from paik.train import Trainer
+from pafik.train import Trainer
 
 USE_WANDB = True
 PATIENCE = 7
@@ -53,7 +53,6 @@ def main() -> None:
     solver_param.lr_beta = (wandb.config.lr_beta_l, wandb.config.lr_beta_h)
     solver_param.enable_load_model = ENABLE_LODE_MODEL  # type: ignore
     solver_param.use_nsf_only = USE_NSF_ONLY  # type: ignore
-    
 
     trainer = Trainer(solver_param=solver_param)
 
@@ -86,7 +85,8 @@ def main() -> None:
 if __name__ == "__main__":
     project_name = "msik_ikflow_nsf_norm"
 
-    sweep_id = wandb.sweep(sweep=sweep_config, project=project_name, entity="luca_nthu")
+    sweep_id = wandb.sweep(
+        sweep=sweep_config, project=project_name, entity="luca_nthu")
     # Start sweep job.
     wandb.agent(sweep_id, function=main, count=EXPERMENT_COUNT)
     wandb.finish()

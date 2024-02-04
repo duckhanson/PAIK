@@ -5,8 +5,8 @@ import pandas as pd
 from tabulate import tabulate
 import torch
 from tqdm import trange
-from paik.solver import Solver
-from paik.settings import (
+from pafik.solver import Solver
+from pafik.settings import (
     DEFAULT_NSF,
     DEFULT_SOLVER,
 )
@@ -73,10 +73,11 @@ def ikp(test_pafik: bool, test_ikflow: bool):
         )
         l2 = np.zeros((NUM_SOLS, len(P)))
         ang = np.zeros((NUM_SOLS, len(P)))
-        J = torch.empty((NUM_SOLS, len(P), 7), dtype=torch.float32, device="cpu")
+        J = torch.empty((NUM_SOLS, len(P), 7),
+                        dtype=torch.float32, device="cpu")
         begin = time.time()
         if NUM_POSES < NUM_SOLS:
-            
+
             for i in trange(NUM_POSES):
                 J[:, i, :] = ik_solver.solve(
                     P[i],

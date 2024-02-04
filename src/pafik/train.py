@@ -7,10 +7,10 @@ import numpy as np
 from tqdm import tqdm
 from pprint import pprint
 import wandb
-from paik.settings import SolverConfig, DEFULT_SOLVER
+from pafik.settings import SolverConfig, DEFULT_SOLVER
 from torch.utils.data import DataLoader, TensorDataset
 
-from paik.solver import Solver
+from pafik.solver import Solver
 
 USE_WANDB = False
 PATIENCE = 4
@@ -67,9 +67,11 @@ class Trainer(Solver):
                 noise_std = np.zeros((len(self._F), 1))
             else:
                 noise_std = self.__noise_esp * np.random.rand(len(self._F), 1)
-            J = self.norm_J(self._J_tr + noise_std * np.random.randn(*self._J_tr.shape))
+            J = self.norm_J(self._J_tr + noise_std *
+                            np.random.randn(*self._J_tr.shape))
             C = self.norm_C(
-                np.column_stack((self._P_tr, self._F, self.__std_scale * noise_std))
+                np.column_stack(
+                    (self._P_tr, self._F, self.__std_scale * noise_std))
             )
             C = self.remove_posture_feature(C) if self._use_nsf_only else C
 

@@ -11,7 +11,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 from zuko.flows.spline import NSF
-from paik.settings import SolverConfig
+from pafik.settings import SolverConfig
 from jrl.robots import Panda
 
 

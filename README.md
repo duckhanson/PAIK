@@ -1,1 +1,1 @@
-# PAIK: Posture-Aware Inverse Kinematics
+# pafik: Posture-Aware Inverse Kinematics

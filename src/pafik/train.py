@@ -7,10 +7,9 @@ import numpy as np
 from tqdm import tqdm
 from pprint import pprint
 import wandb
-from pafik.settings import SolverConfig, DEFULT_SOLVER
 from torch.utils.data import DataLoader, TensorDataset
-
-from pafik.solver import Solver
+from .settings import SolverConfig, DEFULT_SOLVER
+from .solver import Solver
 
 USE_WANDB = False
 PATIENCE = 4

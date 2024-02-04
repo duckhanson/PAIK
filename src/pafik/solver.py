@@ -11,9 +11,9 @@ from sklearn.neighbors import NearestNeighbors
 
 from tqdm import trange
 
-from pafik.settings import SolverConfig, DEFULT_SOLVER
-from pafik.model import get_flow_model, get_robot
-from pafik.file import load_numpy, save_numpy, save_pickle, load_pickle
+from .settings import SolverConfig, DEFULT_SOLVER
+from .model import get_flow_model, get_robot
+from .file import load_numpy, save_numpy, save_pickle, load_pickle
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 

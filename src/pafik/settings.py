@@ -46,26 +46,39 @@ class SolverConfig:
     # workdir
     __current_folder_path, _ = os.path.split(os.path.realpath(__file__))
     __current_workdir_path, _ = os.path.split(os.path.realpath(__current_folder_path))
-    workdir: str = __current_workdir_path
+    _workdir: str = __current_workdir_path
 
     # training
     # (N, max) = (1000_0000, 430_0000), (500_0000, 400_0000)
     N: int = 500_0000  # 2500_0000
 
     # data
-    data_dir: str = f"{workdir}/data/{robot_name}"
+    data_dir: str = f"{_workdir}/data/{robot_name}"
 
     # train
     train_dir: str = f"{data_dir}/train"
 
     # hnne parameter
-    weight_dir: str = f"{workdir}/weights/{robot_name}"
+    weight_dir: str = f"{_workdir}/weights/{robot_name}"
     max_num_data_hnne: int = 400_0000
 
     # experiment
     traj_dir: str = f"{data_dir}/trajectory/"
 
     dir_paths: Tuple[str, str, str] = (data_dir, weight_dir, traj_dir)
+    
+    @property
+    def workdir(self):
+        return self._workdir
+    
+    @workdir.setter
+    def workdir(self, value: str):
+        self._workdir = value
+        self.data_dir = f"{value}/data/{self.robot_name}"
+        self.train_dir = f"{self.data_dir}/train"
+        self.weight_dir = f"{value}/weights/{self.robot_name}"
+        self.traj_dir = f"{self.data_dir}/trajectory/"
+        self.dir_paths = (self.data_dir, self.weight_dir, self.traj_dir)
 
 
 # DEFAULT_SOLVER_PARAM_M7_NORM = SolverConfig(

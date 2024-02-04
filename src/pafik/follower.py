@@ -8,10 +8,9 @@ from time import time
 from datetime import datetime
 from tabulate import tabulate
 from sklearn.neighbors import NearestNeighbors
-from pafik.file import load_numpy, save_numpy, save_pickle
-from pafik.settings import SolverConfig
-
-from pafik.solver import Solver
+from .file import load_numpy, save_numpy, save_pickle
+from .settings import SolverConfig
+from .solver import Solver
 
 
 def max_joint_angle_change(qs: torch.Tensor | np.ndarray):

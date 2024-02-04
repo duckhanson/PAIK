@@ -8,7 +8,6 @@ from pafik.settings import (
     DEFULT_SOLVER,
 )
 
-TEST_PAFIK = True
 NUM_POSES = 3000  # 100
 NUM_SOLS = 400  # 1000
 BATCH_SIZE = 5000

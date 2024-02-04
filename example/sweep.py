@@ -1,8 +1,8 @@
 # Import required packages
-from pafik.settings import DEFULT_SOLVER
 from datetime import datetime
 from tabulate import tabulate
 import wandb
+from pafik.settings import DEFULT_SOLVER
 from pafik.train import Trainer
 
 WORK_DIR = "/home/luca/example_package/pafik"

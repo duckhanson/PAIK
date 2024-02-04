@@ -12,3 +12,7 @@ wandb/*
 *checkpoint*
 logs/*
 mlruns/
+build/
+dist/
+*.txt
+*.egg*

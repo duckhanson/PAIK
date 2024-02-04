@@ -17,7 +17,7 @@ setup(
     long_description_content_type="text/markdown",
     package_dir={"": "src"},
     packages=find_packages(where="src"),
-    # url="https://github.com/duckhanson/PAFIK",
+    url="https://github.com/duckhanson/PAFIK",
     license="MIT",
     classifiers=[
         "License :: OSI Approved :: MIT License",

@@ -1,6 +1,7 @@
 # Import required packages
 from __future__ import annotations
 from typing import Any, Tuple
+from os.path import isdir
 from time import time
 import numpy as np
 import pandas as pd
@@ -34,6 +35,8 @@ class Solver:
         self._use_nsf_only = solver_param.use_nsf_only
         # Neural spline flow (NSF) with 3 sample features and 5 context features
         self._n, self._m, self._r = solver_param.n, solver_param.m, solver_param.r
+        self._J_tr, self._P_tr, self._F = self.__load_training_data()
+
         self._solver, self._optimizer, self._scheduler = get_flow_model(
             solver_param
         )  # type: ignore
@@ -43,8 +46,6 @@ class Solver:
         assert (
             self._n == self._robot.n_dofs
         ), f"n should be {self._robot.n_dofs} as the robot"
-
-        self._J_tr, self._P_tr, self._F = self.__load_training_data()
 
         try:
             self.nearest_neighnbor_P = load_pickle(
@@ -88,6 +89,7 @@ class Solver:
 
     # private methods
     def __load_training_data(self):
+        assert isdir(self.param.train_dir), f"{self.param.train_dir} not found, please change workdir to the project root!"
         path_J = (
             f"{self.param.train_dir}/J-{self.param.N}-{self._n}-{self._m}-{self._r}.npy"
         )

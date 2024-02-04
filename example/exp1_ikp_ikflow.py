@@ -22,9 +22,7 @@ def ikp():
 
     # Build IKFlowSolver and set weights
     ik_solver, _ = get_ik_solver("panda__full__lp191_5.25m")
-    _, P = ik_solver.robot.sample_joint_angles_and_poses(
-        n=NUM_POSES, return_torch=False
-    )
+    _, P = ik_solver.robot.sample_joint_angles_and_poses(n=NUM_POSES)
     l2 = np.zeros((NUM_SOLS, len(P)))
     ang = np.zeros((NUM_SOLS, len(P)))
     J = torch.empty((NUM_SOLS, len(P), 7), dtype=torch.float32, device="cpu")
@@ -56,3 +54,7 @@ def ikp():
             headers=["avg_l2", "avg_ang", "avg_inference_time"],
         )
     )
+
+
+if __name__ == "__main__":
+    ikp()

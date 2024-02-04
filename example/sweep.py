@@ -5,6 +5,7 @@ from tabulate import tabulate
 import wandb
 from pafik.train import Trainer
 
+WORK_DIR = "/home/luca/example_package/pafik"
 USE_WANDB = True
 PATIENCE = 7
 POSE_ERR_THRESH = 3.15e-3
@@ -53,6 +54,7 @@ def main() -> None:
     solver_param.lr_beta = (wandb.config.lr_beta_l, wandb.config.lr_beta_h)
     solver_param.enable_load_model = ENABLE_LODE_MODEL  # type: ignore
     solver_param.use_nsf_only = USE_NSF_ONLY  # type: ignore
+    solver_param.workdir = WORK_DIR
 
     trainer = Trainer(solver_param=solver_param)
 

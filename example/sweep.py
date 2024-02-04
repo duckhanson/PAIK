@@ -23,13 +23,15 @@ sweep_config = {
     "method": "random",
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
+        "num_transforms": {"values": get_range(4, 7, 1)},
         "lr": {"values": get_range(48, 56, 1e-5)},
         "lr_weight_decay": {"values": get_range(13, 17, 1e-3)},
         "gamma": {"values": get_range(84, 87, 1e-3)},
-        "noise_esp": {"values": get_range(25, 34, 1e-4)},
-        "noise_esp_decay": {"values": get_range(95, 100, 1e-2)},
-        "num_bins": {"values": get_range(3, 9, 1)},
-        "lr_beta_l": {"values": get_range(82, 96, 1e-2)},
+        "noise_esp": {"values": get_range(25, 31, 1e-4)},
+        "noise_esp_decay": {"values": get_range(95, 98, 1e-2)},
+        "num_bins": {"values": get_range(3, 7, 1)},
+        "base_std": {"values": get_range(40, 50, 1e-2)},
+        "lr_beta_l": {"values": get_range(88, 94, 1e-2)},
         "lr_beta_h": {"values": get_range(91, 95, 1e-2)},
     },
 }
@@ -40,15 +42,18 @@ def main() -> None:
     wandb.init(name=begin_time)
 
     solver_param = DEFULT_SOLVER
+    solver_param.num_transforms = wandb.config.num_transforms
     solver_param.lr = wandb.config.lr
     solver_param.lr_weight_decay = wandb.config.lr_weight_decay
     solver_param.gamma = wandb.config.gamma
     solver_param.noise_esp = wandb.config.noise_esp
     solver_param.noise_esp_decay = wandb.config.noise_esp_decay
+    solver_param.num_bins = wandb.config.num_bins
+    solver_param.base_std = wandb.config.base_std
     solver_param.lr_beta = (wandb.config.lr_beta_l, wandb.config.lr_beta_h)
     solver_param.enable_load_model = ENABLE_LODE_MODEL  # type: ignore
     solver_param.use_nsf_only = USE_NSF_ONLY  # type: ignore
-    solver_param.num_bins = wandb.config.num_bins
+    
 
     trainer = Trainer(solver_param=solver_param)
 

@@ -45,16 +45,16 @@ class Solver:
         ), f"n should be {self._robot.n_dofs} as the robot"
 
         try:
-            self.nearest_neighnbor_P = load_pickle(
-                f"{solver_param.weight_dir}/nearest_neighnbor_P.pth"
+            self.P_knn = load_pickle(
+                f"{solver_param.weight_dir}/P_knn.pth"
             )
         except:
-            self.nearest_neighnbor_P = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(
+            self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(
                 self._P_tr
             )
             save_pickle(
-                f"{solver_param.weight_dir}/nearest_neighnbor_P.pth",
-                self.nearest_neighnbor_P,
+                f"{solver_param.weight_dir}/P_knn.pth",
+                self.P_knn,
             )
 
     @property
@@ -140,7 +140,7 @@ class Solver:
         self.__mean_C = np.concatenate((C.mean(axis=0), np.zeros((1))))
         std_C = np.concatenate((C.std(axis=0), np.ones((1))))
         scale = np.ones_like(self.__mean_C)
-        scale[self._m : self._m + self._r] *= self.__solver_param.posture_feature_scale
+        scale[self._m: self._m + self._r] *= self.__solver_param.posture_feature_scale
         self.__std_C = std_C / scale
 
         return J, P, F
@@ -152,7 +152,8 @@ class Solver:
                 DiagNormal,
                 torch.zeros((self._robot.n_dofs,), device=self._device)
                 + self._init_latent,
-                torch.ones((self._robot.n_dofs,), device=self._device) * self._base_std,
+                torch.ones((self._robot.n_dofs,),
+                           device=self._device) * self._base_std,
                 buffer=True,
             ),  # type: ignore
         )
@@ -204,7 +205,8 @@ class Solver:
             return self.solve(P, F, num_sols)
         C = self.norm_C(
             np.repeat(
-                np.expand_dims(np.column_stack((P, F, np.zeros((len(F), 1)))), axis=0),
+                np.expand_dims(np.column_stack(
+                    (P, F, np.zeros((len(F), 1)))), axis=0),
                 num_sols,
                 axis=0,
             )
@@ -213,10 +215,12 @@ class Solver:
         C = C.reshape(-1, C.shape[-1])
         complementary = batch_size - len(C) % batch_size
         complementary = 0 if complementary == batch_size else complementary
-        C = np.concatenate((C, C[:complementary]), axis=0) if complementary > 0 else C
+        C = np.concatenate((C, C[:complementary]),
+                           axis=0) if complementary > 0 else C
         C = C.reshape(-1, batch_size, C.shape[-1])
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
-        J = torch.empty((len(C), batch_size, self._robot.n_dofs), device=self._device)
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
+                        device=self._device)
 
         if verbose:
             with torch.inference_mode():
@@ -292,7 +296,7 @@ class Solver:
         if self._method_of_select_reference_posture == "knn":
             # type: ignore
             return self._F[
-                self.nearest_neighnbor_P.kneighbors(
+                self.P_knn.kneighbors(
                     np.atleast_2d(P), n_neighbors=1, return_distance=False
                 ).flatten()
             ]
@@ -324,7 +328,8 @@ class Solver:
         F = self.select_reference_posture(P)
 
         # Begin inference
-        J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size, verbose=verbose)
+        J_hat = self.solve_batch(
+            P, F, num_sols, batch_size=batch_size, verbose=verbose)
 
         l2, ang = self.evaluate_pose_error(J_hat, P, return_all=True)
         avg_inference_time = round((time() - time_begin) / num_poses, 3)

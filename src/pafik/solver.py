@@ -238,30 +238,8 @@ class Solver:
             else J
         )
         return self.denorm_J(J.reshape(num_sols, -1, self._robot.n_dofs))
-
-    def evaluate_pose_error(
-        self,
-        J: np.ndarray,
-        P: np.ndarray,
-        return_posewise_evalution: bool = False,
-        return_all: bool = False,
-    ) -> tuple[Any, Any]:
-        assert len(J.shape) == 2 or len(J.shape) == 3
-
-        num_poses = len(P)
-        num_sols = len(J)
-        J = np.expand_dims(J, axis=1) if len(J.shape) == 2 else J
-        assert J.shape == (num_sols, num_poses, self._robot.n_dofs)
-
-        P_expand = np.repeat(np.expand_dims(P, axis=0), len(J), axis=0).reshape(
-            -1, P.shape[-1]
-        )
-        P_hat = self._robot.forward_kinematics(J.reshape(-1, self._n)).reshape(
-            -1, P.shape[-1]
-        )
-        l2 = np.linalg.norm(P_expand[:, :3] - P_hat[:, :3], axis=1)
-        # geometric_distance_between_quaternions
-        q1, q2 = P_expand[:, 3:], P_hat[:, 3:]
+    
+    def geometric_distance_between_quaternions(self, q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
         # from jrl.conversions
         # Note: Decreasing this value to 1e-8 greates NaN gradients for nearby quaternions.
         acos_clamp_epsilon = 1e-7
@@ -282,6 +260,29 @@ class Solver:
             )
             - np.pi
         )
+        return ang
+    
+    def evaluate_pose_error_J2d_P2d(self, J: np.ndarray, P: np.ndarray):
+        assert len(J.shape) == 2 and len(P.shape) == 2 and J.shape[0] == P.shape[0]
+        P_hat = self._robot.forward_kinematics(J)
+        l2 = np.linalg.norm(P[:, :3] - P_hat[:, :3], axis=1)
+        ang = self.geometric_distance_between_quaternions(P[:, 3:], P_hat[:, 3:])
+        return l2, ang
+
+    def evaluate_pose_error_J3d_P2d(
+        self,
+        J: np.ndarray,
+        P: np.ndarray,
+        return_posewise_evalution: bool = False,
+        return_all: bool = False,
+    ) -> tuple[Any, Any]:
+        num_poses, num_sols = len(P), len(J)
+        assert len(J.shape) == 3 and len(P.shape) == 2 and J.shape[1] == num_poses
+        
+        P_expand = np.repeat(np.expand_dims(P, axis=0), num_sols, axis=0).reshape(
+            -1, P.shape[-1]
+        )
+        l2, ang = self.evaluate_pose_error_J2d_P2d(J.reshape(-1, self._n), P_expand)
 
         if return_posewise_evalution:
             return (
@@ -331,7 +332,7 @@ class Solver:
         J_hat = self.solve_batch(
             P, F, num_sols, batch_size=batch_size, verbose=verbose)
 
-        l2, ang = self.evaluate_pose_error(J_hat, P, return_all=True)
+        l2, ang = self.evaluate_pose_error_J3d_P2d(J_hat, P, return_all=True)
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
         df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})

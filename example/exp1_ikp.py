@@ -32,9 +32,9 @@ def ikp():
         tabulate(
             [[avg_l2, np.rad2deg(avg_ang), avg_inference_time, success_rate]],
             headers=[
-                "avg_l2",
-                "avg_ang",
-                "avg_inference_time",
+                "avg_l2 (m)",
+                "avg_ang (deg)",
+                "avg_inference_time (s)",
                 f"success_rate ({METHOD_OF_SELECT_REFERENCE_POSTURE})",
             ],
         )

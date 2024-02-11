@@ -10,7 +10,7 @@ NUM_SOLS = 400  # 1000
 BATCH_SIZE = 5000
 SUCCESS_THRESHOLD = (5e-3, 2)
 STD = 0.1
-WORKDIR = "/home/luca/example_package/pafik"
+WORKDIR = "/home/luca/pafik"
 USE_NSF_ONLY = False
 METHOD_OF_SELECT_REFERENCE_POSTURE = "knn"
 

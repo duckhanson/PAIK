@@ -11,7 +11,6 @@ from torch.utils.data import DataLoader, TensorDataset
 from .settings import SolverConfig, DEFULT_SOLVER
 from .solver import Solver
 
-USE_WANDB = False
 PATIENCE = 4
 POSE_ERR_THRESH = 6e-3
 
@@ -43,7 +42,6 @@ class Trainer(Solver):
         begin_time,
         num_epochs,
         batch_size=128,
-        use_wandb=True,
         patience=4,
         pose_err_thres=1e-2,
         num_eval_poses=100,
@@ -116,10 +114,7 @@ class Trainer(Solver):
                 "noise_esp": self.__noise_esp,
             }
 
-            if use_wandb:
-                wandb.log(log_info)
-            else:
-                pprint(log_info)
+            wandb.log(log_info)
 
             if (
                 np.isnan(avg_pos_errs)
@@ -248,8 +243,7 @@ def main() -> None:
     begin_time = datetime.now().strftime("%m%d-%H%M")
     # note that we define values from `wandb.config`
     # instead of defining hard values
-    if USE_WANDB:
-        wandb.init(name=begin_time, notes=f"r=0")
+    wandb.init(name=begin_time, notes=f"r=0")
 
     solver_param = DEFULT_SOLVER
 
@@ -259,18 +253,14 @@ def main() -> None:
         num_epochs=solver_param.num_epochs,
         batch_size=solver_param.batch_size,
         begin_time=begin_time,
-        use_wandb=USE_WANDB,
         patience=PATIENCE,
         pose_err_thres=POSE_ERR_THRESH,
         num_eval_poses=100,
         num_eval_sols=100,
     )
 
-    if USE_WANDB:
-        # [optional] finish the wandb run, necessary in notebooks
-        wandb.finish()
-    else:
-        pprint(f"Finish job {begin_time}")
+    # [optional] finish the wandb run, necessary in notebooks
+    wandb.finish()
 
 
 if __name__ == "__main__":

@@ -6,7 +6,6 @@ from pafik.settings import DEFULT_SOLVER
 from pafik.train import Trainer
 
 WORK_DIR = "/home/luca/example_package/pafik"
-USE_WANDB = True
 WANDB_PROJECT_NAME = "msik_ikflow_nsf_norm" # please change to your own project name
 WANDB_ENTITY = "luca_nthu" # please change to your own entity name
 PATIENCE = 7
@@ -78,7 +77,6 @@ def main() -> None:
         num_epochs=NUM_EPOCHS,
         batch_size=solver_param.batch_size,
         begin_time=begin_time,
-        use_wandb=USE_WANDB,
         patience=PATIENCE,
         pose_err_thres=POSE_ERR_THRESH,
         num_eval_poses=1000,

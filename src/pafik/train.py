@@ -116,17 +116,6 @@ class Trainer(Solver):
 
             wandb.log(log_info)
 
-            if (
-                np.isnan(avg_pos_errs)
-                or avg_pos_errs > 1e-1
-                or ep > 14
-                and avg_pos_errs > 1.5e-2
-            ):
-                print(
-                    f"Thresholds Touched ({avg_pos_errs} > 1e-1 or 1.5e-2 and ep > 14)"
-                )
-                break
-
             early_stopping(avg_pos_errs, self._solver)
 
             if early_stopping.early_stop:
@@ -216,7 +205,7 @@ class EarlyStopping:
             self.trace_func(
                 f"EarlyStopping counter: {self.counter} out of {self.patience}, score: {score}, best: {self.best_score}"
             )
-            if self.counter >= self.patience:
+            if self.counter >= self.patience or np.isnan(val_loss):
                 self.early_stop = True
         else:
             self.best_score = score

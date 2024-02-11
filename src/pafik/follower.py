@@ -78,7 +78,7 @@ class PathFollower(Solver):
         P = load_numpy(file_path=Ppath_file_path)
         J = load_numpy(file_path=Jtraj_file_path)
 
-        if len(P) == 0 or len(J) == 0:
+        if P is None or J is None:
             # endPoints = np.random.rand(2, cfg.m) # 2 for begin and end
             # rand_idxs = np.random.randint(low=0, high=len(self._J_tr), size=2)
             # endPoints = self._J_tr[rand_idxs]
@@ -124,7 +124,7 @@ class PathFollower(Solver):
         P = load_numpy(file_path=Ppath_file_path)
         J = load_numpy(file_path=Jtraj_file_path)
 
-        if len(P) == 0 or len(J) == 0:
+        if P is None or J is None:
             J = np.empty((num_traj, num_steps, self._n))
             P = np.empty((num_traj, num_steps, self._m))
 

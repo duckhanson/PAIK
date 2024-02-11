@@ -95,7 +95,7 @@ class Solver:
         J = load_numpy(file_path=path_J)
         P = load_numpy(file_path=path_P)
 
-        if len(J) != self.param.N or len(P) != self.param.N:
+        if J is None or P is None:
             J, P = self._robot.sample_joint_angles_and_poses(
                 n=self.param.N, return_torch=False
             )
@@ -106,7 +106,7 @@ class Solver:
         path_F = f"{self.param.train_dir}/F-{self.param.N}-{self._n}-{self._m}-{self._r}-from-C-space.npy"
         F = load_numpy(file_path=path_F)
 
-        if F.shape != (len(J), self._r):
+        if F is None:
             # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
             hnne = HNNE(dim=self._r)
             # maximum number of data for hnne (11M), we use max_num_data_hnne to test
@@ -131,19 +131,16 @@ class Solver:
         print(f"[SUCCESS] F load from {path_F}")
 
         # for normalization
-        self.__mean_J, self.__std_J = J.mean(axis=0), J.std(axis=0)
         C = np.column_stack((P, F))
-        self.__mean_C = np.concatenate((C.mean(axis=0), np.zeros((1))))
         std_C = np.concatenate((C.std(axis=0), np.ones((1))))
-        scale = np.ones_like(self.__mean_C)
-        scale[self._m : self._m + self._r] *= self.__solver_param.posture_feature_scale
-        self.__std_C = std_C / scale
+        scaler_C = np.ones_like(std_C)
+        scaler_C[self._m : self._m + self._r] *= self.__solver_param.posture_feature_scale
 
         self.__normalization_elements = {
             "J": {"mean": J.mean(axis=0), "std": J.std(axis=0)},
             "C": {
                 "mean": np.concatenate((C.mean(axis=0), np.zeros((1)))),
-                "std": std_C / scale,
+                "std": std_C / scaler_C,
             },
         }
 

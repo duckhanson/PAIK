@@ -96,7 +96,7 @@ def load_numpy(file_path: str):
         return np.load(file_path)
     else:
         print(f"[ERROR] {file_path}: file not exist and return empty np array.")
-        return np.array([])
+        return None
 
 
 def save_numpy(file_path: str, arr: np.ndarray):

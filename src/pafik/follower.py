@@ -20,7 +20,7 @@ class PathFollower(Solver):
     def __init__(self, solver_param: SolverConfig) -> None:
         super().__init__(solver_param)
 
-        self.J_knn = NearestNeighbors(n_neighbors=1).fit(self._J_tr)
+        self.J_knn = NearestNeighbors(n_neighbors=1).fit(self.J)
         save_pickle(f"{solver_param.weight_dir}/J_knn.pth", self.J_knn)
 
     def solve_path(
@@ -34,7 +34,7 @@ class PathFollower(Solver):
         self.base_std = std
         J_hat = self.solve_batch(
             P,
-            self._F[
+            self.F[
                 self.J_knn.kneighbors(
                     J, return_distance=False
                 ).flatten()  # type: ignore
@@ -83,16 +83,19 @@ class PathFollower(Solver):
         J = load_numpy(file_path=Jtraj_file_path)
 
         if P is None or J is None:
-            J = np.empty((num_traj, num_steps, self._n))
-            P = np.empty((num_traj, num_steps, self._m))
+            J = np.empty((num_traj, num_steps, self.n))
+            P = np.empty((num_traj, num_steps, self.m))
 
             for i in range(num_traj):
                 endPoints, _ = self._robot.sample_joint_angles_and_poses(
                     n=2, return_torch=False
                 )
-                Jtraj = trajectory.Trajectory(milestones=endPoints)  # type: ignore
-                J[i] = np.array([Jtraj.eval(i / num_steps) for i in range(num_steps)])
-                P[i] = self._robot.forward_kinematics(J[i, :, 0 : self._robot.n_dofs])
+                Jtraj = trajectory.Trajectory(
+                    milestones=endPoints)  # type: ignore
+                J[i] = np.array([Jtraj.eval(i / num_steps)
+                                for i in range(num_steps)])
+                P[i] = self._robot.forward_kinematics(
+                    J[i, :, 0: self._robot.n_dofs])
 
             save_numpy(file_path=Jtraj_file_path, arr=J)
             save_numpy(file_path=Ppath_file_path, arr=P)

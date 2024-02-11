@@ -36,10 +36,10 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
     solver.base_std = STD
     J_hat = solver.solve_batch(
         P,
-        solver._F[solver.J_knn.kneighbors(J, return_distance=False).flatten()],
+        solver.F[solver.J_knn.kneighbors(J, return_distance=False).flatten()],
         num_sols=1,
     )  # type: ignore
-    l2, ang = solver.evaluate_pose_error(J_hat, P, return_all=True)
+    l2, ang = solver.evaluate_pose_error_J2d_P2d(J_hat, P)
     ddjc = np.linalg.norm(
         J_hat - J, axis=-1).reshape(NUM_TRAJECTORIES, NUM_STEPS)
     mjac = np.array(

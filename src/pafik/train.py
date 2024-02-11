@@ -35,7 +35,7 @@ class Trainer(Solver):
         super().__init__(solver_param)
         self.__noise_esp = self.param.noise_esp
         self.__noise_esp_decay = self.param.noise_esp_decay  # 0.8 - 0.9
-        self.__std_scale = 1 / self.__noise_esp
+        self.__noise_scale = 1 / self.__noise_esp
 
     def mini_train(
         self,
@@ -67,14 +67,15 @@ class Trainer(Solver):
         for ep in range(num_epochs):
             # add noise
             if self.__noise_esp < 1e-9:
-                noise_std = np.zeros((len(self._F), 1))
+                noise_std = np.zeros((len(self.F), 1))
             else:
-                noise_std = self.__noise_esp * np.random.rand(len(self._F), 1)
+                noise_std = self.__noise_esp * np.random.rand(len(self.F), 1)
             J = self.normalize_input_data(
-                self._J_tr + noise_std * np.random.randn(*self._J_tr.shape), "J"
+                self.J + noise_std * np.random.randn(*self.J.shape), "J"
             )
             C = self.normalize_input_data(
-                np.column_stack((self._P_tr, self._F, self.__std_scale * noise_std)),
+                np.column_stack(
+                    (self.P, self.F, self.__noise_scale * noise_std)),
                 "C",
             )
             C = self.remove_posture_feature(C) if self._use_nsf_only else C
@@ -122,7 +123,8 @@ class Trainer(Solver):
 
             wandb.log(log_info)
 
-            early_stopping(avg_pos_errs, self._solver, self._optimizer)  # type: ignore
+            early_stopping(avg_pos_errs, self._solver,
+                           self._optimizer)  # type: ignore
 
             if early_stopping.early_stop:
                 print("Early stopping")

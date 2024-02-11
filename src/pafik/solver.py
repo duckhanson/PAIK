@@ -31,8 +31,8 @@ class Solver:
         self._device = solver_param.device
         self._use_nsf_only = solver_param.use_nsf_only
         # Neural spline flow (NSF) with 3 sample features and 5 context features
-        self._n, self._m, self._r = solver_param.n, solver_param.m, solver_param.r
-        self._J_tr, self._P_tr, self._F = self.__load_training_data()
+        self.n, self.m, self.r = solver_param.n, solver_param.m, solver_param.r
+        self.J, self.P, self.F = self.__load_training_data()
 
         self._solver, self._optimizer, self._scheduler = get_flow_model(
             solver_param
@@ -41,14 +41,15 @@ class Solver:
         self._init_latent = torch.zeros((self.robot.n_dofs)).to(self._device)
         # load inference data
         assert (
-            self._n == self._robot.n_dofs
+            self.n == self._robot.n_dofs
         ), f"n should be {self._robot.n_dofs} as the robot"
 
         path_p_knn = f"{solver_param.weight_dir}/P_knn.pth"
         try:
             self.P_knn = load_pickle(path_p_knn)
         except:
-            self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self._P_tr)
+            self.P_knn = NearestNeighbors(
+                n_neighbors=1, n_jobs=-1).fit(self.P)
             save_pickle(
                 path_p_knn,
                 self.P_knn,
@@ -74,13 +75,13 @@ class Solver:
     def base_std(self, value: float):
         assert value >= 0 and value < 1
         self._base_std = value
-        self.__update_solver()
+        self.__change_solver_base()
 
     @latent.setter
     def latent(self, value: torch.Tensor):
         assert value.shape == (self._robot.n_dofs)
         self._init_latent = value
-        self.__update_solver()
+        self.__change_solver_base()
 
     # private methods
     def __load_training_data(self):
@@ -88,11 +89,12 @@ class Solver:
             self.param.train_dir
         ), f"{self.param.train_dir} not found, please change workdir to the project root!"
         path_function = (
-            lambda name: f"{self.param.train_dir}/{name}-{self.param.N}-{self._n}-{self._m}-{self._r}.npy"
+            lambda name: f"{self.param.train_dir}/{name}-{self.param.N}-{self.n}-{self.m}-{self.r}.npy"
         )
 
         input_name_list = ["J", "P", "F"]
-        path_collection = {name: path_function(name) for name in input_name_list}
+        path_collection = {name: path_function(
+            name) for name in input_name_list}
         J, P, F = [
             load_numpy(file_path=path_collection[name]) for name in input_name_list
         ]
@@ -105,12 +107,12 @@ class Solver:
             save_numpy(file_path=path_collection["P"], arr=P)
 
         if F is None:
-            assert self._r > 0, "r should be greater than 0."
+            assert self.r > 0, "r should be greater than 0."
             # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
-            hnne = HNNE(dim=self._r)
+            hnne = HNNE(dim=self.r)
             # maximum number of data for hnne (11M), we use max_num_data_hnne to test
             num_data = min(self.param.max_num_data_hnne, len(J))
-            F = hnne.fit_transform(X=J[:num_data], dim=self._r, verbose=True)
+            F = hnne.fit_transform(X=J[:num_data], dim=self.r, verbose=True)
             # query nearest neighbors for the rest of J
             if len(F) != len(J):
                 knn = NearestNeighbors(n_neighbors=1).fit(J[:num_data])
@@ -142,14 +144,15 @@ class Solver:
 
         return J, P, F
 
-    def __update_solver(self):
+    def __change_solver_base(self):
         self._solver = Flow(
             transforms=self._solver.transforms,  # type: ignore
             base=Unconditional(
                 DiagNormal,
                 torch.zeros((self._robot.n_dofs,), device=self._device)
                 + self._init_latent,
-                torch.ones((self._robot.n_dofs,), device=self._device) * self._base_std,
+                torch.ones((self._robot.n_dofs,),
+                           device=self._device) * self._base_std,
                 buffer=True,
             ),  # type: ignore
         )
@@ -186,6 +189,18 @@ class Solver:
             J = self._solver(C).sample((num_sols,))
         return self.denormalize_output_data(J.detach().cpu().numpy(), "J")
 
+    def make_divisible_C(self, C: np.ndarray, batch_size: int):
+        assert C.ndim == 2
+        complementary = batch_size - len(C) % batch_size
+        complementary = 0 if complementary == batch_size else complementary
+        C = np.concatenate((C, C[:complementary]),
+                           axis=0) if complementary > 0 else C
+        return C, complementary
+
+    def remove_complementary_J(self, J: np.ndarray, complementary: int):
+        assert J.ndim == 2
+        return J[:-complementary] if complementary > 0 else J
+
     def solve_batch(
         self,
         P: np.ndarray,
@@ -196,38 +211,33 @@ class Solver:
     ):
         if len(P) * num_sols < batch_size:
             return self.solve(P, F, num_sols)
-        C = self.normalize_input_data(
-            np.repeat(
-                np.expand_dims(np.column_stack((P, F, np.zeros((len(F), 1)))), axis=0),
-                num_sols,
-                axis=0,
-            ),
-            "C",
-        )
+
+        # shape: (num_poses, C.shape[-1] = m + r + 1)
+        C = np.column_stack((P, F, np.zeros((len(F), 1))))
+        # shape: (num_sols, num_poses, C.shape[-1])
+        expanded_C = np.repeat(np.expand_dims(C, axis=0), num_sols, axis=0)
+
+        C = self.normalize_input_data(expanded_C, "C")
         C = self.remove_posture_feature(C) if self._use_nsf_only else C
+
+        # shape: (num_sols * num_poses, C.shape[-1])
         C = C.reshape(-1, C.shape[-1])
-        complementary = batch_size - len(C) % batch_size
-        complementary = 0 if complementary == batch_size else complementary
-        C = np.concatenate((C, C[:complementary]), axis=0) if complementary > 0 else C
+        C, complementary = self.make_divisible_C(C, batch_size)
+
+        # shape: ((num_sols * num_poses + complementary) // batch_size, batch_size, C.shape[-1])
         C = C.reshape(-1, batch_size, C.shape[-1])
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
-        J = torch.empty((len(C), batch_size, self._robot.n_dofs), device=self._device)
 
-        if verbose:
-            with torch.inference_mode():
-                for i in trange(len(C)):
-                    J[i] = self._solver(C[i]).sample()
-        else:
-            with torch.inference_mode():
-                for i in range(len(C)):
-                    J[i] = self._solver(C[i]).sample()
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
+                        device=self._device)
+        iterator = trange(len(C)) if verbose else range(len(C))
+        with torch.inference_mode():
+            for i in iterator:
+                J[i] = self._solver(C[i]).sample()
 
         J = J.detach().cpu().numpy()
-        J = (
-            J.reshape(-1, self._robot.n_dofs)[:-complementary]
-            if complementary > 0
-            else J
-        )
+        J = J.reshape(-1, self._robot.n_dofs)
+        J = self.remove_complementary_J(J, complementary)
         return self.denormalize_output_data(
             J.reshape(num_sols, -1, self._robot.n_dofs), "J"
         )
@@ -258,10 +268,12 @@ class Solver:
         return ang
 
     def evaluate_pose_error_J2d_P2d(self, J: np.ndarray, P: np.ndarray):
-        assert len(J.shape) == 2 and len(P.shape) == 2 and J.shape[0] == P.shape[0]
+        assert len(J.shape) == 2 and len(
+            P.shape) == 2 and J.shape[0] == P.shape[0]
         P_hat = self._robot.forward_kinematics(J)
         l2 = np.linalg.norm(P[:, :3] - P_hat[:, :3], axis=1)
-        ang = self.geometric_distance_between_quaternions(P[:, 3:], P_hat[:, 3:])
+        ang = self.geometric_distance_between_quaternions(
+            P[:, 3:], P_hat[:, 3:])
         return l2, ang
 
     def evaluate_pose_error_J3d_P2d(
@@ -272,12 +284,15 @@ class Solver:
         return_all: bool = False,
     ) -> tuple[Any, Any]:
         num_poses, num_sols = len(P), len(J)
-        assert len(J.shape) == 3 and len(P.shape) == 2 and J.shape[1] == num_poses
+        assert len(J.shape) == 3 and len(
+            P.shape) == 2 and J.shape[1] == num_poses
 
+        # shape: (num_sols * num_poses, P.shape[-1])
         P_expand = np.repeat(np.expand_dims(P, axis=0), num_sols, axis=0).reshape(
             -1, P.shape[-1]
         )
-        l2, ang = self.evaluate_pose_error_J2d_P2d(J.reshape(-1, self._n), P_expand)
+        l2, ang = self.evaluate_pose_error_J2d_P2d(
+            J.reshape(-1, self.n), P_expand)
 
         if return_posewise_evalution:
             return (
@@ -291,17 +306,17 @@ class Solver:
     def select_reference_posture(self, P: np.ndarray):
         if self._method_of_select_reference_posture == "knn":
             # type: ignore
-            return self._F[
+            return self.F[
                 self.P_knn.kneighbors(
                     np.atleast_2d(P), n_neighbors=1, return_distance=False
                 ).flatten()  # type: ignore
             ]
         elif self._method_of_select_reference_posture == "random":
-            min_F, max_F = np.min(self._F), np.max(self._F)
-            return np.random.rand(len(P), self._r) * (max_F - min_F) + min_F
+            min_F, max_F = np.min(self.F), np.max(self.F)
+            return np.random.rand(len(P), self.r) * (max_F - min_F) + min_F
         elif self._method_of_select_reference_posture == "pick":
             # randomly pick one posture from train set
-            return self._F[np.random.randint(0, len(self._F), len(P))]
+            return self.F[np.random.randint(0, len(self.F), len(P))]
         else:
             raise NotImplementedError
 
@@ -324,7 +339,8 @@ class Solver:
         F = self.select_reference_posture(P)
 
         # Begin inference
-        J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size, verbose=verbose)
+        J_hat = self.solve_batch(
+            P, F, num_sols, batch_size=batch_size, verbose=verbose)
 
         l2, ang = self.evaluate_pose_error_J3d_P2d(J_hat, P, return_all=True)
         avg_inference_time = round((time() - time_begin) / num_poses, 3)

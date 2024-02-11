@@ -27,11 +27,11 @@ class Visualizer(PathFollower):
 
     def solve_set_k(self, single_pose: np.ndarray, num_sols: int, k: int = 1):
         P = (
-            single_pose[:, : self._m]
+            single_pose[:, : self.m]
             if len(single_pose.shape) == 2
-            else np.atleast_2d(single_pose[: self._m])
+            else np.atleast_2d(single_pose[: self.m])
         )
-        F = self._F[
+        F = self.F[
             self.P_knn.kneighbors(
                 np.atleast_2d(P), n_neighbors=k, return_distance=False
             ).flatten()

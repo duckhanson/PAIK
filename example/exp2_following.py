@@ -26,7 +26,7 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
     solver_param.workdir = WORKDIR
     solver = PathFollower(solver_param=solver_param)
 
-    Jt, Pt = solver.sample_Jtraj_Ppath_multiple_trajectories(
+    Jt, Pt = solver.sample_multiple_Jtraj_and_Ppath(
         num_steps=NUM_STEPS, num_traj=NUM_TRAJECTORIES
     )
 
@@ -40,7 +40,8 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
         num_sols=1,
     )  # type: ignore
     l2, ang = solver.evaluate_pose_error(J_hat, P, return_all=True)
-    ddjc = np.linalg.norm(J_hat - J, axis=-1).reshape(NUM_TRAJECTORIES, NUM_STEPS)
+    ddjc = np.linalg.norm(
+        J_hat - J, axis=-1).reshape(NUM_TRAJECTORIES, NUM_STEPS)
     mjac = np.array(
         [
             max_joint_angle_change(qs)
@@ -53,13 +54,15 @@ def path_following_multiple_trajectory(test_pafik: bool, test_ikflow: bool):
     ang = ang.reshape(NUM_TRAJECTORIES, NUM_STEPS).mean(axis=-1)
     ddjc = ddjc.mean(axis=-1)
     df = pd.DataFrame(
-        {"l2": l2, "ang": np.rad2deg(ang), "mjac": mjac, "ddjc": np.rad2deg(ddjc)}
+        {"l2": l2, "ang": np.rad2deg(
+            ang), "mjac": mjac, "ddjc": np.rad2deg(ddjc)}
     )
 
     print(
         tabulate(
             [
-                (thres, df.query(f"ddjc < {thres}")["ddjc"].count() / df.shape[0])
+                (thres, df.query(f"ddjc < {thres}")
+                 ["ddjc"].count() / df.shape[0])
                 for thres in DDJC_THRES
             ],
             headers=["ddjc", "success rate"],

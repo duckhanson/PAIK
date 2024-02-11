@@ -49,7 +49,13 @@ class Trainer(Solver):
         seed=42,
     ) -> None:
         init_seeds(seed=seed)
-        early_stopping = EarlyStopping(patience=patience, verbose=True)
+        early_stopping = EarlyStopping(
+            patience=patience,
+            verbose=True,
+            enable_save=True,
+            path=f"{self.param.weight_dir}/{begin_time}.pth",
+            val_loss_threshold=pose_err_thres,
+        )
         # data generation
         assert self._device == "cuda", "device should be cuda"
 
@@ -116,20 +122,11 @@ class Trainer(Solver):
 
             wandb.log(log_info)
 
-            early_stopping(avg_pos_errs, self._solver)
+            early_stopping(avg_pos_errs, self._solver, self._optimizer)  # type: ignore
 
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
-
-            if avg_pos_errs < pose_err_thres:  # type: ignore
-                torch.save(
-                    {
-                        "solver": self._solver.state_dict(),
-                        "opt": self._optimizer.state_dict(),
-                    },
-                    f"{self.param.weight_dir}/{begin_time}.pth",
-                )
 
         print("Finished Training")
 
@@ -168,6 +165,7 @@ class EarlyStopping:
         delta=0,
         enable_save=False,
         path="checkpoint.pt",
+        val_loss_threshold=0.0,
         trace_func=print,
     ):
         """
@@ -186,71 +184,49 @@ class EarlyStopping:
         self.patience = patience
         self.verbose = verbose
         self.counter = 0
-        self.best_score = None
         self.early_stop = False
+        self.val_loss_threshold = val_loss_threshold
         self.val_loss_min = np.Inf
         self.delta = delta
         self.enable_save = enable_save
         self.path = path
         self.trace_func = trace_func
 
-    def __call__(self, val_loss, model):
-        score = -val_loss
-
-        if self.best_score is None:
-            self.best_score = score
-            self.save_checkpoint(val_loss, model)
-        elif score < self.best_score + self.delta:
+    def __call__(self, val_loss, model, optimizer):
+        if np.isnan(val_loss):
+            self.early_stop = True
+            self.trace_func(f"EarlyStopping counter: val_loss: nan")
+        elif self.val_loss_min is None or val_loss < self.val_loss_min:
+            self.save_checkpoint(val_loss, model, optimizer=optimizer)
+            self.counter = 0
+        elif val_loss - self.val_loss_min > self.delta:
             self.counter += 1
             self.trace_func(
-                f"EarlyStopping counter: {self.counter} out of {self.patience}, score: {score}, best: {self.best_score}"
+                f"EarlyStopping counter: {self.counter} out of {self.patience}, val_loss: {val_loss}, best: {self.val_loss_min}"
             )
-            if self.counter >= self.patience or np.isnan(val_loss):
+            if self.counter >= self.patience:
                 self.early_stop = True
-        else:
-            self.best_score = score
-            self.save_checkpoint(val_loss, model)
-            self.counter = 0
 
-    def save_checkpoint(self, val_loss, model):
+    def save_checkpoint(self, val_loss, model, optimizer):
         """Saves model when validation loss decrease."""
         if self.enable_save:
             if self.verbose:
                 self.trace_func(
-                    f"Validation loss decreased ({self.val_loss_min:.4f} --> {val_loss:.4f}).  Saving model ..."
+                    f"Validation loss decreased ({self.val_loss_min:.4f} --> {val_loss:.4f})."
                 )
-            torch.save(model.state_dict(), self.path)
+
+            if val_loss < self.val_loss_threshold:
+                self.trace_func(f"Saving model to {self.path}.")
+                torch.save(
+                    {
+                        "solver": model.state_dict(),
+                        "opt": optimizer.state_dict(),
+                    },
+                    self.path,
+                )
         else:
             if self.verbose:
                 self.trace_func(
                     f"Validation loss decreased ({self.val_loss_min:.4f} --> {val_loss:.4f})."
                 )
         self.val_loss_min = val_loss
-
-
-def main() -> None:
-    begin_time = datetime.now().strftime("%m%d-%H%M")
-    # note that we define values from `wandb.config`
-    # instead of defining hard values
-    wandb.init(name=begin_time, notes=f"r=0")
-
-    solver_param = DEFULT_SOLVER
-
-    trainer = Trainer(solver_param=solver_param)
-
-    trainer.mini_train(
-        num_epochs=solver_param.num_epochs,
-        batch_size=solver_param.batch_size,
-        begin_time=begin_time,
-        patience=PATIENCE,
-        pose_err_thres=POSE_ERR_THRESH,
-        num_eval_poses=100,
-        num_eval_sols=100,
-    )
-
-    # [optional] finish the wandb run, necessary in notebooks
-    wandb.finish()
-
-
-if __name__ == "__main__":
-    main()

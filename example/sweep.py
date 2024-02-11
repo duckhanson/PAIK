@@ -5,7 +5,7 @@ import wandb
 from pafik.settings import DEFULT_SOLVER
 from pafik.train import Trainer
 
-WORK_DIR = "/home/luca/example_package/pafik"
+WORK_DIR = "/home/luca/pafik"
 WANDB_PROJECT_NAME = "msik_ikflow_nsf_norm" # please change to your own project name
 WANDB_ENTITY = "luca_nthu" # please change to your own entity name
 PATIENCE = 7

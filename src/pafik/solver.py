@@ -44,12 +44,13 @@ class Solver:
             self._n == self._robot.n_dofs
         ), f"n should be {self._robot.n_dofs} as the robot"
 
+        path_p_knn = f"{solver_param.weight_dir}/P_knn.pth"
         try:
-            self.P_knn = load_pickle(f"{solver_param.weight_dir}/P_knn.pth")
+            self.P_knn = load_pickle(path_p_knn)
         except:
             self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self._P_tr)
             save_pickle(
-                f"{solver_param.weight_dir}/P_knn.pth",
+                path_p_knn,
                 self.P_knn,
             )
 
@@ -86,27 +87,25 @@ class Solver:
         assert isdir(
             self.param.train_dir
         ), f"{self.param.train_dir} not found, please change workdir to the project root!"
-        path_J = (
-            f"{self.param.train_dir}/J-{self.param.N}-{self._n}-{self._m}-{self._r}.npy"
+        path_function = (
+            lambda name: f"{self.param.train_dir}/{name}-{self.param.N}-{self._n}-{self._m}-{self._r}.npy"
         )
-        path_P = (
-            f"{self.param.train_dir}/P-{self.param.N}-{self._n}-{self._m}-{self._r}.npy"
-        )
-        J = load_numpy(file_path=path_J)
-        P = load_numpy(file_path=path_P)
+
+        input_name_list = ["J", "P", "F"]
+        path_collection = {name: path_function(name) for name in input_name_list}
+        J, P, F = [
+            load_numpy(file_path=path_collection[name]) for name in input_name_list
+        ]
 
         if J is None or P is None:
             J, P = self._robot.sample_joint_angles_and_poses(
                 n=self.param.N, return_torch=False
             )
-            save_numpy(file_path=path_J, arr=J)
-            save_numpy(file_path=path_P, arr=P[:, : self._m])
-
-        assert self._r > 0
-        path_F = f"{self.param.train_dir}/F-{self.param.N}-{self._n}-{self._m}-{self._r}-from-C-space.npy"
-        F = load_numpy(file_path=path_F)
+            save_numpy(file_path=path_collection["J"], arr=J)
+            save_numpy(file_path=path_collection["P"], arr=P)
 
         if F is None:
+            assert self._r > 0, "r should be greater than 0."
             # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
             hnne = HNNE(dim=self._r)
             # maximum number of data for hnne (11M), we use max_num_data_hnne to test
@@ -114,8 +113,7 @@ class Solver:
             F = hnne.fit_transform(X=J[:num_data], dim=self._r, verbose=True)
             # query nearest neighbors for the rest of J
             if len(F) != len(J):
-                knn = NearestNeighbors(n_neighbors=1)
-                knn.fit(J[:num_data])
+                knn = NearestNeighbors(n_neighbors=1).fit(J[:num_data])
                 F = np.row_stack(
                     (
                         F,
@@ -127,14 +125,16 @@ class Solver:
                     )
                 )  # type: ignore
 
-            save_numpy(file_path=path_F, arr=F)
-        print(f"[SUCCESS] F load from {path_F}")
+            save_numpy(file_path=path_collection["F"], arr=F)
+        print(f"[SUCCESS] F load from {path_collection['F']}")
 
         # for normalization
         C = np.column_stack((P, F))
         std_C = np.concatenate((C.std(axis=0), np.ones((1))))
         scaler_C = np.ones_like(std_C)
-        scaler_C[self._m : self._m + self._r] *= self.__solver_param.posture_feature_scale
+        scaler_C[
+            self._m : self._m + self._r
+        ] *= self.__solver_param.posture_feature_scale
 
         self.__normalization_elements = {
             "J": {"mean": J.mean(axis=0), "std": J.std(axis=0)},
@@ -175,10 +175,8 @@ class Solver:
     def remove_posture_feature(self, C: np.ndarray):
         assert self._use_nsf_only and isinstance(C, np.ndarray)
         print("before remove posture feature", C.shape)
-        if len(C.shape) == 2:
-            C = np.column_stack((C[:, : self._m], C[:, -1]))
-        elif len(C.shape) == 3:
-            C = np.concatenate((C[:, :, : self._m], C[:, :, -1:]), axis=-1)
+        # delete the last 2 of the last dimension of C, which is posture feature
+        C = np.delete(C, -2, -1)
         print("after remove posture feature", C.shape)
         return C
 
@@ -300,11 +298,11 @@ class Solver:
             return self._F[
                 self.P_knn.kneighbors(
                     np.atleast_2d(P), n_neighbors=1, return_distance=False
-                ).flatten()
+                ).flatten()  # type: ignore
             ]
         elif self._method_of_select_reference_posture == "random":
-            mF, MF = np.min(self._F), np.max(self._F)
-            return np.random.rand(len(P), self._r) * (MF - mF) + mF
+            min_F, max_F = np.min(self._F), np.max(self._F)
+            return np.random.rand(len(P), self._r) * (max_F - min_F) + min_F
         elif self._method_of_select_reference_posture == "pick":
             # randomly pick one posture from train set
             return self._F[np.random.randint(0, len(self._F), len(P))]

@@ -42,7 +42,7 @@ class PathFollower(Solver):
         )  # type: ignore
         if not return_evaluation:
             return J_hat
-        l2_errs, ang_errs = self.evaluate_pose_error(
+        l2_errs, ang_errs = self.evaluate_pose_error_J3d_P2d(
             J_hat, P, return_posewise_evalution=True
         )
         mjac_arr = np.array([max_joint_angle_change(qs) for qs in J_hat])

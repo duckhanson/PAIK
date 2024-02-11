@@ -130,17 +130,13 @@ class Solver:
 
         # for normalization
         C = np.column_stack((P, F))
-        std_C = np.concatenate((C.std(axis=0), np.ones((1))))
-        scaler_C = np.ones_like(std_C)
-        scaler_C[
-            self._m : self._m + self._r
-        ] *= self.__solver_param.posture_feature_scale
 
         self.__normalization_elements = {
             "J": {"mean": J.mean(axis=0), "std": J.std(axis=0)},
             "C": {
+                # extra column for tuning std of noise for training data
                 "mean": np.concatenate((C.mean(axis=0), np.zeros((1)))),
-                "std": std_C / scaler_C,
+                "std": np.concatenate((C.std(axis=0), np.ones((1)))),
             },
         }
 

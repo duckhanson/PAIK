@@ -34,7 +34,6 @@ class SolverConfig:
     batch_size: int = 2048
     num_epochs: int = 15
     shce_patience: int = 2
-    posture_feature_scale: float = 1.0
     use_nsf_only: bool = False
     select_reference_posture_method: str = "knn"
 

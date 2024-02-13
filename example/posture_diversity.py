@@ -134,7 +134,6 @@ def main():
     n_neighbors = N_NEIGHBORS
     verbose = True
     batch_size = BATCH_SIZE
-    lambda_ = LAMBDA
     success_rate_thresold = SOLUTIONS_SUCCESS_RATE_THRESHOLD_FOR_CLUSTERING_IN_NUM_SOLS
 
     # PAFIK

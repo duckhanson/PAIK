@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-import os
 from tqdm import trange
 from tabulate import tabulate
 import numpy as np
@@ -19,6 +18,9 @@ def cluster_based_on_distance(a, dist_thresh=1):
     kmeans= AgglomerativeClustering(n_clusters=None, distance_threshold=dist_thresh).fit(a)
     return a[np.sort(np.unique(kmeans.labels_, return_index=True)[1])]
 
+WORK_DIR = "/home/luca/nodeik"
+ROBOT_PATH = WORK_DIR + '/examples/assets/robots/franka_panda/panda_arm.urdf'
+MODEL_PATH = WORK_DIR + '/model/panda_loss-20.ckpt'
 NUM_POSES = 100
 NUM_SOLS = 1000
 NUM_STEPS = 20
@@ -48,7 +50,7 @@ class args:
     num_samples = 4
     num_references = 256
     seed = 1
-    model_checkpoint = os.path.join(os.path.dirname(__file__), '..', 'model','panda_loss-20.ckpt')
+    model_checkpoint = MODEL_PATH
     
 np.random.seed(args.seed)
 device = torch.device('cuda:' + str(args.gpu) if torch.cuda.is_available() else 'cpu')
@@ -71,7 +73,7 @@ def evalutate_pose_errors(qs, generated_poses, given_poses, given_qs=None):
 def run_random(num_poses, num_sols):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    r = Robot(robot_path=os.path.join(os.path.dirname(__file__), 'assets', 'robots','franka_panda', 'panda_arm.urdf'), ee_link_name='panda_hand')
+    r = Robot(robot_path=ROBOT_PATH, ee_link_name='panda_hand')
     learn = Learner.load_from_checkpoint(args.model_checkpoint, model=build_model(args, r.active_joint_dim, condition_dims=7).to(device), robot=r, std=STD, state_dim=r.active_joint_dim, condition_dim=7)
     learn.model_wrapper.device = device
     nodeik = learn.model_wrapper
@@ -103,7 +105,7 @@ def run_random(num_poses, num_sols):
 def run_path_following(load_time: str):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    r = Robot(robot_path=os.path.join(os.path.dirname(__file__), 'assets', 'robots','franka_panda', 'panda_arm.urdf'), ee_link_name='panda_hand')
+    r = Robot(robot_path=ROBOT_PATH, ee_link_name='panda_hand')
     learn = Learner.load_from_checkpoint(args.model_checkpoint, model=build_model(args, r.active_joint_dim, condition_dims=7).to(device), robot=r, std=STD, state_dim=r.active_joint_dim, condition_dim=7)
     learn.model_wrapper.device = device
     nodeik = learn.model_wrapper
@@ -180,7 +182,7 @@ def evaluate_diversity():
     
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    r = Robot(robot_path=os.path.join(os.path.dirname(__file__), 'assets', 'robots','franka_panda', 'panda_arm.urdf'), ee_link_name='panda_hand')
+    r = Robot(robot_path=ROBOT_PATH, ee_link_name='panda_hand')
     learn = Learner.load_from_checkpoint(args.model_checkpoint, model=build_model(args, r.active_joint_dim, condition_dims=7).to(device), robot=r, std=STD, state_dim=r.active_joint_dim, condition_dim=7)
     learn.model_wrapper.device = device
     nodeik = learn.model_wrapper

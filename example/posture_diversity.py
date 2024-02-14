@@ -11,7 +11,7 @@ from ikflow.model_loading import get_ik_solver
 from jkinpylib.evaluation import solution_pose_errors
 
 from tabulate import tabulate
-from evaluation import n_cluster_analysis, Generate_Diverse_Postures_Info
+from analyze_posture import n_cluster_analysis, Generate_Diverse_Postures_Info
 
 WORKDIR = "."
 NUM_POSES = 5_000

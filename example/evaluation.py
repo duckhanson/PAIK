@@ -25,7 +25,14 @@ def cluster_based_on_distance(a, dist_thresh=1):
     # return a[np.sort(np.unique(kmeans.labels_, return_index=True)[1])]
 
 
-def n_solutions_to_reach_n_clusters(J_pose, l2_, ang_, n_clusters_threshold, lambda_, joint_config_rads_distance_threshold):
+def n_solutions_to_reach_n_clusters(
+    J_pose,
+    l2_,
+    ang_,
+    n_clusters_threshold,
+    lambda_,
+    joint_config_rads_distance_threshold,
+):
     """
     # example of useage
     # n_solutions_to_reach_n_clusters(J_hat[i], [10, 15], l2[i], ang[i], 2)
@@ -36,7 +43,7 @@ def n_solutions_to_reach_n_clusters(J_pose, l2_, ang_, n_clusters_threshold, lam
     result_n_clusters = np.zeros((len(n_clusters_threshold)))
     record = np.full(len(J_pose), default_)
     bound = len(J_pose) - 1
-    
+
     # print(f"J_pose.shape: {J_pose.shape}, l2_.shape: {l2_.shape}, ang_.shape: {ang_.shape}, n_clusters_threshold: {n_clusters_threshold}, lambda_: {lambda_}, joint_config_rads_distance_threshold: {joint_config_rads_distance_threshold}")
 
     for i, n_cluster in enumerate(n_clusters_threshold):
@@ -51,7 +58,7 @@ def n_solutions_to_reach_n_clusters(J_pose, l2_, ang_, n_clusters_threshold, lam
                     (l2_partial < lambda_[0]) & (ang_partial < lambda_[1])
                 ]
                 record[m] = cluster_based_on_distance(
-                    J_valid, joint_config_rads_distance_threshold   
+                    J_valid, joint_config_rads_distance_threshold
                 )
             # print(f"l: {l}, r: {r}, m: {m}, record[m]: {record[m]}")
             if record[m] < n_cluster:
@@ -67,12 +74,29 @@ def n_solutions_to_reach_n_clusters(J_pose, l2_, ang_, n_clusters_threshold, lam
     return result_n_clusters
 
 
-def n_cluster_analysis(J_hat_, l2_, ang_, num_poses=NUM_POSES, n_clusters_threshold=N_CLUSTERS_THRESHOLD, lambda_=LAMBDA, joint_config_rads_distance_threshold=JOINT_CONFIG_RADS_DISTANCE_THRESHOLD):
-    assert len(J_hat_) == len(l2_) == len(ang_) == num_poses, f'J_hat_.shape: {J_hat_.shape}, l2_.shape: {l2_.shape}, ang_.shape: {ang_.shape}, NUM_POSES: {NUM_POSES}'
+def n_cluster_analysis(
+    J_hat_,
+    l2_,
+    ang_,
+    num_poses=NUM_POSES,
+    n_clusters_threshold=N_CLUSTERS_THRESHOLD,
+    lambda_=LAMBDA,
+    joint_config_rads_distance_threshold=JOINT_CONFIG_RADS_DISTANCE_THRESHOLD,
+):
+    assert (
+        len(J_hat_) == len(l2_) == len(ang_) == num_poses
+    ), f"J_hat_.shape: {J_hat_.shape}, l2_.shape: {l2_.shape}, ang_.shape: {ang_.shape}, NUM_POSES: {NUM_POSES}"
     # print(f'J_hat_.shape: {J_hat_.shape}, l2_.shape: {l2_.shape}, ang_.shape: {ang_.shape}, NUM_POSES: {NUM_POSES}')
     return np.array(
         [
-            n_solutions_to_reach_n_clusters(J_hat_[i], l2_[i], ang_[i], n_clusters_threshold, lambda_, joint_config_rads_distance_threshold)
+            n_solutions_to_reach_n_clusters(
+                J_hat_[i],
+                l2_[i],
+                ang_[i],
+                n_clusters_threshold,
+                lambda_,
+                joint_config_rads_distance_threshold,
+            )
             for i in trange(num_poses)
         ]
     )

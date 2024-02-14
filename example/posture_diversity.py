@@ -2,7 +2,6 @@ import time
 import numpy as np
 import pandas as pd
 from tqdm import trange
-from sklearn.cluster import AgglomerativeClustering
 from pafik.solver import Solver
 from pafik.settings import DEFULT_SOLVER
 
@@ -12,6 +11,7 @@ from ikflow.model_loading import get_ik_solver
 from jkinpylib.evaluation import solution_pose_errors
 
 from tabulate import tabulate
+from evaluation import n_cluster_analysis, Generate_Diverse_Postures_Info
 
 WORKDIR = "."
 NUM_POSES = 5_000
@@ -25,106 +25,6 @@ N_CLUSTERS_THRESHOLD = [10, 15, 20, 25, 30]
 SOLUTIONS_SUCCESS_RATE_THRESHOLD_FOR_CLUSTERING_IN_NUM_SOLS = 0.80
 
 
-def cluster_based_on_distance(a, dist_thresh=1):
-    if len(a) < 3:
-        # a minimum of 2 is required by AgglomerativeClustering.
-        return 0
-    kmeans = AgglomerativeClustering(
-        n_clusters=None, distance_threshold=dist_thresh
-    ).fit(a)
-    return kmeans.n_clusters_
-    # return a[np.sort(np.unique(kmeans.labels_, return_index=True)[1])]
-
-
-def n_solutions_to_reach_n_clusters(J_pose, l2_, ang_):
-    """
-    # example of useage
-    # n_solutions_to_reach_n_clusters(J_hat[i], [10, 15], l2[i], ang[i], 2)
-    """
-    assert all(n_cluster > 2 for n_cluster in N_CLUSTERS_THRESHOLD)
-
-    default_ = -1
-    result_n_clusters = np.zeros((len(N_CLUSTERS_THRESHOLD)))
-    record = np.full(len(J_pose), default_)
-    bound = len(J_pose) - 1
-
-    for i, n_cluster in enumerate(N_CLUSTERS_THRESHOLD):
-        l, r = 0, bound
-        # binary search
-        while l < r:
-            m = (l + r) // 2
-
-            if record[m] == default_:
-                J_partial, l2_partial, ang_partial = J_pose[:m], l2_[:m], ang_[:m]
-                J_valid = J_partial[
-                    (l2_partial < LAMBDA[0]) & (ang_partial < LAMBDA[1])
-                ]
-                record[m] = cluster_based_on_distance(
-                    J_valid, JOINT_CONFIG_RADS_DISTANCE_THRESHOLD
-                )
-            # print(f"l: {l}, r: {r}, m: {m}, record[m]: {record[m]}")
-            if record[m] < n_cluster:
-                l = m + 1
-            else:
-                r = m
-
-        # print(f"record: {record}")
-        if r == bound:
-            result_n_clusters[i] = np.nan
-        else:
-            result_n_clusters[i] = r
-    return result_n_clusters
-
-
-def n_cluster_analysis(J_hat_, l2_, ang_):
-    assert len(J_hat_) == len(l2_) == len(ang_) == NUM_POSES
-    return np.array(
-        [
-            n_solutions_to_reach_n_clusters(J_hat_[i], l2_[i], ang_[i])
-            for i in trange(NUM_POSES)
-        ]
-    )
-
-
-class Generate_Diverse_Postures_Info:
-    def __init__(
-        self,
-        name,
-        average_time_per_pose,
-        num_poses,
-        num_sols,
-        df,
-        success_rate_threshold,
-    ):
-        # check df counts at least .95 of num_sols
-        assert (
-            df.count().min() / num_poses > success_rate_threshold
-        ), f"df counts at least {success_rate_threshold} of num_sols, {df.count().values / num_poses}"
-        self.name = name
-        self.success_rate = df.count().values / num_poses
-        self.average_time_per_pose = average_time_per_pose
-        self.average_time = average_time_per_pose / num_sols
-        self.num_sols = num_sols
-        self.df = df
-
-        # def get_average_time_for_n_clusters(self):
-        mean_of_num_solutions_to_reach_n_clusters = self.df.mean().values
-        average_time_to_reach_n_clusters = (
-            mean_of_num_solutions_to_reach_n_clusters * self.average_time
-        )
-        # return average_time_to_reach_n_clusters
-        self.average_time_to_reach_n_clusters = average_time_to_reach_n_clusters
-
-    def __repr__(self):
-        return f"Average time per pose: {self.name}: {self.average_time:.6f} s ({self.average_time_per_pose:.2f} s / {self.num_sols} IK solutions)"
-
-    def get_list_of_name_and_average_time_to_reach_n_clusters(self):
-        return [self.name, *self.average_time_to_reach_n_clusters]
-
-    def get_list_of_name_num_sols_and_average_time_to_reach_n_clusters(self):
-        return [f"{self.name} ({self.num_sols})", *self.success_rate]
-
-
 def main():
     solver_param = DEFULT_SOLVER
     solver_param.workdir = WORKDIR
@@ -134,6 +34,10 @@ def main():
     n_neighbors = N_NEIGHBORS
     verbose = True
     batch_size = BATCH_SIZE
+    lambda_ = LAMBDA
+    std = STD
+    joint_config_rads_distance_threshold = JOINT_CONFIG_RADS_DISTANCE_THRESHOLD
+    n_clusters_threshold = N_CLUSTERS_THRESHOLD
     success_rate_thresold = SOLUTIONS_SUCCESS_RATE_THRESHOLD_FOR_CLUSTERING_IN_NUM_SOLS
 
     # PAFIK
@@ -152,17 +56,28 @@ def main():
     )
 
     begin_time = time.time()
-    solver.base_std = STD
+    solver.base_std = std
     J_hat = solver.solve_batch(
         P_expand_dim, F, 1, batch_size=batch_size, verbose=verbose
     )
     l2, ang = solver.evaluate_pose_error_J3d_P2d(J_hat, P_expand_dim, return_all=True)
     average_time = (time.time() - begin_time) / num_poses
-    J_hat = J_hat.reshape(NUM_POSES, N_NEIGHBORS, -1)
-    l2 = l2.reshape(NUM_POSES, N_NEIGHBORS)
-    ang = ang.reshape(NUM_POSES, N_NEIGHBORS)
+    J_hat = J_hat.reshape(num_poses, n_neighbors, -1)
+    l2 = l2.reshape(num_poses, n_neighbors)
+    ang = ang.reshape(num_poses, n_neighbors)
 
-    df = pd.DataFrame(n_cluster_analysis(J_hat, l2, ang), columns=N_CLUSTERS_THRESHOLD)
+    df = pd.DataFrame(
+        n_cluster_analysis(
+            J_hat,
+            l2,
+            ang,
+            num_poses,
+            n_clusters_threshold=n_clusters_threshold,
+            lambda_=lambda_,
+            joint_config_rads_distance_threshold=joint_config_rads_distance_threshold,
+        ),
+        columns=N_CLUSTERS_THRESHOLD,
+    )
     print(df.info())
     print(df.describe())
 
@@ -170,9 +85,9 @@ def main():
     set_seed()
     # Build IKFlowSolver and set weights
     ik_solver, _ = get_ik_solver("panda__full__lp191_5.25m")
-    l2_flow = np.zeros((NUM_SOLS, len(P)))
-    ang_flow = np.zeros((NUM_SOLS, len(P)))
-    J_flow = torch.empty((NUM_SOLS, len(P), 7), dtype=torch.float32, device="cpu")
+    l2_flow = np.zeros((num_sols, len(P)))
+    ang_flow = np.zeros((num_sols, len(P)))
+    J_flow = torch.empty((num_sols, len(P), 7), dtype=torch.float32, device="cpu")
 
     begin_time = time.time()
     if num_poses < num_sols:
@@ -180,7 +95,7 @@ def main():
             J_flow[:, i, :] = ik_solver.solve(
                 P[i],
                 n=num_sols,
-                latent_scale=STD,
+                latent_scale=std,
                 refine_solutions=False,
                 return_detailed=False,
             ).cpu()  # type: ignore
@@ -191,7 +106,7 @@ def main():
     else:
         for i in trange(num_sols):
             J_flow[i] = ik_solver.solve_n_poses(
-                P, latent_scale=STD, refine_solutions=False, return_detailed=False
+                P, latent_scale=std, refine_solutions=False, return_detailed=False
             ).cpu()
             l2_flow[i], ang_flow[i] = solution_pose_errors(
                 ik_solver.robot, J_flow[i], P
@@ -203,8 +118,12 @@ def main():
             J_flow.numpy().transpose((1, 0, 2)),
             l2_flow.transpose((1, 0)),
             ang_flow.transpose((1, 0)),
+            num_poses,
+            n_clusters_threshold=n_clusters_threshold,
+            lambda_=lambda_,
+            joint_config_rads_distance_threshold=joint_config_rads_distance_threshold,
         ),
-        columns=N_CLUSTERS_THRESHOLD,
+        columns=n_clusters_threshold,
     )
     print(df_flow.info())
     print(df_flow.describe())

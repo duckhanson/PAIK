@@ -12,7 +12,7 @@ import warp as wp
 from nodeik.robots.robot import Robot
 from nodeik.training import KinematicsDataset, Learner, ModelWrapper
 from pyquaternion import Quaternion
-from evaluation import n_cluster_analysis, Generate_Diverse_Postures_Info
+from analyze_posture import n_cluster_analysis, Generate_Diverse_Postures_Info
 
 WORK_DIR = "/home/luca/nodeik"
 ROBOT_PATH = WORK_DIR + "/examples/assets/robots/franka_panda/panda_arm.urdf"

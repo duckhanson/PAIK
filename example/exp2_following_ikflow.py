@@ -42,8 +42,7 @@ def path_following_multiple_trajectory():
 
     begin_time = time()
     J_hat = torch.empty(
-        (NUM_TRAJECTORIES, NUM_STEPS,
-         Jt.shape[-1]), dtype=torch.float32, device="cpu"
+        (NUM_TRAJECTORIES, NUM_STEPS, Jt.shape[-1]), dtype=torch.float32, device="cpu"
     )
     for i in trange(NUM_STEPS):
         J_hat[:, i, :] = ik_solver.solve_n_poses(
@@ -71,8 +70,7 @@ def path_following_multiple_trajectory():
     print(
         tabulate(
             [
-                (thres, df.query(f"ddjc < {thres}")
-                 ["ddjc"].count() / df.shape[0])
+                (thres, df.query(f"ddjc < {thres}")["ddjc"].count() / df.shape[0])
                 for thres in DDJC_THRES
             ],
             headers=["ddjc", "success rate"],

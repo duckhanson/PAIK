@@ -6,8 +6,8 @@ from pafik.settings import DEFULT_SOLVER
 from pafik.train import Trainer
 
 WORK_DIR = "/home/luca/pafik"
-WANDB_PROJECT_NAME = "msik_ikflow_nsf_norm" # please change to your own project name
-WANDB_ENTITY = "luca_nthu" # please change to your own entity name
+WANDB_PROJECT_NAME = "msik_ikflow_nsf_norm"  # please change to your own project name
+WANDB_ENTITY = "luca_nthu"  # please change to your own entity name
 PATIENCE = 7
 POSE_ERR_THRESH = 3.15e-3
 EXPERMENT_COUNT = 15
@@ -85,7 +85,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    sweep_id = wandb.sweep(sweep=sweep_config, project=WANDB_PROJECT_NAME, entity=WANDB_ENTITY)
+    sweep_id = wandb.sweep(
+        sweep=sweep_config, project=WANDB_PROJECT_NAME, entity=WANDB_ENTITY
+    )
     # Start sweep job.
     wandb.agent(sweep_id, function=main, count=EXPERMENT_COUNT)
     wandb.finish()

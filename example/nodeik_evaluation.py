@@ -12,11 +12,7 @@ import warp as wp
 from nodeik.robots.robot import Robot
 from nodeik.training import KinematicsDataset, Learner, ModelWrapper
 from pyquaternion import Quaternion
-from sklearn.cluster import AgglomerativeClustering
-
-def cluster_based_on_distance(a, dist_thresh=1):
-    kmeans= AgglomerativeClustering(n_clusters=None, distance_threshold=dist_thresh).fit(a)
-    return a[np.sort(np.unique(kmeans.labels_, return_index=True)[1])]
+from evaluation import n_cluster_analysis, Generate_Diverse_Postures_Info
 
 WORK_DIR = "/home/luca/nodeik"
 ROBOT_PATH = WORK_DIR + '/examples/assets/robots/franka_panda/panda_arm.urdf'
@@ -165,20 +161,17 @@ def run_path_following(load_time: str):
     print(f"avg_inference_time: {avg_runtime}")
     
 
-def evaluate_diversity():
-    NUM_POSES = 10_000
-    N_NEIGHBORS = 500
-    NUM_SOLS = N_NEIGHBORS
-    LAMBDA = (0.005, 0.05)
+def posture_diversity():
+    NUM_POSES = 5_000
+    NUM_SOLS = 15_000  # IKFlow, NODE IK
     STD = 0.25
-
+    SOLUTIONS_SUCCESS_RATE_THRESHOLD_FOR_CLUSTERING_IN_NUM_SOLS = 0.3 # 0.80
+    N_CLUSTERS_THRESHOLD = [10, 15, 20, 25, 30]
+    
     num_poses = NUM_POSES
     num_sols = NUM_SOLS
-    n_neighbors = N_NEIGHBORS
-    verbose = True
-    batch_size = 5000
-    lambda_ = LAMBDA
-    joint_cofig_distance_thres_rads = 2
+    n_clusters_threshold = N_CLUSTERS_THRESHOLD
+    success_rate_thresold = SOLUTIONS_SUCCESS_RATE_THRESHOLD_FOR_CLUSTERING_IN_NUM_SOLS
     
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -194,12 +187,11 @@ def evaluate_diversity():
         P[i] = r.get_pair()[r.active_joint_dim:]
     P = np.expand_dims(P, axis=1)
     P = np.repeat(P, num_sols, axis=1)
-    # P.shape = (num_poses, num_sols, len(x))
-    print('P:', P.shape)
     
     J_hat = np.empty((num_poses, num_sols, r.active_joint_dim))
     P_hat = np.empty((num_poses, num_sols, len(x)))
     
+    begin_time = time.time()
     if num_poses < num_sols:
         for i in trange(num_poses):
             J_hat[i], _ = nodeik.inverse_kinematics(P[i])
@@ -209,41 +201,29 @@ def evaluate_diversity():
             J_hat[:, i, :], _ = nodeik.inverse_kinematics(P[:, i, :])
             P_hat[:, i, :] = nodeik.forward_kinematics(J_hat[:, i, :])
     l2, ang = evalutate_pose_errors(J_hat.reshape(-1, r.active_joint_dim), P_hat.reshape(-1, len(x)), P.reshape(-1, len(x))) 
-    df = pd.DataFrame({
-        'l2': l2,
-        'ang (rad)': ang,
-        'ang (deg)': np.rad2deg(ang),
-    })
-    print(df.describe())
-    
+    average_time = (time.time() - begin_time) / num_poses
     
     J_hat = J_hat.reshape(num_poses, num_sols, -1)
     l2 = l2.reshape(num_poses, num_sols)
     ang = ang.reshape(num_poses, num_sols)
     
-    n_clusters = np.empty((num_poses))
-    for i in trange(num_poses):
-        # print("Filter by l2 and ang")
-        J_candidate = J_hat[i][(l2[i] < lambda_[0]) & (ang[i] < lambda_[1])]
-        # print(J_candidate.shape)
-        # print("J_candidate.shape", J_candidate.shape)
-        # print(f"Cluster by joint distance")
-        if J_candidate.shape[0] < 2:
-            n_clusters[i] = J_candidate.shape[0]    
-        else:
-            J_filtered = cluster_based_on_distance(J_candidate, dist_thresh=joint_cofig_distance_thres_rads)
-            # print("J_filtered.shape", J_filtered.shape)
-            n_clusters[i] = J_filtered.shape[0]
-        
-    df = pd.DataFrame({
-        'n_clusters': n_clusters
-    })
+    # ans = n_cluster_analysis(J_hat, l2, ang, num_poses)
+    # print(ans)
+    df = pd.DataFrame(n_cluster_analysis(J_hat, l2, ang, num_poses, n_clusters_threshold=n_clusters_threshold), columns=n_clusters_threshold)
+    print(df.info())
     print(df.describe())
+    
+    # print a tbulate of the average time to reach n clusters
+    N_posture_info = Generate_Diverse_Postures_Info(
+        "N", average_time, num_poses, num_sols, df, success_rate_thresold
+    )
+    
+    print(N_posture_info.get_list_of_name_and_average_time_to_reach_n_clusters())
     
     
 if __name__ == '__main__':
     # run_random(NUM_POSES, NUM_SOLS)
     # run_path_following(LOAD_TRAJ)
-    evaluate_diversity()    
+    posture_diversity()    
     
     

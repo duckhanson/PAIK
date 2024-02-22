@@ -14,14 +14,14 @@ from tabulate import tabulate
 from analyze_posture import n_cluster_analysis, Generate_Diverse_Postures_Info
 
 WORKDIR = "."
-NUM_POSES = 5_000
+NUM_POSES = 1_000 # 5_000
 N_NEIGHBORS = 5_000  # PAFIK
 NUM_SOLS = 15_000  # IKFlow
 BATCH_SIZE = 5_000
 LAMBDA = (0.005, 0.05)
 STD = 0.25
-JOINT_CONFIG_RADS_DISTANCE_THRESHOLD = 2
-N_CLUSTERS_THRESHOLD = [10, 15, 20, 25, 30]
+JOINT_CONFIG_RADS_DISTANCE_THRESHOLD = 1
+N_CLUSTERS_THRESHOLD = [10, 15, 20]
 SOLUTIONS_SUCCESS_RATE_THRESHOLD_FOR_CLUSTERING_IN_NUM_SOLS = 0.80
 
 
@@ -164,7 +164,6 @@ def main():
             headers="firstrow",
         )
     )
-
 
 if __name__ == "__main__":
     main()

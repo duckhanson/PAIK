@@ -186,14 +186,17 @@ def run_path_following(load_time: str):
 
 
 def posture_diversity():
-    NUM_POSES = 5_000
-    NUM_SOLS = 15_000  # IKFlow, NODE IK
+    NUM_POSES = 1_000
+    NUM_SOLS = 20_000  # IKFlow, NODE IK
+    NUM_BATCH_POSES = 100
     STD = 0.25
     SOLUTIONS_SUCCESS_RATE_THRESHOLD_FOR_CLUSTERING_IN_NUM_SOLS = 0.3  # 0.80
-    N_CLUSTERS_THRESHOLD = [10, 15, 20, 25, 30]
+    N_CLUSTERS_THRESHOLD = [10, 15, 20]
 
+    assert NUM_SOLS % NUM_BATCH_POSES == 0
     num_poses = NUM_POSES
     num_sols = NUM_SOLS
+    num_batch_poses = NUM_BATCH_POSES
     n_clusters_threshold = N_CLUSTERS_THRESHOLD
     success_rate_thresold = SOLUTIONS_SUCCESS_RATE_THRESHOLD_FOR_CLUSTERING_IN_NUM_SOLS
 
@@ -213,52 +216,65 @@ def posture_diversity():
     nodeik.eval()
 
     x = r.get_pair()[r.active_joint_dim :]
-    P = np.empty((num_poses, len(x)))
-    for i in range(num_poses):
-        P[i] = r.get_pair()[r.active_joint_dim :]
-    P = np.expand_dims(P, axis=1)
-    P = np.repeat(P, num_sols, axis=1)
 
-    J_hat = np.empty((num_poses, num_sols, r.active_joint_dim))
-    P_hat = np.empty((num_poses, num_sols, len(x)))
+    result_collection = np.empty((num_poses, len(n_clusters_threshold))).reshape(
+        -1, num_batch_poses, len(n_clusters_threshold)
+    )
+    for batch_i in trange(num_poses // num_batch_poses):
+        P = np.empty((num_batch_poses, len(x)))
+        for i in range(num_batch_poses):
+            P[i] = r.get_pair()[r.active_joint_dim :]
+        P = np.expand_dims(P, axis=1)
+        P = np.repeat(P, num_sols, axis=1)
 
-    begin_time = time.time()
-    if num_poses < num_sols:
-        for i in trange(num_poses):
+        J_hat = np.empty((num_batch_poses, num_sols, r.active_joint_dim))
+        P_hat = np.empty((num_batch_poses, num_sols, len(x)))
+
+        if batch_i == 0:
+            begin_time = time.time()
+
+        for i in range(num_batch_poses):
             J_hat[i], _ = nodeik.inverse_kinematics(P[i])
             P_hat[i] = nodeik.forward_kinematics(J_hat[i])
-    else:
-        for i in trange(num_sols):
-            J_hat[:, i, :], _ = nodeik.inverse_kinematics(P[:, i, :])
-            P_hat[:, i, :] = nodeik.forward_kinematics(J_hat[:, i, :])
-    l2, ang = evalutate_pose_errors(
-        J_hat.reshape(-1, r.active_joint_dim),
-        P_hat.reshape(-1, len(x)),
-        P.reshape(-1, len(x)),
-    )
-    average_time = (time.time() - begin_time) / num_poses
+        l2, ang = evalutate_pose_errors(
+            J_hat.reshape(-1, r.active_joint_dim),
+            P_hat.reshape(-1, len(x)),
+            P.reshape(-1, len(x)),
+        )
 
-    J_hat = J_hat.reshape(num_poses, num_sols, -1)
-    l2 = l2.reshape(num_poses, num_sols)
-    ang = ang.reshape(num_poses, num_sols)
+        if batch_i == 0:
+            average_time = (time.time() - begin_time) / num_batch_poses
 
-    # ans = n_cluster_analysis(J_hat, l2, ang, num_poses)
-    # print(ans)
+        J_hat = J_hat.reshape(num_batch_poses, num_sols, -1)
+        l2 = l2.reshape(num_batch_poses, num_sols)
+        ang = ang.reshape(num_batch_poses, num_sols)
+
+        result_collection[batch_i] = n_cluster_analysis(
+            J_hat, l2, ang, num_batch_poses, n_clusters_threshold=n_clusters_threshold
+        )
+
+        np.save("nodeik_result_collection.npy", result_collection[: batch_i + 1])
+
     df = pd.DataFrame(
-        n_cluster_analysis(
-            J_hat, l2, ang, num_poses, n_clusters_threshold=n_clusters_threshold
-        ),
+        result_collection.reshape(-1, len(n_clusters_threshold)),
         columns=n_clusters_threshold,
     )
     print(df.info())
     print(df.describe())
-
     # print a tbulate of the average time to reach n clusters
     N_posture_info = Generate_Diverse_Postures_Info(
         "N", average_time, num_poses, num_sols, df, success_rate_thresold
     )
 
-    print(N_posture_info.get_list_of_name_and_average_time_to_reach_n_clusters())
+    print(
+        tabulate(
+            [
+                N_CLUSTERS_THRESHOLD,
+                N_posture_info.get_list_of_name_and_average_time_to_reach_n_clusters(),
+            ],
+            headers="firstrow",
+        )
+    )
 
 
 if __name__ == "__main__":

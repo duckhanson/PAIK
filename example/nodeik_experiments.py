@@ -70,7 +70,7 @@ def evalutate_pose_errors(qs, generated_poses, given_poses, given_qs=None):
     return l2, ang
 
 
-def run_random(num_poses, num_sols):
+def ikp(num_poses, num_sols):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     r = Robot(robot_path=ROBOT_PATH, ee_link_name="panda_hand")
@@ -208,6 +208,5 @@ def posture_diversity():
 
 
 if __name__ == "__main__":
-    # run_random(NUM_POSES, NUM_SOLS)
-    # run_path_following(LOAD_TRAJ)
+    # ikp(NUM_POSES, NUM_SOLS)
     posture_diversity()

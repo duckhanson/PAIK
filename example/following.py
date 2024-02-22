@@ -72,7 +72,7 @@ def pafik():
     print(df.describe())
     print(f"avg_inference_time: {avg_inference_time}")
 
-    
+
 def ikflow():
     solver_param = DEFULT_SOLVER
     solver_param.workdir = WORKDIR

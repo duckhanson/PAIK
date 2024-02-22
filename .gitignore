@@ -16,3 +16,5 @@ build/
 dist/
 *.txt
 *.egg*
+image/
+record/

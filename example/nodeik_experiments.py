@@ -12,22 +12,15 @@ import warp as wp
 from nodeik.robots.robot import Robot
 from nodeik.training import KinematicsDataset, Learner, ModelWrapper
 from pyquaternion import Quaternion
-from analyze_posture import n_cluster_analysis, Generate_Diverse_Postures_Info
+from mmd_helper import mmd_evaluate_multiple_poses
 
+PAFIK_WORKDIR = "/home/luca/pafik"
 WORK_DIR = "/home/luca/nodeik"
-ROBOT_PATH = WORK_DIR + "/examples/assets/robots/franka_panda/panda_arm.urdf"
-MODEL_PATH = WORK_DIR + "/model/panda_loss-20.ckpt"
-NUM_POSES = 100
-NUM_SOLS = 1000
-NUM_STEPS = 20
-NUM_TRAJECTORIES = 10000
-DDJC_THRES = (40, 80, 120)
+NUM_POSES = 30
+NUM_SOLS = 2000
+BATCH_SIZE = 5000
+BASE_STDS = np.arange(0.1, 1.5, 0.1)  # start, stop, step
 STD = 0.01
-LOAD_TRAJ = "0201005723"
-
-
-def max_joint_angle_change(qs: np.ndarray):
-    return np.max(np.abs(np.diff(qs, axis=0)))
 
 
 @dataclass
@@ -47,63 +40,71 @@ class args:
     num_samples = 4
     num_references = 256
     seed = 1
-    model_checkpoint = MODEL_PATH
+    model_checkpoint = WORK_DIR + "/model/panda_loss-20.ckpt"
 
 
-np.random.seed(args.seed)
-device = torch.device("cuda:" + str(args.gpu) if torch.cuda.is_available() else "cpu")
-
-wp.init()
-
-
-def evalutate_pose_errors(qs, generated_poses, given_poses, given_qs=None):
-    assert qs.shape[0] == given_poses.shape[0] == generated_poses.shape[0]
-    assert len(qs.shape) == 2
-    l2 = np.linalg.norm(given_poses[:, :3] - generated_poses[:, :3], axis=1)
-    a_quats = np.array([Quaternion(array=a[3:]) for a in given_poses])
-    b_quats = np.array([Quaternion(array=b[3:]) for b in generated_poses])
-    ang = np.array([Quaternion.distance(a, b) for a, b in zip(a_quats, b_quats)])
-    if given_qs is not None:
-        mjac = max_joint_angle_change(qs)
-        ddjc = np.linalg.norm(qs - given_qs, axis=-1)
-        return l2, ang, mjac, ddjc
+def evalutate_pose_errors_Phat2d_P2d(P_hat, P):
+    assert P.shape == P_hat.shape
+    l2 = np.linalg.norm(P[:, :3] - P_hat[:, :3], axis=1)
+    a_quats = np.array([Quaternion(array=a[3:]) for a in P])
+    b_quats = np.array([Quaternion(array=b[3:]) for b in P_hat])
+    ang = np.array([Quaternion.distance(a, b)
+                   for a, b in zip(a_quats, b_quats)])
     return l2, ang
 
 
-def ikp(num_poses, num_sols):
+def init_nodeik(args, std, robot=None):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    r = Robot(robot_path=ROBOT_PATH, ee_link_name="panda_hand")
+    device = torch.device("cuda:" + str(args.gpu)
+                          if torch.cuda.is_available() else "cpu")
+
+    wp.init()
+    if robot is None:
+        robot_urdf_path = WORK_DIR + "/examples/assets/robots/franka_panda/panda_arm.urdf"
+        robot = Robot(robot_path=robot_urdf_path, ee_link_name="panda_hand")
     learn = Learner.load_from_checkpoint(
         args.model_checkpoint,
-        model=build_model(args, r.active_joint_dim, condition_dims=7).to(device),
-        robot=r,
-        std=STD,
-        state_dim=r.active_joint_dim,
+        model=build_model(args, robot.active_joint_dim,
+                          condition_dims=7).to(device),
+        robot=robot,
+        std=std,
+        state_dim=robot.active_joint_dim,
         condition_dim=7,
     )
     learn.model_wrapper.device = device
     nodeik = learn.model_wrapper
     nodeik.eval()
+    return robot, nodeik
 
-    x = r.get_pair()[r.active_joint_dim :]
+
+def get_pair_from_robot(robot, num_poses):
+    x = robot.get_pair()[robot.active_joint_dim:]
+    J = np.empty((num_poses, robot.active_joint_dim))
     P = np.empty((num_poses, len(x)))
     for i in range(num_poses):
-        P[i] = r.get_pair()[r.active_joint_dim :]
-    P = np.tile(P, (num_sols, 1))
-    P = P.reshape(num_poses, num_sols, len(x))
+        J[i] = robot.get_pair()[: robot.active_joint_dim]
+        P[i] = robot.get_pair()[robot.active_joint_dim:]
+    return J, P
+
+
+def ikp(num_poses, num_sols):
+    robot, nodeik = init_nodeik(args, STD)
+
+    _, P = get_pair_from_robot(robot, num_poses)
+    P = np.repeat(np.expand_dims(P, axis=1), num_sols,
+                  axis=1)  # (num_poses, num_sols, len(x))
 
     begin = time.time()
-    J_hat = np.empty((num_poses, num_sols, r.active_joint_dim))
-    P_hat = np.empty((num_poses, num_sols, len(x)))
+    J_hat = np.empty((num_poses, num_sols, robot.active_joint_dim))
+    P_hat = np.empty_like(P)
     for i in trange(num_poses):
         J_hat[i], _ = nodeik.inverse_kinematics(P[i])
         P_hat[i] = nodeik.forward_kinematics(J_hat[i])
     avg_inference_time = round((time.time() - begin) / num_poses, 3)
-    l2, ang = evalutate_pose_errors(
-        J_hat.reshape(-1, r.active_joint_dim),
-        P_hat.reshape(-1, len(x)),
-        P.reshape(-1, len(x)),
+    l2, ang = evalutate_pose_errors_Phat2d_P2d(
+        P_hat.reshape(-1, P.shape[-1]),
+        P.reshape(-1, P.shape[-1]),
     )
     df = pd.DataFrame(
         {
@@ -115,98 +116,69 @@ def ikp(num_poses, num_sols):
     print(f"avg_inference_time: {avg_inference_time}")
 
 
-def posture_diversity():
-    NUM_POSES = 1_000
-    NUM_SOLS = 20_000  # IKFlow, NODE IK
-    NUM_BATCH_POSES = 100
-    STD = 0.25
-    SOLUTIONS_SUCCESS_RATE_THRESHOLD_FOR_CLUSTERING_IN_NUM_SOLS = 0.3  # 0.80
-    N_CLUSTERS_THRESHOLD = [10, 15, 20]
+def load_poses_and_numerical_ik_sols(date: str, nodeik: ModelWrapper):
+    P = np.load(f"{PAFIK_WORKDIR}/record/{date}/poses.npy")
+    J = np.load(f"{PAFIK_WORKDIR}/record/{date}/numerical_ik_sols.npy")
+    P_hat = np.empty_like(P)
+    for i in trange(len(P)):
+        P_hat[i] = nodeik.forward_kinematics(J[i, np.random.randint(0, J.shape[1])])
+    l2, ang = evalutate_pose_errors_Phat2d_P2d(P_hat, P)
+    assert l2.mean() < 1e-3  # check if the numerical ik solutions are correct
+    return P, J
 
-    assert NUM_SOLS % NUM_BATCH_POSES == 0
-    num_poses = NUM_POSES
-    num_sols = NUM_SOLS
-    num_batch_poses = NUM_BATCH_POSES
-    n_clusters_threshold = N_CLUSTERS_THRESHOLD
-    success_rate_thresold = SOLUTIONS_SUCCESS_RATE_THRESHOLD_FOR_CLUSTERING_IN_NUM_SOLS
 
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    r = Robot(robot_path=ROBOT_PATH, ee_link_name="panda_hand")
-    learn = Learner.load_from_checkpoint(
-        args.model_checkpoint,
-        model=build_model(args, r.active_joint_dim, condition_dims=7).to(device),
-        robot=r,
-        std=STD,
-        state_dim=r.active_joint_dim,
-        condition_dim=7,
-    )
-    learn.model_wrapper.device = device
-    nodeik = learn.model_wrapper
-    nodeik.eval()
+def mmd_posture_diversity():
+    robot, nodeik = init_nodeik(args, STD)
+    P, J = load_poses_and_numerical_ik_sols("2024_02_22", nodeik)
 
-    x = r.get_pair()[r.active_joint_dim :]
+    num_poses, num_sols = J.shape[0: 2]
+    base_stds = BASE_STDS
 
-    result_collection = np.empty((num_poses, len(n_clusters_threshold))).reshape(
-        -1, num_batch_poses, len(n_clusters_threshold)
-    )
-    for batch_i in trange(num_poses // num_batch_poses):
-        P = np.empty((num_batch_poses, len(x)))
-        for i in range(num_batch_poses):
-            P[i] = r.get_pair()[r.active_joint_dim :]
-        P = np.expand_dims(P, axis=1)
-        P = np.repeat(P, num_sols, axis=1)
+    print(f"num_poses: {num_poses}, num_sols: {num_sols}")
+    
+    l2_nodeik = np.empty((len(base_stds)))
+    ang_nodeik = np.empty((len(base_stds)))
+    mmd_nodeik = np.empty((len(base_stds)))
 
-        J_hat = np.empty((num_batch_poses, num_sols, r.active_joint_dim))
-        P_hat = np.empty((num_batch_poses, num_sols, len(x)))
+    P_repeat = np.repeat(np.expand_dims(P, axis=1), num_sols, axis=1) # (num_poses, num_sols, len(x))
+    assert P_repeat.shape == (num_poses, num_sols, P.shape[-1])
+    
+    for i, base_std in enumerate(base_stds):
+        _, nodeik = init_nodeik(args, base_std, robot)
+        
+        J_hat = np.empty_like(J)
+        P_hat = np.empty_like(P_repeat)
+        for ip in trange(num_poses):
+            J_hat[ip], _ = nodeik.inverse_kinematics(P_repeat[ip])
+            for isols in range(num_sols):
+                P_hat[ip, isols] = nodeik.forward_kinematics(J_hat[ip, isols])
+        l2, ang = evalutate_pose_errors_Phat2d_P2d(P_hat.reshape(-1, P_hat.shape[-1]), P_repeat.reshape(-1, P_repeat.shape[-1]))
+        print(f"base_std: {base_std}, l2: {l2.mean()}, ang: {np.rad2deg(ang.mean())}")
+        break
+        
+            
 
-        if batch_i == 0:
-            begin_time = time.time()
+    
+    # for _ in trange(num_poses // batch_size):
 
-        for i in range(num_batch_poses):
-            J_hat[i], _ = nodeik.inverse_kinematics(P[i])
-            P_hat[i] = nodeik.forward_kinematics(J_hat[i])
-        l2, ang = evalutate_pose_errors(
-            J_hat.reshape(-1, r.active_joint_dim),
-            P_hat.reshape(-1, len(x)),
-            P.reshape(-1, len(x)),
-        )
+        # J_hat = np.empty((batch_size, num_sols, robot.active_joint_dim))
+        # P_hat = np.empty((batch_size, num_sols, len(x)))
 
-        if batch_i == 0:
-            average_time = (time.time() - begin_time) / num_batch_poses
+        # for i in range(batch_size):
+        #     J_hat[i], _ = nodeik.inverse_kinematics(P[i])
+        #     P_hat[i] = nodeik.forward_kinematics(J_hat[i])
+        # l2, ang = evalutate_pose_errors(
+        #     J_hat.reshape(-1, robot.active_joint_dim),
+        #     P_hat.reshape(-1, len(x)),
+        #     P.reshape(-1, len(x)),
+        # )
 
-        J_hat = J_hat.reshape(num_batch_poses, num_sols, -1)
-        l2 = l2.reshape(num_batch_poses, num_sols)
-        ang = ang.reshape(num_batch_poses, num_sols)
-
-        result_collection[batch_i] = n_cluster_analysis(
-            J_hat, l2, ang, num_batch_poses, n_clusters_threshold=n_clusters_threshold
-        )
-
-        np.save("nodeik_result_collection.npy", result_collection[: batch_i + 1])
-
-    df = pd.DataFrame(
-        result_collection.reshape(-1, len(n_clusters_threshold)),
-        columns=n_clusters_threshold,
-    )
-    print(df.info())
-    print(df.describe())
-    # print a tbulate of the average time to reach n clusters
-    N_posture_info = Generate_Diverse_Postures_Info(
-        "N", average_time, num_poses, num_sols, df, success_rate_thresold
-    )
-
-    print(
-        tabulate(
-            [
-                N_CLUSTERS_THRESHOLD,
-                N_posture_info.get_list_of_name_and_average_time_to_reach_n_clusters(),
-            ],
-            headers="firstrow",
-        )
-    )
+        # J_hat = J_hat.reshape(batch_size, num_sols, -1)
+        # l2 = l2.reshape(batch_size, num_sols)
+        # ang = ang.reshape(batch_size, num_sols)
 
 
 if __name__ == "__main__":
+    
     # ikp(NUM_POSES, NUM_SOLS)
-    posture_diversity()
+    mmd_posture_diversity()

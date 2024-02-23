@@ -36,7 +36,7 @@ class MMDLoss(nn.Module):
     def forward(self, X, Y):
         X_filtered = X[~torch.any(X.isnan(), dim=1)]
         Y_filtered = Y[~torch.any(Y.isnan(), dim=1)]
-        
+
         if X_filtered.shape[0] == 0 or Y_filtered.shape[0] == 0:
             return torch.nan
         # print(f"X_filtered: {X_filtered.shape}, Y_filtered: {Y_filtered.shape}")

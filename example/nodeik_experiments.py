@@ -140,34 +140,41 @@ def mmd_posture_diversity(pose_error_threshold=(0.03, 10)):
     P_repeat = np.repeat(np.expand_dims(P, axis=1), num_sols, axis=1)
     assert P_repeat.shape == (num_poses, num_sols, P.shape[-1])
 
-    J_hat_nodeik = np.empty((len(base_stds), num_poses, num_sols, robot.active_joint_dim))
+    J_hat_nodeik = np.empty(
+        (len(base_stds), num_poses, num_sols, robot.active_joint_dim)
+    )
     for i, std in enumerate(base_stds):
         _, nodeik = init_nodeik(args, std, robot)
 
         J_hat = np.empty_like(J)
         P_hat = np.empty_like(P_repeat)
-        for ip in trange(num_poses):
+        for ip in (pbar := trange(num_poses)):
+            pbar.set_description(f"i: {i}, std: {std}")
             J_hat[ip], _ = nodeik.inverse_kinematics(P_repeat[ip])
             for isols in range(num_sols):
                 P_hat[ip, isols] = nodeik.forward_kinematics(J_hat[ip, isols])
         J_hat = J_hat.reshape(-1, J_hat.shape[-1])
         P_hat = P_hat.reshape(-1, P_hat.shape[-1])
-        l2, ang = evalutate_pose_errors_Phat2d_P2d(P_hat, P_repeat.reshape(-1, P_repeat.shape[-1]))
-        
+        l2, ang = evalutate_pose_errors_Phat2d_P2d(
+            P_hat, P_repeat.reshape(-1, P_repeat.shape[-1])
+        )
+
         # filter out the outliers
-        condition = (l2 < pose_error_threshold[0]) & (np.rad2deg(ang) < pose_error_threshold[1])
+        condition = (l2 < pose_error_threshold[0]) & (
+            np.rad2deg(ang) < pose_error_threshold[1]
+        )
         l2_nodeik[i] = l2[condition].mean()
         ang_nodeik[i] = ang[condition].mean()
         # print(f"nan condition sum: {condition.sum()}, remaining: {len(condition) - condition.sum()}")
         J_hat[~condition] = np.nan
         P_hat[~condition] = np.nan
-        
+
         J_hat = J_hat.reshape(num_poses, num_sols, J_hat.shape[-1])
         P_hat = P_hat.reshape(num_poses, num_sols, P_hat.shape[-1])
-        
+
         J_hat_nodeik[i] = J_hat
         mmd_nodeik[i] = mmd_evaluate_multiple_poses(J_hat, J, num_poses)
-    
+
     df = pd.DataFrame(
         {
             "l2": l2_nodeik,
@@ -176,7 +183,7 @@ def mmd_posture_diversity(pose_error_threshold=(0.03, 10)):
             "std": base_stds,
         }
     )
-    
+
     print(df.describe())
 
     record_dir = f"{PAFIK_WORKDIR}/record/{datetime.today().strftime('%Y_%m_%d')}"
@@ -187,6 +194,5 @@ def mmd_posture_diversity(pose_error_threshold=(0.03, 10)):
 
 
 if __name__ == "__main__":
-
     # ikp(NUM_POSES, NUM_SOLS)
     mmd_posture_diversity()

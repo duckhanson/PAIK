@@ -6,7 +6,7 @@ class RBF(nn.Module):
     def __init__(self, n_kernels=5, mul_factor=2.0, bandwidth=None):
         super().__init__()
         self.bandwidth_multipliers = mul_factor ** (
-            torch.arange(n_kernels) - n_kernels // 2
+            torch.arange(n_kernels, device="cuda") - n_kernels // 2
         )
         self.bandwidth = bandwidth
 
@@ -19,6 +19,7 @@ class RBF(nn.Module):
 
     def forward(self, X):
         L2_distances = torch.cdist(X, X) ** 2
+        # assert L2_distances.device == "cuda" and self.bandwidth_multipliers.device == "cuda" and self.get_bandwidth(L2_distances).device == "cuda", f"L2_dis: {L2_distances.device}, bandmult: {self.bandwidth_multipliers.device}, band: {self.get_bandwidth(L2_distances).device}"
         return torch.exp(
             -L2_distances[None, ...]
             / (self.get_bandwidth(L2_distances) * self.bandwidth_multipliers)[
@@ -35,9 +36,13 @@ class MMDLoss(nn.Module):
     def forward(self, X, Y):
         X_filtered = X[~torch.any(X.isnan(), dim=1)]
         Y_filtered = Y[~torch.any(Y.isnan(), dim=1)]
+        
+        if X_filtered.shape[0] == 0 or Y_filtered.shape[0] == 0:
+            return torch.nan
+        # print(f"X_filtered: {X_filtered.shape}, Y_filtered: {Y_filtered.shape}")
         K = self.kernel(torch.vstack([X_filtered, Y_filtered]))
 
-        X_size = X.shape[0]
+        X_size = X_filtered.shape[0]
         XX = K[:X_size, :X_size].mean()
         XY = K[:X_size, X_size:].mean()
         YY = K[X_size:, X_size:].mean()
@@ -48,7 +53,6 @@ def mmd_evaluate_multiple_poses(
     J_hat_,
     J_ground_truth_,
     num_poses,
-    return_all=False,
 ):
     assert (
         len(J_hat_) == num_poses and len(J_ground_truth_) == num_poses
@@ -59,8 +63,6 @@ def mmd_evaluate_multiple_poses(
     mmd_all_poses = torch.empty(num_poses, device="cuda")
     for i in range(num_poses):
         mmd_all_poses[i] = mmd_score(J_hat_[i], J_ground_truth_[i])
+    mmd_all_poses = mmd_all_poses[~torch.isnan(mmd_all_poses)]
     mmd_all_poses = mmd_all_poses.cpu().numpy()
-
-    if return_all:
-        return mmd_all_poses
     return mmd_all_poses.mean()

@@ -123,7 +123,7 @@ def load_poses_and_numerical_ik_sols(date: str, nodeik: ModelWrapper):
     return P, J
 
 
-def mmd_posture_diversity(pose_error_threshold=(0.03, 10)):
+def mmd_posture_diversity(pose_error_threshold=(0.03, 30)):
     robot, nodeik = init_nodeik(args, STD)
     P, J = load_poses_and_numerical_ik_sols("2024_02_22", nodeik)
 
@@ -149,7 +149,7 @@ def mmd_posture_diversity(pose_error_threshold=(0.03, 10)):
         J_hat = np.empty_like(J)
         P_hat = np.empty_like(P_repeat)
         for ip in (pbar := trange(num_poses)):
-            pbar.set_description(f"i: {i}, std: {std}")
+            pbar.set_description(f"i: {i}, std: {round(std, 1)}")
             J_hat[ip], _ = nodeik.inverse_kinematics(P_repeat[ip])
             for isols in range(num_sols):
                 P_hat[ip, isols] = nodeik.forward_kinematics(J_hat[ip, isols])

@@ -125,7 +125,7 @@ def load_poses_and_numerical_ik_sols(date: str, nodeik: ModelWrapper):
 
 def mmd_posture_diversity(pose_error_threshold=(0.03, 30)):
     robot, nodeik = init_nodeik(args, STD)
-    P, J = load_poses_and_numerical_ik_sols("2024_02_22", nodeik)
+    P, J = load_poses_and_numerical_ik_sols(datetime.today().strftime('%Y_%m_%d'), nodeik)
 
     num_poses, num_sols = J.shape[0:2]
     base_stds = BASE_STDS
@@ -180,7 +180,7 @@ def mmd_posture_diversity(pose_error_threshold=(0.03, 30)):
             "l2": l2_nodeik,
             "ang": ang_nodeik,
             "mmd": mmd_nodeik,
-            "std": base_stds,
+            "base_std": base_stds,
         }
     )
 

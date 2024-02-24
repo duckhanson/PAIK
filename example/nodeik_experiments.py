@@ -113,10 +113,12 @@ def ikp(num_poses, num_sols):
 
 
 def load_poses_and_numerical_ik_sols(date: str, nodeik: ModelWrapper):
-    P = np.load(f"{PAFIK_WORKDIR}/record/{date}/poses.npy")
-    J = np.load(f"{PAFIK_WORKDIR}/record/{date}/numerical_ik_sols.npy")
+    record_dir = f"{PAFIK_WORKDIR}/record/{date}"
+    P = np.load(f"{record_dir}/poses.npy")
+    J = np.load(f"{record_dir}/numerical_ik_sols.npy")
+    print(f"loaded from {record_dir}")
     P_hat = np.empty_like(P)
-    for i in trange(len(P)):
+    for i in range(len(P)):
         P_hat[i] = nodeik.forward_kinematics(J[i, np.random.randint(0, J.shape[1])])
     l2, ang = evalutate_pose_errors_Phat2d_P2d(P_hat, P)
     assert l2.mean() < 1e-3  # check if the numerical ik solutions are correct

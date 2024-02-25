@@ -97,13 +97,13 @@ def mmd_evaluate_multiple_poses(
     _summary_
 
     Args:
-        J_hat_ (npt.NDArray): _description_
-        J_ground_truth_ (npt.NDArray): _description_
-        num_poses (int): _description_
-        use_inverse_multi_quadric (bool, optional): _description_. Defaults to True.
+        J_hat_ (npt.NDArray): generated IK solutions with shape (num_poses, num_sols, num_dofs or n)
+        J_ground_truth_ (npt.NDArray): numerical IK solutions with shape (num_poses, num_sols, num_dofs or n)
+        num_poses (int): the number of poses, which is the first dimension of J_hat_ and J_ground_truth_
+        use_inverse_multi_quadric (bool, optional): if True, use inverse multiquadric kernel, else use gaussian kerenl. Defaults to True.
 
     Returns:
-        float: _description_
+        float: a scalar of mmd score between the J_hat_ and J_ground_truth_ average over all poses
     """
     
     assert (

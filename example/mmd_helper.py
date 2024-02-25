@@ -1,9 +1,11 @@
-from typing import List, Tuple
 import numpy as np
 import numpy.typing as npt
 import torch
 
-def guassian_kernel(L2_distances_square: torch.Tensor, n_kernels:float=5, mul_factor: float=2.0) -> torch.Tensor:
+
+def guassian_kernel(
+    L2_distances_square: torch.Tensor, n_kernels: float = 5, mul_factor: float = 2.0
+) -> torch.Tensor:
     """
     Apply the gaussian kernel to the L2 distances of two distributions. Multiple kernels are used to capture different scales of the data.
 
@@ -22,9 +24,10 @@ def guassian_kernel(L2_distances_square: torch.Tensor, n_kernels:float=5, mul_fa
     )
 
     kernels = torch.exp(
-        -L2_distances_square[None, ...] / (bandwith * bandwidth_multipliers)[:, None, None]
+        -L2_distances_square[None, ...]
+        / (bandwith * bandwidth_multipliers)[:, None, None]
     ).sum(dim=0)
-    
+
     return kernels
 
 
@@ -45,13 +48,19 @@ def inverse_multiquadric_kernel(
     widths, exponents = torch.unbind(widths_exponents, dim=1)
     widths = widths[:, None, None]
     exponents = exponents[:, None, None]
-    
-    kernels = (widths ** exponents * ((widths + L2_distances_square[None, ...]) / exponents) ** -exponents).sum(dim=0)
+
+    kernels = (
+        widths ** exponents
+        * ((widths + L2_distances_square[None, ...]) / exponents) ** -exponents
+    ).sum(dim=0)
     return kernels
 
 
 def mmd_score(
-    X: torch.Tensor, Y: torch.Tensor, use_inverse_multi_quadric: bool, mmd_kernels: torch.Tensor=torch.tensor([(0.2, 0.1), (0.2, 0.5), (0.2, 2)])
+    X: torch.Tensor,
+    Y: torch.Tensor,
+    use_inverse_multi_quadric: bool,
+    mmd_kernels: torch.Tensor = torch.tensor([(0.2, 0.1), (0.2, 0.5), (0.2, 2)]),
 ) -> torch.Tensor:
     """
     compute the maximum mean discrepancy (MMD) between two distributions X and Y. Two types of kernels are used: gaussian and inverse multiquadric and only the latter will use mmd_kernels.
@@ -73,7 +82,7 @@ def mmd_score(
 
     if min_len == 0:
         return torch.tensor(float("nan"), device=X.device)
-    
+
     X, Y = X[:min_len], Y[:min_len]
 
     total = torch.vstack([X, Y])
@@ -91,7 +100,10 @@ def mmd_score(
 
 
 def mmd_evaluate_multiple_poses(
-    J_hat_: npt.NDArray[np.float32], J_ground_truth_: npt.NDArray[np.float32], num_poses: int, use_inverse_multi_quadric: bool=True
+    J_hat_: npt.NDArray[np.float32],
+    J_ground_truth_: npt.NDArray[np.float32],
+    num_poses: int,
+    use_inverse_multi_quadric: bool = True,
 ) -> float:
     """
     _summary_
@@ -105,14 +117,16 @@ def mmd_evaluate_multiple_poses(
     Returns:
         float: a scalar of mmd score between the J_hat_ and J_ground_truth_ average over all poses
     """
-    
+
     assert (
         len(J_hat_) == num_poses and J_hat_.shape == J_ground_truth_.shape
     ), f"J_hat_.shape: {J_hat_.shape}, J_ground_truth_.shape: {J_ground_truth_.shape}, num_poses: {num_poses}"
-    
+
     device = "cuda"
-    J_hat_ = torch.from_numpy(J_hat_).float().to(device) # type: ignore
-    J_ground_truth_ = torch.from_numpy(J_ground_truth_).float().to(device) # type: ignore
+    J_hat_ = torch.from_numpy(J_hat_).float().to(device)  # type: ignore
+    J_ground_truth_ = (
+        torch.from_numpy(J_ground_truth_).float().to(device)
+    )  # type: ignore
     mmd_all_poses = torch.stack(
         [
             mmd_score(J_hat_[i], J_ground_truth_[i], use_inverse_multi_quadric)
@@ -120,5 +134,7 @@ def mmd_evaluate_multiple_poses(
         ],
         dim=0,
     )
-    mmd_mean = torch.mean(mmd_all_poses[~torch.isnan(mmd_all_poses)], dim=0, keepdim=True)
+    mmd_mean = torch.mean(
+        mmd_all_poses[~torch.isnan(mmd_all_poses)], dim=0, keepdim=True
+    )
     return mmd_mean.item()

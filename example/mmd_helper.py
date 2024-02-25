@@ -107,8 +107,8 @@ def mmd_evaluate_multiple_poses(
     """
     
     assert (
-        len(J_hat_) == num_poses and len(J_ground_truth_) == num_poses
-    ), f"J_hat_.shape: {J_hat_.shape}, num_poses: {num_poses}"
+        len(J_hat_) == num_poses and J_hat_.shape == J_ground_truth_.shape
+    ), f"J_hat_.shape: {J_hat_.shape}, J_ground_truth_.shape: {J_ground_truth_.shape}, num_poses: {num_poses}"
     
     device = "cuda"
     J_hat_ = torch.from_numpy(J_hat_).float().to(device) # type: ignore

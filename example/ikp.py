@@ -12,10 +12,10 @@ from ikflow.model_loading import get_ik_solver
 from jkinpylib.evaluation import solution_pose_errors
 
 NUM_POSES = 3000  # 100
-NUM_SOLS = 400  # 1000
+NUM_SOLS = 1000  # 1000
 BATCH_SIZE = 5000
 SUCCESS_THRESHOLD = (5e-3, 2)
-STD = 0.1
+STD = 0.25
 WORKDIR = "/home/luca/pafik"
 USE_NSF_ONLY = False
 METHOD_OF_SELECT_REFERENCE_POSTURE = "knn"
@@ -23,7 +23,7 @@ METHOD_OF_SELECT_REFERENCE_POSTURE = "knn"
 
 def pafik():
     solver_param = DEFAULT_NSF if USE_NSF_ONLY else DEFULT_SOLVER
-    solver_param.workdir = WORKDIR
+    solver_param.workdir = WORKDIR 
     solver_param.select_reference_posture_method = METHOD_OF_SELECT_REFERENCE_POSTURE
     solver = Solver(solver_param=solver_param)
 

@@ -19,11 +19,11 @@ from mmd_helper import mmd_evaluate_multiple_poses
 PAFIK_WORKDIR = "/home/luca/pafik"
 WORK_DIR = "/home/luca/nodeik"
 URDF_PATH = WORK_DIR + "/examples/assets/robots/franka_panda/panda_arm.urdf"
-NUM_POSES = 30
-NUM_SOLS = 2000
+NUM_POSES = 100
+NUM_SOLS = 1000
 BATCH_SIZE = 5000
 BASE_STDS = np.arange(0.1, 1.5, 0.1)  # start, stop, step
-STD = 0.01
+STD = 0.25
 
 
 @dataclass
@@ -196,5 +196,5 @@ def mmd_posture_diversity(pose_error_threshold=(0.03, 30)):
 
 
 if __name__ == "__main__":
-    # ikp(NUM_POSES, NUM_SOLS)
-    mmd_posture_diversity()
+    ikp(NUM_POSES, NUM_SOLS)
+    # mmd_posture_diversity()

@@ -15,6 +15,7 @@ from tqdm import trange
 from .settings import SolverConfig, DEFULT_SOLVER
 from .model import get_flow_model, get_robot
 from .file import load_numpy, save_numpy, save_pickle, load_pickle
+from .evaluate import evaluate_pose_error_P2d_P2d
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 
@@ -85,6 +86,12 @@ class Solver:
 
     # private methods
     def __load_training_data(self):
+        """
+        Load training data from the given path, if not found, generate and save it.
+
+        Returns:
+            Tuple: J, P, F
+        """
         assert isdir(
             self.param.train_dir
         ), f"{self.param.train_dir} not found, please change workdir to the project root!"
@@ -145,6 +152,9 @@ class Solver:
         return J, P, F
 
     def __change_solver_base(self):
+        """
+        Change the base distribution of the solver to the new base distribution.
+        """
         self._solver = Flow(
             transforms=self._solver.transforms,  # type: ignore
             base=Unconditional(
@@ -158,13 +168,33 @@ class Solver:
         )
 
     # public methods
-    def normalize_input_data(self, data: np.ndarray, name: str):
+    def normalize_input_data(self, data: np.ndarray, name: str) -> np.ndarray:
+        """
+        Normalize input data. J_norm = (J - J_mean) / J_std, C_norm = (C - C_mean) / C_std
+
+        Args:
+            data (np.ndarray): input only support J and C
+            name (str): name of the input data, only support "J" and "C"
+
+        Returns:
+            np.ndarray: normalized data
+        """
         assert name in ["J", "C"] and isinstance(data, np.ndarray)
         return (
             data - self.__normalization_elements[name]["mean"]
         ) / self.__normalization_elements[name]["std"]
 
-    def denormalize_output_data(self, data: np.ndarray, name: str):
+    def denormalize_output_data(self, data: np.ndarray, name: str) -> np.ndarray:
+        """
+        Denormalize output data. J = J_norm * J_std + J_mean, C = C_norm * C_std + C_mean
+
+        Args:
+            data (np.ndarray): input only support J_norm and C_norm
+            name (str): name of the input data, only support "J" and "C"
+
+        Returns:
+            np.ndarray: denormalized data
+        """
         assert name in ["J", "C"] and isinstance(data, np.ndarray)
         return (
             data * self.__normalization_elements[name]["std"]
@@ -172,6 +202,15 @@ class Solver:
         )
 
     def remove_posture_feature(self, C: np.ndarray):
+        """
+        Remove posture feature from C
+
+        Args:
+            C (np.ndarray): conditions
+
+        Returns:
+            np.ndarray: conditions without posture feature
+        """
         assert self._use_nsf_only and isinstance(C, np.ndarray)
         print("before remove posture feature", C.shape)
         # delete the last 2 of the last dimension of C, which is posture feature
@@ -179,7 +218,18 @@ class Solver:
         print("after remove posture feature", C.shape)
         return C
 
-    def solve(self, P: np.ndarray, F: np.ndarray, num_sols: int):
+    def solve(self, P: np.ndarray, F: np.ndarray, num_sols: int) -> np.ndarray:
+        """
+        Solve inverse kinematics problem.
+
+        Args:
+            P (np.ndarray): poses as least 2D array
+            F (np.ndarray): posture features as least 2D array
+            num_sols (int): number of solutions
+
+        Returns:
+            np.ndarray: J with shape (num_sols, num_poses, num_dofs)
+        """
         C = self.normalize_input_data(
             np.column_stack((P, F, np.zeros((len(F), 1)))), "C"
         )
@@ -189,7 +239,17 @@ class Solver:
             J = self._solver(C).sample((num_sols,))
         return self.denormalize_output_data(J.detach().cpu().numpy(), "J")
 
-    def make_divisible_C(self, C: np.ndarray, batch_size: int):
+    def make_divisible_C(self, C: np.ndarray, batch_size: int) -> tuple[np.ndarray, int]:
+        """
+        Make the number of conditions divisible by batch_size. Reapeat the last few conditions to make it divisible.
+
+        Args:
+            C (np.ndarray): conditions
+            batch_size (int): batch size
+
+        Returns:
+            Tuple[np.ndarray, int]: divisible conditions and the number of complementary conditions
+        """
         assert C.ndim == 2
         complementary = batch_size - len(C) % batch_size
         complementary = 0 if complementary == batch_size else complementary
@@ -197,7 +257,17 @@ class Solver:
                            axis=0) if complementary > 0 else C
         return C, complementary
 
-    def remove_complementary_J(self, J: np.ndarray, complementary: int):
+    def remove_complementary_J(self, J: np.ndarray, complementary: int) -> np.ndarray:
+        """
+        Remove the complementary conditions from J.
+
+        Args:
+            J (np.ndarray): complemented J
+            complementary (int): number of complementary conditions
+
+        Returns:
+            np.ndarray: J without complementary elements
+        """
         assert J.ndim == 2
         return J[:-complementary] if complementary > 0 else J
 
@@ -208,7 +278,21 @@ class Solver:
         num_sols: int,
         batch_size: int = 4000,
         verbose: bool = True,
-    ):
+    ) -> np.ndarray:
+        """
+        Solve inverse kinematics problem in batch.
+
+        Args:
+            P (np.ndarray): poses with shape (num_poses, m)
+            F (np.ndarray): F with shape (num_poses, r)
+            num_sols (int): number of solutions
+            batch_size (int, optional): batch size. Defaults to 4000.
+            verbose (bool, optional): use trange or not. Defaults to True.
+
+        Returns:
+            np.ndarray: J with shape (num_sols, num_poses, num_dofs)
+        """
+        
         if len(P) * num_sols < batch_size:
             return self.solve(P, F, num_sols)
 
@@ -242,40 +326,6 @@ class Solver:
             J.reshape(num_sols, -1, self._robot.n_dofs), "J"
         )
 
-    def geometric_distance_between_quaternions(
-        self, q1: np.ndarray, q2: np.ndarray
-    ) -> np.ndarray:
-        # from jrl.conversions
-        # Note: Decreasing this value to 1e-8 greates NaN gradients for nearby quaternions.
-        acos_clamp_epsilon = 1e-7
-        # Note: Updated by @jstmn on Feb24 2023
-        # ang = 2 * np.arccos(dot)
-        ang = np.abs(
-            np.remainder(
-                2
-                * np.arccos(
-                    np.clip(
-                        np.clip(np.sum(q1 * q2, axis=1), -1, 1),
-                        -1 + acos_clamp_epsilon,
-                        1 - acos_clamp_epsilon,
-                    )
-                )
-                + np.pi,
-                2 * np.pi,
-            )
-            - np.pi
-        )
-        return ang
-
-    def evaluate_pose_error_J2d_P2d(self, J: np.ndarray, P: np.ndarray):
-        assert len(J.shape) == 2 and len(
-            P.shape) == 2 and J.shape[0] == P.shape[0]
-        P_hat = self._robot.forward_kinematics(J)
-        l2 = np.linalg.norm(P[:, :3] - P_hat[:, :3], axis=1)
-        ang = self.geometric_distance_between_quaternions(
-            P[:, 3:], P_hat[:, 3:])
-        return l2, ang
-
     def evaluate_pose_error_J3d_P2d(
         self,
         J: np.ndarray,
@@ -283,6 +333,18 @@ class Solver:
         return_posewise_evalution: bool = False,
         return_all: bool = False,
     ) -> tuple[Any, Any]:
+        """
+        Evaluate pose error given generated joint configurations J and ground truth poses P. Return default is l2 and ang with shape (1).
+
+        Args:
+            J (np.ndarray): generated joint configurations with shape (num_sols, num_poses, num_dofs)
+            P (np.ndarray): ground truth poses with shape (num_poses, m)
+            return_posewise_evalution (bool, optional): return l2 and ang with shape (num_poses,). Defaults to False.
+            return_all (bool, optional): return l2 and ang with shape (num_sols * num_poses). Defaults to False.
+
+        Returns:
+            tuple[Any, Any]: l2 and ang, default shape (1), posewise evaluation with shape (num_poses,), or all evaluation with shape (num_sols * num_poses)
+        """
         num_poses, num_sols = len(P), len(J)
         assert len(J.shape) == 3 and len(
             P.shape) == 2 and J.shape[1] == num_poses
@@ -291,8 +353,9 @@ class Solver:
         P_expand = np.repeat(np.expand_dims(P, axis=0), num_sols, axis=0).reshape(
             -1, P.shape[-1]
         )
-        l2, ang = self.evaluate_pose_error_J2d_P2d(
-            J.reshape(-1, self.n), P_expand)
+        
+        P_hat = self.robot.forward_kinematics(J.reshape(-1, self.n))
+        l2, ang = evaluate_pose_error_P2d_P2d(P_hat, P_expand) # type: ignore
 
         if return_posewise_evalution:
             return (

@@ -6,7 +6,7 @@ import os
 import numpy as np
 import torch
 from torch.nn import LeakyReLU
-from torch import optim
+from torch.optim import Optimizer, AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
@@ -15,13 +15,17 @@ from .settings import SolverConfig
 from jrl.robots import Panda
 
 
-def get_flow_model(config: SolverConfig):
+def get_flow_model(config: SolverConfig) -> tuple[Flow, Optimizer, ReduceLROnPlateau]:
     """
-    Return nsf model and optimizer
+    Return flow model, optimizer, and scheduler
 
-    :return: (nsf, AdamW, StepLR)
-    :rtype: tuple
+    Args:
+        config (SolverConfig): defined in settings.py
+
+    Returns:
+        tuple[Flow, Optimizer, ReduceLROnPlateau]: flow model, optimizer, and scheduler
     """
+    
     assert config.model_architecture in ["nsf"]
     # Build Generative model, NSF
     # Neural spline flow (NSF) with inputs 7 features and 3 + 4 + 1 context
@@ -45,7 +49,7 @@ def get_flow_model(config: SolverConfig):
         ),  # type: ignore
     ).to(config.device)
 
-    optimizer = optim.AdamW(
+    optimizer = AdamW(
         flow.parameters(),
         lr=config.lr,
         weight_decay=config.lr_weight_decay,
@@ -84,6 +88,13 @@ def get_flow_model(config: SolverConfig):
 
 
 def get_robot(robot_name: str, robot_dirs: Tuple[str, str, str]):
+    """
+    Return robot model, and create robot directories if not exists
+
+    Args:
+        robot_name (str): current only support "panda"
+        robot_dirs (Tuple[str, str, str]): (data_dir, weight_dir, log_dir) defined in settings.py
+    """
     # def create_robot_dirs(dir_paths) -> None:
     for dp in robot_dirs:
         if not os.path.exists(path=dp):

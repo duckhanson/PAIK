@@ -18,7 +18,7 @@ def guassian_kernel(
         torch.Tensor: distance matrix of the two distributions after applying the gaussian kernel
     """
     n_samples = L2_distances_square.shape[0]
-    bandwith = L2_distances_square.data.sum() / (n_samples ** 2 - n_samples)
+    bandwith = L2_distances_square.data.sum() / (n_samples**2 - n_samples)
     bandwidth_multipliers = mul_factor ** (
         torch.arange(n_kernels, device="cuda") - n_kernels // 2
     )
@@ -50,7 +50,7 @@ def inverse_multiquadric_kernel(
     exponents = exponents[:, None, None]
 
     kernels = (
-        widths ** exponents
+        widths**exponents
         * ((widths + L2_distances_square[None, ...]) / exponents) ** -exponents
     ).sum(dim=0)
     return kernels

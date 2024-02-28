@@ -297,7 +297,7 @@ class Solver:
         # shape: (num_poses, C.shape[-1] = m + r + 1)
         C = np.column_stack((P, F, np.zeros((len(F), 1))))
         # shape: (num_sols, num_poses, C.shape[-1])
-        expanded_C = np.repeat(np.expand_dims(C, axis=0), num_sols, axis=0)
+        expanded_C = np.expand_dims(C, axis=0).repeat(num_sols, axis=0)
 
         C = self.normalize_input_data(expanded_C, "C")
         C = self.remove_posture_feature(C) if self._use_nsf_only else C
@@ -346,10 +346,10 @@ class Solver:
         assert len(J.shape) == 3 and len(P.shape) == 2 and J.shape[1] == num_poses
 
         # shape: (num_sols * num_poses, P.shape[-1])
-        P_expand = np.repeat(np.expand_dims(P, axis=0), num_sols, axis=0).reshape(
+        P_expand = np.expand_dims(P, axis=0).repeat(num_sols, axis=0).reshape(
             -1, P.shape[-1]
         )
-
+        
         P_hat = self.robot.forward_kinematics(J.reshape(-1, self.n))
         l2, ang = evaluate_pose_error_P2d_P2d(P_hat, P_expand)  # type: ignore
 

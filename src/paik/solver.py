@@ -73,13 +73,13 @@ class Solver:
 
     @base_std.setter
     def base_std(self, value: float):
-        assert value >= 0 and value < 1
+        assert value >= 0, "base_std should be greater than or equal to 0."
         self._base_std = value
         self.__change_solver_base()
 
     @latent.setter
     def latent(self, value: torch.Tensor):
-        assert value.shape == (self._robot.n_dofs)
+        assert value.shape == (self._robot.n_dofs), f"shape of latent should be {self._robot.n_dofs}"
         self._init_latent = value
         self.__change_solver_base()
 

@@ -83,22 +83,21 @@ class Solver:
         assert isdir(
             self.param.train_dir
         ), f"{self.param.train_dir} not found, please change workdir to the project root!"
-        path_function = (
+        data_path = (
             lambda name: f"{self.param.train_dir}/{name}-{self.param.N}-{self.n}-{self.m}-{self.r}.npy"
         )
 
         input_name_list = ["J", "P", "F"]
-        path_collection = {name: path_function(name) for name in input_name_list}
         J, P, F = [
-            load_numpy(file_path=path_collection[name]) for name in input_name_list
+            load_numpy(file_path=data_path(name)) for name in input_name_list
         ]
 
         if J is None or P is None:
             J, P = self._robot.sample_joint_angles_and_poses(
                 n=self.param.N, return_torch=False
             )
-            save_numpy(file_path=path_collection["J"], arr=J)
-            save_numpy(file_path=path_collection["P"], arr=P)
+            save_numpy(file_path=data_path("J"), arr=J)
+            save_numpy(file_path=data_path("P"), arr=P)
 
         if F is None:
             assert self.r > 0, "r should be greater than 0."
@@ -121,8 +120,8 @@ class Solver:
                     )
                 )  # type: ignore
 
-            save_numpy(file_path=path_collection["F"], arr=F)
-        print(f"[SUCCESS] F load from {path_collection['F']}")
+            save_numpy(file_path=data_path("F"), arr=F)
+        print(f"[SUCCESS] F load from {data_path('F')}")
 
         # for normalization
         C = np.column_stack((P, F))

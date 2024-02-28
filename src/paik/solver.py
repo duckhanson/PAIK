@@ -296,19 +296,12 @@ class Solver:
 
         # shape: (num_poses, C.shape[-1] = m + r + 1)
         C = np.column_stack((P, F, np.zeros((len(F), 1))))
-        # shape: (num_sols, num_poses, C.shape[-1])
-        expanded_C = np.expand_dims(C, axis=0).repeat(num_sols, axis=0)
-
-        C = self.normalize_input_data(expanded_C, "C")
+        C = self.normalize_input_data(C, "C")
+        C = np.tile(C, (num_sols, 1)) # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
         C = self.remove_posture_feature(C) if self._use_nsf_only else C
-
-        # shape: (num_sols * num_poses, C.shape[-1])
-        C = C.reshape(-1, C.shape[-1])
         C, complementary = self.make_divisible_C(C, batch_size)
-
         # shape: ((num_sols * num_poses + complementary) // batch_size, batch_size, C.shape[-1])
-        C = C.reshape(-1, batch_size, C.shape[-1])
-        C = torch.from_numpy(C.astype(np.float32)).to(self._device)
+        C = torch.from_numpy(C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])).to(self._device)
 
         J = torch.empty((len(C), batch_size, self._robot.n_dofs), device=self._device)
         iterator = trange(len(C)) if verbose else range(len(C))
@@ -317,8 +310,7 @@ class Solver:
                 J[i] = self._solver(C[i]).sample()
 
         J = J.detach().cpu().numpy()
-        J = J.reshape(-1, self._robot.n_dofs)
-        J = self.remove_complementary_J(J, complementary)
+        J = self.remove_complementary_J(J.reshape(-1, self._robot.n_dofs), complementary)
         return self.denormalize_output_data(
             J.reshape(num_sols, -1, self._robot.n_dofs), "J"
         )
@@ -346,9 +338,7 @@ class Solver:
         assert len(J.shape) == 3 and len(P.shape) == 2 and J.shape[1] == num_poses
 
         # shape: (num_sols * num_poses, P.shape[-1])
-        P_expand = np.expand_dims(P, axis=0).repeat(num_sols, axis=0).reshape(
-            -1, P.shape[-1]
-        )
+        P_expand = np.tile(P, (num_sols, 1)) # P: (num_poses, m), P_expand: (num_sols * num_poses, m)
         
         P_hat = self.robot.forward_kinematics(J.reshape(-1, self.n))
         l2, ang = evaluate_pose_error_P2d_P2d(P_hat, P_expand)  # type: ignore

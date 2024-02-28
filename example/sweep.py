@@ -2,11 +2,12 @@
 from datetime import datetime
 from tabulate import tabulate
 import wandb
-from pafik.settings import DEFULT_SOLVER
-from pafik.train import Trainer
+from paik.settings import DEFULT_SOLVER
+from paik.train import Trainer
 
-WORK_DIR = "/home/luca/pafik"
-WANDB_PROJECT_NAME = "msik_ikflow_nsf_norm"  # please change to your own project name
+WORK_DIR = "/home/luca/paik"
+# please change to your own project name
+WANDB_PROJECT_NAME = "msik_ikflow_nsf_norm"
 WANDB_ENTITY = "luca_nthu"  # please change to your own entity name
 PATIENCE = 7
 POSE_ERR_THRESH = 3.15e-3

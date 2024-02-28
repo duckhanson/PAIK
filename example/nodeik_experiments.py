@@ -16,7 +16,7 @@ from nodeik.training import KinematicsDataset, Learner, ModelWrapper
 from pyquaternion import Quaternion
 from mmd_helper import mmd_evaluate_multiple_poses
 
-PAFIK_WORKDIR = "/home/luca/pafik"
+paik_WORKDIR = "/home/luca/paik"
 WORK_DIR = "/home/luca/nodeik"
 URDF_PATH = WORK_DIR + "/examples/assets/robots/franka_panda/panda_arm.urdf"
 NUM_POSES = 100
@@ -51,7 +51,8 @@ def evalutate_pose_errors_Phat2d_P2d(P_hat, P):
     l2 = np.linalg.norm(P[:, :3] - P_hat[:, :3], axis=1)
     a_quats = np.array([Quaternion(array=a[3:]) for a in P])
     b_quats = np.array([Quaternion(array=b[3:]) for b in P_hat])
-    ang = np.array([Quaternion.distance(a, b) for a, b in zip(a_quats, b_quats)])
+    ang = np.array([Quaternion.distance(a, b)
+                   for a, b in zip(a_quats, b_quats)])
     return l2, ang
 
 
@@ -67,7 +68,8 @@ def init_nodeik(args, std, robot=None):
         robot = Robot(robot_path=URDF_PATH, ee_link_name="panda_hand")
     learn = Learner.load_from_checkpoint(
         args.model_checkpoint,
-        model=build_model(args, robot.active_joint_dim, condition_dims=7).to(device),
+        model=build_model(args, robot.active_joint_dim,
+                          condition_dims=7).to(device),
         robot=robot,
         std=std,
         state_dim=robot.active_joint_dim,
@@ -80,12 +82,12 @@ def init_nodeik(args, std, robot=None):
 
 
 def get_pair_from_robot(robot, num_poses):
-    x = robot.get_pair()[robot.active_joint_dim :]
+    x = robot.get_pair()[robot.active_joint_dim:]
     J = np.empty((num_poses, robot.active_joint_dim))
     P = np.empty((num_poses, len(x)))
     for i in trange(num_poses):
         J[i] = robot.get_pair()[: robot.active_joint_dim]
-        P[i] = robot.get_pair()[robot.active_joint_dim :]
+        P[i] = robot.get_pair()[robot.active_joint_dim:]
     return J, P
 
 
@@ -113,13 +115,14 @@ def ikp(num_poses, num_sols):
 
 
 def load_poses_and_numerical_ik_sols(date: str, nodeik: ModelWrapper):
-    record_dir = f"{PAFIK_WORKDIR}/record/{date}"
+    record_dir = f"{paik_WORKDIR}/record/{date}"
     P = np.load(f"{record_dir}/poses.npy")
     J = np.load(f"{record_dir}/numerical_ik_sols.npy")
     print(f"loaded from {record_dir}")
     P_hat = np.empty_like(P)
     for i in range(len(P)):
-        P_hat[i] = nodeik.forward_kinematics(J[i, np.random.randint(0, J.shape[1])])
+        P_hat[i] = nodeik.forward_kinematics(
+            J[i, np.random.randint(0, J.shape[1])])
     l2, ang = evalutate_pose_errors_Phat2d_P2d(P_hat, P)
     assert l2.mean() < 1e-3  # check if the numerical ik solutions are correct
     return P, J
@@ -127,7 +130,8 @@ def load_poses_and_numerical_ik_sols(date: str, nodeik: ModelWrapper):
 
 def mmd_posture_diversity(pose_error_threshold=(0.03, 30)):
     robot, nodeik = init_nodeik(args, STD)
-    P, J = load_poses_and_numerical_ik_sols(datetime.today().strftime('%Y_%m_%d'), nodeik)
+    P, J = load_poses_and_numerical_ik_sols(
+        datetime.today().strftime('%Y_%m_%d'), nodeik)
 
     num_poses, num_sols = J.shape[0:2]
     base_stds = BASE_STDS
@@ -188,7 +192,7 @@ def mmd_posture_diversity(pose_error_threshold=(0.03, 30)):
 
     print(df.describe())
 
-    record_dir = f"{PAFIK_WORKDIR}/record/{datetime.today().strftime('%Y_%m_%d')}"
+    record_dir = f"{paik_WORKDIR}/record/{datetime.today().strftime('%Y_%m_%d')}"
     os.makedirs(record_dir, exist_ok=True)
     np.save(f"{record_dir}/J_hat_nodeik.npy", J_hat_nodeik)
     df.to_pickle(f"{record_dir}/nodeik_posture_mmd_std.pkl")

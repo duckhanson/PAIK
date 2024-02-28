@@ -7,7 +7,7 @@ with open("requirements.txt") as f:
     required = f.read().splitlines()
 
 setup(
-    name="pafik",
+    name="paik",
     version="0.1.0",
     author="chiahanlu",
     author_email="ducklyu0301@gmail.com",
@@ -17,7 +17,7 @@ setup(
     long_description_content_type="text/markdown",
     package_dir={"": "src"},
     packages=find_packages(where="src"),
-    url="https://github.com/duckhanson/PAFIK",
+    url="https://github.com/duckhanson/paik",
     license="MIT",
     classifiers=[
         "License :: OSI Approved :: MIT License",

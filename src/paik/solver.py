@@ -176,7 +176,6 @@ class Solver:
         Returns:
             np.ndarray: normalized data
         """
-        assert name in ["J", "C"] and isinstance(data, np.ndarray)
         return (
             data - self.__normalization_elements[name]["mean"]
         ) / self.__normalization_elements[name]["std"]
@@ -192,7 +191,6 @@ class Solver:
         Returns:
             np.ndarray: denormalized data
         """
-        assert name in ["J", "C"] and isinstance(data, np.ndarray)
         return (
             data * self.__normalization_elements[name]["std"]
             + self.__normalization_elements[name]["mean"]

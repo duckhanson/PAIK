@@ -12,7 +12,7 @@ import warp as wp
 from nodeik.robots.robot import Robot
 from nodeik.training import Learner, ModelWrapper
 from pyquaternion import Quaternion
-from mmd_helper import mmd_evaluate_multiple_poses
+from mmd import mmd_evaluate_multiple_poses
 
 paik_WORKDIR = "/home/luca/paik"
 WORK_DIR = "/home/luca/nodeik"

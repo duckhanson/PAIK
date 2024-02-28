@@ -1,8 +1,9 @@
 import numpy as np
 
+
 def geometric_distance_between_quaternions(
-        q1: np.ndarray, q2: np.ndarray
-    ) -> np.ndarray:
+    q1: np.ndarray, q2: np.ndarray
+) -> np.ndarray:
     """
     Compute the geometric distance between two sets of quaternions. Reference from jrl.conversions.
 
@@ -31,7 +32,10 @@ def geometric_distance_between_quaternions(
     )
     return ang
 
-def evaluate_pose_error_P2d_P2d(P1: np.ndarray, P2: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+
+def evaluate_pose_error_P2d_P2d(
+    P1: np.ndarray, P2: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Evaluate pose error between two sets of poses
 
@@ -44,7 +48,5 @@ def evaluate_pose_error_P2d_P2d(P1: np.ndarray, P2: np.ndarray) -> tuple[np.ndar
     """
     assert len(P1.shape) == 2 and len(P2.shape) == 2 and P1.shape[0] == P2.shape[0]
     l2 = np.linalg.norm(P1[:, :3] - P2[:, :3], axis=1)
-    ang = geometric_distance_between_quaternions(
-        P1[:, 3:], P2[:, 3:])
+    ang = geometric_distance_between_quaternions(P1[:, 3:], P2[:, 3:])
     return l2, ang
-

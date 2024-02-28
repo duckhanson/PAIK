@@ -49,8 +49,7 @@ class Solver:
         try:
             self.P_knn = load_pickle(path_p_knn)
         except:
-            self.P_knn = NearestNeighbors(
-                n_neighbors=1, n_jobs=-1).fit(self.P)
+            self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.P)
             save_pickle(
                 path_p_knn,
                 self.P_knn,
@@ -100,8 +99,7 @@ class Solver:
         )
 
         input_name_list = ["J", "P", "F"]
-        path_collection = {name: path_function(
-            name) for name in input_name_list}
+        path_collection = {name: path_function(name) for name in input_name_list}
         J, P, F = [
             load_numpy(file_path=path_collection[name]) for name in input_name_list
         ]
@@ -161,8 +159,7 @@ class Solver:
                 DiagNormal,
                 torch.zeros((self._robot.n_dofs,), device=self._device)
                 + self._init_latent,
-                torch.ones((self._robot.n_dofs,),
-                           device=self._device) * self._base_std,
+                torch.ones((self._robot.n_dofs,), device=self._device) * self._base_std,
                 buffer=True,
             ),  # type: ignore
         )
@@ -239,7 +236,9 @@ class Solver:
             J = self._solver(C).sample((num_sols,))
         return self.denormalize_output_data(J.detach().cpu().numpy(), "J")
 
-    def make_divisible_C(self, C: np.ndarray, batch_size: int) -> tuple[np.ndarray, int]:
+    def make_divisible_C(
+        self, C: np.ndarray, batch_size: int
+    ) -> tuple[np.ndarray, int]:
         """
         Make the number of conditions divisible by batch_size. Reapeat the last few conditions to make it divisible.
 
@@ -253,8 +252,7 @@ class Solver:
         assert C.ndim == 2
         complementary = batch_size - len(C) % batch_size
         complementary = 0 if complementary == batch_size else complementary
-        C = np.concatenate((C, C[:complementary]),
-                           axis=0) if complementary > 0 else C
+        C = np.concatenate((C, C[:complementary]), axis=0) if complementary > 0 else C
         return C, complementary
 
     def remove_complementary_J(self, J: np.ndarray, complementary: int) -> np.ndarray:
@@ -292,7 +290,7 @@ class Solver:
         Returns:
             np.ndarray: J with shape (num_sols, num_poses, num_dofs)
         """
-        
+
         if len(P) * num_sols < batch_size:
             return self.solve(P, F, num_sols)
 
@@ -312,8 +310,7 @@ class Solver:
         C = C.reshape(-1, batch_size, C.shape[-1])
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
 
-        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
-                        device=self._device)
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs), device=self._device)
         iterator = trange(len(C)) if verbose else range(len(C))
         with torch.inference_mode():
             for i in iterator:
@@ -346,16 +343,15 @@ class Solver:
             tuple[Any, Any]: l2 and ang, default shape (1), posewise evaluation with shape (num_poses,), or all evaluation with shape (num_sols * num_poses)
         """
         num_poses, num_sols = len(P), len(J)
-        assert len(J.shape) == 3 and len(
-            P.shape) == 2 and J.shape[1] == num_poses
+        assert len(J.shape) == 3 and len(P.shape) == 2 and J.shape[1] == num_poses
 
         # shape: (num_sols * num_poses, P.shape[-1])
         P_expand = np.repeat(np.expand_dims(P, axis=0), num_sols, axis=0).reshape(
             -1, P.shape[-1]
         )
-        
+
         P_hat = self.robot.forward_kinematics(J.reshape(-1, self.n))
-        l2, ang = evaluate_pose_error_P2d_P2d(P_hat, P_expand) # type: ignore
+        l2, ang = evaluate_pose_error_P2d_P2d(P_hat, P_expand)  # type: ignore
 
         if return_posewise_evalution:
             return (
@@ -402,8 +398,7 @@ class Solver:
         F = self.select_reference_posture(P)
 
         # Begin inference
-        J_hat = self.solve_batch(
-            P, F, num_sols, batch_size=batch_size, verbose=verbose)
+        J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size, verbose=verbose)
 
         l2, ang = self.evaluate_pose_error_J3d_P2d(J_hat, P, return_all=True)
         avg_inference_time = round((time() - time_begin) / num_poses, 3)

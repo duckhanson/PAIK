@@ -74,8 +74,7 @@ class Trainer(Solver):
                 self.J + noise_std * np.random.randn(*self.J.shape), "J"
             )
             C = self.normalize_input_data(
-                np.column_stack(
-                    (self.P, self.F, self.__noise_scale * noise_std)),
+                np.column_stack((self.P, self.F, self.__noise_scale * noise_std)),
                 "C",
             )
             C = self.remove_posture_feature(C) if self._use_nsf_only else C
@@ -123,8 +122,7 @@ class Trainer(Solver):
 
             wandb.log(log_info)
 
-            early_stopping(avg_pos_errs, self._solver,
-                           self._optimizer)  # type: ignore
+            early_stopping(avg_pos_errs, self._solver, self._optimizer)  # type: ignore
 
             if early_stopping.early_stop:
                 print("Early stopping")

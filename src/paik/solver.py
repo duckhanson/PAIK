@@ -39,7 +39,6 @@ class Solver:
             solver_param
         )  # type: ignore
         self._base_std = solver_param.base_std
-        self._init_latent = torch.zeros((self.robot.n_dofs)).to(self._device)
         # load inference data
         assert (
             self.n == self._robot.n_dofs
@@ -54,10 +53,6 @@ class Solver:
                 path_p_knn,
                 self.P_knn,
             )
-
-    @property
-    def latent(self):
-        return self._init_latent
 
     @property
     def base_std(self):
@@ -75,12 +70,6 @@ class Solver:
     def base_std(self, value: float):
         assert value >= 0, "base_std should be greater than or equal to 0."
         self._base_std = value
-        self.__change_solver_base()
-
-    @latent.setter
-    def latent(self, value: torch.Tensor):
-        assert value.shape == (self._robot.n_dofs), f"shape of latent should be {self._robot.n_dofs}"
-        self._init_latent = value
         self.__change_solver_base()
 
     # private methods
@@ -157,8 +146,7 @@ class Solver:
             transforms=self._solver.transforms,  # type: ignore
             base=Unconditional(
                 DiagNormal,
-                torch.zeros((self._robot.n_dofs,), device=self._device)
-                + self._init_latent,
+                torch.zeros((self._robot.n_dofs,), device=self._device),
                 torch.ones((self._robot.n_dofs,), device=self._device) * self._base_std,
                 buffer=True,
             ),  # type: ignore
@@ -295,11 +283,14 @@ class Solver:
         # shape: (num_poses, C.shape[-1] = m + r + 1)
         C = np.column_stack((P, F, np.zeros((len(F), 1))))
         C = self.normalize_input_data(C, "C")
-        C = np.tile(C, (num_sols, 1)) # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
+        # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
+        C = np.tile(C, (num_sols, 1))
         C = self.remove_posture_feature(C) if self._use_nsf_only else C
         C, complementary = self.make_divisible_C(C, batch_size)
         # shape: ((num_sols * num_poses + complementary) // batch_size, batch_size, C.shape[-1])
-        C = torch.from_numpy(C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])).to(self._device)
+        C = torch.from_numpy(
+            C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])
+        ).to(self._device)
 
         J = torch.empty((len(C), batch_size, self._robot.n_dofs), device=self._device)
         iterator = trange(len(C)) if verbose else range(len(C))
@@ -308,7 +299,9 @@ class Solver:
                 J[i] = self._solver(C[i]).sample()
 
         J = J.detach().cpu().numpy()
-        J = self.remove_complementary_J(J.reshape(-1, self._robot.n_dofs), complementary)
+        J = self.remove_complementary_J(
+            J.reshape(-1, self._robot.n_dofs), complementary
+        )
         return self.denormalize_output_data(
             J.reshape(num_sols, -1, self._robot.n_dofs), "J"
         )
@@ -335,9 +328,9 @@ class Solver:
         num_poses, num_sols = len(P), len(J)
         assert len(J.shape) == 3 and len(P.shape) == 2 and J.shape[1] == num_poses
 
-        # shape: (num_sols * num_poses, P.shape[-1])
-        P_expand = np.tile(P, (num_sols, 1)) # P: (num_poses, m), P_expand: (num_sols * num_poses, m)
-        
+        # P: (num_poses, m), P_expand: (num_sols * num_poses, m)
+        P_expand = np.tile(P, (num_sols, 1))
+
         P_hat = self.robot.forward_kinematics(J.reshape(-1, self.n))
         l2, ang = evaluate_pose_error_P2d_P2d(P_hat, P_expand)  # type: ignore
 

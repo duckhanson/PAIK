@@ -87,10 +87,7 @@ class Solver:
             lambda name: f"{self.param.train_dir}/{name}-{self.param.N}-{self.n}-{self.m}-{self.r}.npy"
         )
 
-        input_name_list = ["J", "P", "F"]
-        J, P, F = [
-            load_numpy(file_path=data_path(name)) for name in input_name_list
-        ]
+        J, P, F = [load_numpy(file_path=data_path(name)) for name in ["J", "P", "F"]]
 
         if J is None or P is None:
             J, P = self._robot.sample_joint_angles_and_poses(

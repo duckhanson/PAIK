@@ -1,18 +1,16 @@
 from dataclasses import dataclass
 import os
-import pickle
 from datetime import datetime
 from tqdm import trange
-from tabulate import tabulate
 import numpy as np
 import pandas as pd
-from tqdm import tqdm, trange
+from tqdm import trange
 import torch
 import time
 from nodeik.utils import build_model
 import warp as wp
 from nodeik.robots.robot import Robot
-from nodeik.training import KinematicsDataset, Learner, ModelWrapper
+from nodeik.training import Learner, ModelWrapper
 from pyquaternion import Quaternion
 from mmd_helper import mmd_evaluate_multiple_poses
 
@@ -123,7 +121,7 @@ def load_poses_and_numerical_ik_sols(date: str, nodeik: ModelWrapper):
     for i in range(len(P)):
         P_hat[i] = nodeik.forward_kinematics(
             J[i, np.random.randint(0, J.shape[1])])
-    l2, ang = evalutate_pose_errors_Phat2d_P2d(P_hat, P)
+    l2, ang = evaluate_pose_error_P2d_P2d(P_hat, P)
     assert l2.mean() < 1e-3  # check if the numerical ik solutions are correct
     return P, J
 
@@ -161,7 +159,7 @@ def mmd_posture_diversity(pose_error_threshold=(0.03, 30)):
                 P_hat[ip, isols] = nodeik.forward_kinematics(J_hat[ip, isols])
         J_hat = J_hat.reshape(-1, J_hat.shape[-1])
         P_hat = P_hat.reshape(-1, P_hat.shape[-1])
-        l2, ang = evalutate_pose_errors_Phat2d_P2d(
+        l2, ang = evaluate_pose_error_P2d_P2d(
             P_hat, P_repeat.reshape(-1, P_repeat.shape[-1])
         )
 

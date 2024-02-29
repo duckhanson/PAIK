@@ -17,7 +17,7 @@ from mmd import mmd_evaluate_multiple_poses
 paik_WORKDIR = "/home/luca/paik"
 WORK_DIR = "/home/luca/nodeik"
 URDF_PATH = WORK_DIR + "/examples/assets/robots/franka_panda/panda_arm.urdf"
-NUM_POSES = 100
+NUM_POSES = 10
 NUM_SOLS = 1000
 BATCH_SIZE = 5000
 BASE_STDS = np.arange(0.1, 1.5, 0.1)  # start, stop, step
@@ -49,8 +49,7 @@ def evaluate_pose_errors_P2d_P2d(P_hat, P):
     l2 = np.linalg.norm(P[:, :3] - P_hat[:, :3], axis=1)
     a_quats = np.array([Quaternion(array=a[3:]) for a in P])
     b_quats = np.array([Quaternion(array=b[3:]) for b in P_hat])
-    ang = np.array([Quaternion.distance(a, b)
-                   for a, b in zip(a_quats, b_quats)])
+    ang = np.array([Quaternion.distance(a, b) for a, b in zip(a_quats, b_quats)])
     return l2, ang
 
 
@@ -66,8 +65,7 @@ def init_nodeik(args, std, robot=None):
         robot = Robot(robot_path=URDF_PATH, ee_link_name="panda_hand")
     learn = Learner.load_from_checkpoint(
         args.model_checkpoint,
-        model=build_model(args, robot.active_joint_dim,
-                          condition_dims=7).to(device),
+        model=build_model(args, robot.active_joint_dim, condition_dims=7).to(device),
         robot=robot,
         std=std,
         state_dim=robot.active_joint_dim,
@@ -80,12 +78,12 @@ def init_nodeik(args, std, robot=None):
 
 
 def get_pair_from_robot(robot, num_poses):
-    x = robot.get_pair()[robot.active_joint_dim:]
+    x = robot.get_pair()[robot.active_joint_dim :]
     J = np.empty((num_poses, robot.active_joint_dim))
     P = np.empty((num_poses, len(x)))
     for i in trange(num_poses):
         J[i] = robot.get_pair()[: robot.active_joint_dim]
-        P[i] = robot.get_pair()[robot.active_joint_dim:]
+        P[i] = robot.get_pair()[robot.active_joint_dim :]
     return J, P
 
 
@@ -112,6 +110,39 @@ def ikp(num_poses, num_sols):
     print(f"avg_inference_time: {avg_inference_time}")
 
 
+def posture_constraint_ikp(num_poses, num_sols):
+    robot, nodeik = init_nodeik(args, STD)
+    J, P = get_pair_from_robot(robot, num_poses)
+
+    # J.shape = (num_poses, num_dofs or n)
+    J = np.repeat(np.expand_dims(J, axis=1), num_sols, axis=1)
+
+    # P.shape = (num_poses, num_sols, len(x))
+    P = np.repeat(np.expand_dims(P, axis=1), num_sols, axis=1)
+
+    begin = time.time()
+    J_hat = np.empty((num_poses, num_sols, robot.active_joint_dim))
+    P_hat = np.empty_like(P)
+    for i in trange(num_poses):
+        J_hat[i], _ = nodeik.inverse_kinematics(P[i])
+        P_hat[i] = nodeik.forward_kinematics(J_hat[i])
+    avg_inference_time = round((time.time() - begin) / num_poses, 3)
+    l2, ang = evaluate_pose_errors_P2d_P2d(
+        P_hat.reshape(-1, P.shape[-1]), P.reshape(-1, P.shape[-1])
+    )
+    distance_J = np.linalg.norm(J_hat - J, axis=-1).flatten()
+
+    df = pd.DataFrame(
+        {
+            "l2": l2,
+            "ang (deg)": np.rad2deg(ang),
+            "distance_J (deg)": np.rad2deg(distance_J),
+        }
+    )
+    print(df.describe())
+    print(f"avg_inference_time: {avg_inference_time}")
+
+
 def load_poses_and_numerical_ik_sols(date: str, nodeik: ModelWrapper):
     record_dir = f"{paik_WORKDIR}/record/{date}"
     P = np.load(f"{record_dir}/poses.npy")
@@ -119,8 +150,7 @@ def load_poses_and_numerical_ik_sols(date: str, nodeik: ModelWrapper):
     print(f"loaded from {record_dir}")
     P_hat = np.empty_like(P)
     for i in range(len(P)):
-        P_hat[i] = nodeik.forward_kinematics(
-            J[i, np.random.randint(0, J.shape[1])])
+        P_hat[i] = nodeik.forward_kinematics(J[i, np.random.randint(0, J.shape[1])])
     l2, ang = evaluate_pose_errors_P2d_P2d(P_hat, P)
     assert l2.mean() < 1e-3  # check if the numerical ik solutions are correct
     return P, J
@@ -179,9 +209,11 @@ def mmd_posture_diversity(date="2024_02_24", pose_error_threshold=(0.03, 30)):
 
         J_hat_nodeik[i] = J_hat
         mmd_nodeik[i] = mmd_evaluate_multiple_poses(J_hat, J, num_poses)
-        print(f"std: {std}, l2: {l2_nodeik[i]}, ang: {ang_nodeik[i]}, mmd: {mmd_nodeik[i]}")
+        print(
+            f"std: {std}, l2: {l2_nodeik[i]}, ang: {ang_nodeik[i]}, mmd: {mmd_nodeik[i]}"
+        )
         break
-        
+
     df = pd.DataFrame(
         {
             "l2": l2_nodeik,
@@ -202,4 +234,5 @@ def mmd_posture_diversity(date="2024_02_24", pose_error_threshold=(0.03, 30)):
 
 if __name__ == "__main__":
     # ikp(NUM_POSES, NUM_SOLS)
-    mmd_posture_diversity()
+    posture_constraint_ikp(NUM_POSES, NUM_SOLS)
+    # mmd_posture_diversity()

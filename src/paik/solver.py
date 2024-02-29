@@ -54,6 +54,16 @@ class Solver:
                 self.P_knn,
             )
 
+        path_J_knn = f"{solver_param.weight_dir}/J_knn.pth"
+        try:
+            self.J_knn = load_pickle(path_J_knn)
+        except:
+            self.J_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.J)
+            save_pickle(
+                path_J_knn,
+                self.J_knn,
+            )
+
     @property
     def base_std(self):
         return self._base_std

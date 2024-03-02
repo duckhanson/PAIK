@@ -1,4 +1,5 @@
 # Import required packages
+import dis
 import time
 import numpy as np
 from tabulate import tabulate
@@ -11,58 +12,43 @@ from ikflow.utils import set_seed
 from ikflow.model_loading import get_ik_solver
 from jkinpylib.evaluation import solution_pose_errors
 
-NUM_POSES = 3000  # 100
-NUM_SOLS = 1000  # 1000
-BATCH_SIZE = 5000
-SUCCESS_THRESHOLD = (5e-3, 2)
-STD = 0.25
-WORKDIR = "/home/luca/paik"
-USE_NSF_ONLY = False
-METHOD_OF_SELECT_REFERENCE_POSTURE = "knn"
-
+from common.config import CONFIG_IKP
+from common.display import display_ikp
 
 def paik():
-    solver_param = DEFAULT_NSF if USE_NSF_ONLY else DEFULT_SOLVER
-    solver_param.workdir = WORKDIR
-    solver_param.select_reference_posture_method = METHOD_OF_SELECT_REFERENCE_POSTURE
+    config = CONFIG_IKP()
+    solver_param = DEFAULT_NSF if config.use_nsf_only else DEFULT_SOLVER
+    solver_param.workdir = config.workdir
+    solver_param.select_reference_posture_method = config.method_of_select_reference_posture
     solver = Solver(solver_param=solver_param)
 
-    (avg_l2, avg_ang, avg_inference_time, success_rate) = solver.evaluate_ikp_iterative(
-        NUM_POSES,
-        NUM_SOLS,
-        std=STD,
-        batch_size=BATCH_SIZE,
-        success_threshold=SUCCESS_THRESHOLD,
+    (l2, ang, avg_inference_time, success_rate) = solver.evaluate_ikp_iterative(
+        config.num_poses,
+        config.num_sols,
+        std=config.std,
+        batch_size=config.batch_size,
+        success_threshold=config.success_threshold,
     )  # type: ignore
-    print(
-        tabulate(
-            [[avg_l2, np.rad2deg(avg_ang), avg_inference_time, success_rate]],
-            headers=[
-                "avg_l2 (m)",
-                "avg_ang (deg)",
-                "avg_inference_time (s)",
-                f"success_rate ({METHOD_OF_SELECT_REFERENCE_POSTURE})",
-            ],
-        )
-    )
+    display_ikp(l2, ang, avg_inference_time)
+    print(f"success rate {config.method_of_select_reference_posture}: {success_rate}")
 
 
 def ikflow():
     set_seed()
-
+    config = CONFIG_IKP()
     # Build IKFlowSolver and set weights
     ik_solver, _ = get_ik_solver("panda__full__lp191_5.25m")
-    _, P = ik_solver.robot.sample_joint_angles_and_poses(n=NUM_POSES)
-    l2 = np.zeros((NUM_SOLS, len(P)))
-    ang = np.zeros((NUM_SOLS, len(P)))
-    J = torch.empty((NUM_SOLS, len(P), 7), dtype=torch.float32, device="cpu")
+    _, P = ik_solver.robot.sample_joint_angles_and_poses(n=config.num_poses)
+    l2 = np.zeros((config.num_sols, len(P)))
+    ang = np.zeros((config.num_sols, len(P)))
+    J = torch.empty((config.num_sols, len(P), 7), dtype=torch.float32, device="cpu")
     begin = time.time()
-    if NUM_POSES < NUM_SOLS:
-        for i in trange(NUM_POSES):
+    if config.num_poses < config.num_sols:
+        for i in trange(config.num_poses):
             J[:, i, :] = ik_solver.solve(
                 P[i],
-                n=NUM_SOLS,
-                latent_scale=STD,
+                n=config.num_sols,
+                latent_scale=config.std,
                 refine_solutions=False,
                 return_detailed=False,
             ).cpu()  # type: ignore
@@ -71,19 +57,14 @@ def ikflow():
                 ik_solver.robot, J[:, i, :], P[i]
             )
     else:
-        for i in trange(NUM_SOLS):
+        for i in trange(config.num_sols):
             J[i] = ik_solver.solve_n_poses(
-                P, latent_scale=STD, refine_solutions=False, return_detailed=False
+                P, latent_scale=config.std, refine_solutions=False, return_detailed=False
             ).cpu()
             l2[i], ang[i] = solution_pose_errors(ik_solver.robot, J[i], P)
-    avg_inference_time = round((time.time() - begin) / NUM_POSES, 3)
+    avg_inference_time = round((time.time() - begin) / config.num_poses, 3)
 
-    print(
-        tabulate(
-            [[l2.mean(), np.rad2deg(ang.mean()), avg_inference_time]],
-            headers=["avg_l2", "avg_ang", "avg_inference_time"],
-        )
-    )
+    display_ikp(l2.mean(), ang.mean(), avg_inference_time)
 
 
 if __name__ == "__main__":

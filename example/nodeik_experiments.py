@@ -13,10 +13,14 @@ from nodeik.robots.robot import Robot
 from nodeik.training import Learner, ModelWrapper
 from pyquaternion import Quaternion
 from mmd import mmd_evaluate_multiple_poses
+# from posture_constrained_ikp import display_success_rate
+from common.config import CONFIG_IKP
+from common.display import display_ikp
 
 paik_WORKDIR = "/home/luca/paik"
 WORK_DIR = "/home/luca/nodeik"
 URDF_PATH = WORK_DIR + "/examples/assets/robots/franka_panda/panda_arm.urdf"
+MODEL_PATH = WORK_DIR + "/model/panda_loss-20.ckpt"
 NUM_POSES = 10
 NUM_SOLS = 1000
 BATCH_SIZE = 5000
@@ -41,7 +45,7 @@ class args:
     num_samples = 4
     num_references = 256
     seed = 1
-    model_checkpoint = WORK_DIR + "/model/panda_loss-20.ckpt"
+    model_checkpoint = MODEL_PATH
 
 
 def evaluate_pose_errors_P2d_P2d(P_hat, P):
@@ -87,30 +91,32 @@ def get_pair_from_robot(robot, num_poses):
     return J, P
 
 
-def ikp(num_poses, num_sols):
-    robot, nodeik = init_nodeik(args, STD)
+def ikp():
+    config = CONFIG_IKP()
+    robot, nodeik = init_nodeik(args, config.std)
 
-    _, P = get_pair_from_robot(robot, num_poses)
+    _, P = get_pair_from_robot(robot, config.num_poses)
     P = np.repeat(
-        np.expand_dims(P, axis=1), num_sols, axis=1
-    )  # (num_poses, num_sols, len(x))
+        np.expand_dims(P, axis=1), config.num_sols, axis=1
+    )  # (config.num_poses, config.num_sols, len(x))
 
     begin = time.time()
-    J_hat = np.empty((num_poses, num_sols, robot.active_joint_dim))
+    J_hat = np.empty((config.num_poses, config.num_sols, robot.active_joint_dim))
     P_hat = np.empty_like(P)
-    for i in trange(num_poses):
+    for i in trange(config.num_poses):
         J_hat[i], _ = nodeik.inverse_kinematics(P[i])
         P_hat[i] = nodeik.forward_kinematics(J_hat[i])
-    avg_inference_time = round((time.time() - begin) / num_poses, 3)
+    avg_inference_time = round((time.time() - begin) / config.num_poses, 3)
     l2, ang = evaluate_pose_errors_P2d_P2d(
         P_hat.reshape(-1, P.shape[-1]), P.reshape(-1, P.shape[-1])
     )
-    df = pd.DataFrame({"l2": l2, "ang (deg)": np.rad2deg(ang)})
-    print(df.describe())
-    print(f"avg_inference_time: {avg_inference_time}")
+    display_ikp(l2.mean(), np.rad2deg(ang.mean()), avg_inference_time)
 
 
-def posture_constraint_ikp(num_poses, num_sols):
+def posture_constraint_ikp():
+    from posture_constrained_ikp import NUM_POSES, NUM_SOLS, STD
+    num_poses, num_sols, std = NUM_POSES, NUM_SOLS, STD
+    
     robot, nodeik = init_nodeik(args, STD)
     J, P = get_pair_from_robot(robot, num_poses)
 
@@ -141,6 +147,7 @@ def posture_constraint_ikp(num_poses, num_sols):
     )
     print(df.describe())
     print(f"avg_inference_time: {avg_inference_time}")
+    display_success_rate(distance_J)
 
 
 def load_poses_and_numerical_ik_sols(date: str, nodeik: ModelWrapper):
@@ -233,6 +240,6 @@ def mmd_posture_diversity(date="2024_02_24", pose_error_threshold=(0.03, 30)):
 
 
 if __name__ == "__main__":
-    # ikp(NUM_POSES, NUM_SOLS)
-    posture_constraint_ikp(NUM_POSES, NUM_SOLS)
+    ikp()
+    # posture_constraint_ikp()
     # mmd_posture_diversity()

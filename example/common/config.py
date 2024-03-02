@@ -17,13 +17,22 @@ class ConfigFile:
     )
     model_path: str = f"{nodeik_workdir}/model/panda_loss-20.ckpt"
 
-    date: str = field(
+    _date: str = field(
         default_factory=lambda: datetime.today().strftime("%Y_%m_%d")
     )  # "2024_02_24"
 
     def __post_init__(self):
         self.record_dir = f"{self.workdir}/record/{self.date}"
         os.makedirs(self.record_dir, exist_ok=True)
+
+    @property
+    def date(self):
+        return self._date
+
+    @date.setter
+    def date(self, value):
+        self._date = value
+        self.record_dir = f"{self.workdir}/record/{self.date}"
 
 
 @dataclass()

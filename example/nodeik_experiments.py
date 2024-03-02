@@ -110,7 +110,7 @@ def ikp():
     l2, ang = evaluate_pose_errors_P2d_P2d(
         P_hat.reshape(-1, P.shape[-1]), P.reshape(-1, P.shape[-1])
     )
-    display_ikp(l2.mean(), np.rad2deg(ang.mean()), avg_inference_time)
+    display_ikp(l2.mean(), ang.mean(), avg_inference_time)
 
 
 def posture_constraint_ikp():

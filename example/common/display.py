@@ -5,11 +5,11 @@ from tabulate import tabulate
 def display_ikp(l2, ang, avg_inference_time):
     print(
         tabulate(
-            [[l2, np.rad2deg(ang), avg_inference_time]],
+            [[l2 * 1e3, np.rad2deg(ang), np.round(avg_inference_time * 1e3, decimals=0)]],
             headers=[
-                "avg_l2 (m)",
+                "avg_l2 (mm)",
                 "avg_ang (deg)",
-                "avg_inference_time (s)",
+                "avg_inference_time (ms)",
             ],
         )
     )

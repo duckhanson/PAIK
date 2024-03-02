@@ -7,6 +7,7 @@ import pandas as pd
 from tqdm import trange
 import torch
 import time
+from common.file import save_diversity
 from nodeik.utils import build_model
 import warp as wp
 from nodeik.robots.robot import Robot
@@ -220,25 +221,17 @@ def diversity():
 
         J_hat_nodeik[i] = J_hat
         mmd_nodeik[i] = mmd_evaluate_multiple_poses(J_hat, J, num_poses)
-        print(
-            f"std: {std}, l2: {l2_nodeik[i]}, ang: {ang_nodeik[i]}, mmd: {mmd_nodeik[i]}"
-        )
 
-    df = pd.DataFrame(
-        {
-            "l2": l2_nodeik,
-            "ang": ang_nodeik,
-            "mmd": mmd_nodeik,
-            "base_std": base_stds,
-        }
+    save_diversity(
+        config.record_dir, 
+        "nodeik", 
+        J_hat_nodeik, 
+        l2_nodeik, 
+        ang_nodeik, 
+        mmd_nodeik, 
+        base_stds
     )
-
-    print(df.describe())
-
-    np.save(f"{config.record_dir}/J_hat_nodeik.npy", J_hat_nodeik)
-    df.to_pickle(f"{config.record_dir}/nodeik_posture_mmd_std.pkl")
-    print(f"saved to {config.record_dir}/nodeik_posture_mmd_std.pkl")
-
+    
 
 if __name__ == "__main__":
     # ikp()

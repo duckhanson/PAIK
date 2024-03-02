@@ -38,7 +38,14 @@ def paik():
     # J_hat.shape = (num_sols, num_poses, num_dofs or n)
     # J.shape = (num_poses, num_dofs or n)
     distance_J = compute_distance_J(J_hat, J)
-    display_posture(l2, ang, distance_J, config.success_distance_thresholds)
+    display_posture(
+        config.record_dir,
+        "paik",
+        l2,
+        ang,
+        distance_J,
+        config.success_distance_thresholds,
+    )
 
 
 def ikflow():
@@ -80,6 +87,8 @@ def ikflow():
     # J.shape = (num_poses, num_dofs or n)
     distance_J = compute_distance_J(J_hat, J)
     display_posture(
+        config.record_dir,
+        "ikflow",
         l2.flatten(),
         ang.flatten(),
         distance_J.flatten(),

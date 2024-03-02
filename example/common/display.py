@@ -46,7 +46,7 @@ def display_success_rate(distance_J_deg, success_distance_thresholds):
     )
 
 
-def display_posture(l2, ang, distance_J, success_distance_thresholds):
+def display_posture(record_dir, name, l2, ang, distance_J, success_distance_thresholds):
     assert l2.shape == ang.shape == distance_J.shape
 
     ang = np.rad2deg(ang)
@@ -60,4 +60,5 @@ def display_posture(l2, ang, distance_J, success_distance_thresholds):
         }
     )
     print(df.describe())
+    df.to_pickle(f"{record_dir}/{name}_posture.pkl")
     display_success_rate(distance_J, success_distance_thresholds)

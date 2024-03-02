@@ -134,6 +134,8 @@ def posture_constraint_ikp():
     # J.shape = (num_poses, num_dofs or n)
     distance_J = compute_distance_J(J_hat, J)
     display_posture(
+        config.record_dir,
+        "nodeik",
         l2.flatten(),
         ang.flatten(),
         distance_J.flatten(),

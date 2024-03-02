@@ -12,11 +12,12 @@ from ikflow.utils import set_seed
 from ikflow.model_loading import get_ik_solver
 from jkinpylib.evaluation import solution_pose_errors
 
-from common.config import CONFIG_IKP
+from common.config import ConfigIKP
 from common.display import display_ikp
 
+
 def paik():
-    config = CONFIG_IKP()
+    config = ConfigIKP()
     solver_param = DEFAULT_NSF if config.use_nsf_only else DEFULT_SOLVER
     solver_param.workdir = config.workdir
     solver_param.select_reference_posture_method = config.method_of_select_reference_posture
@@ -30,18 +31,20 @@ def paik():
         success_threshold=config.success_threshold,
     )  # type: ignore
     display_ikp(l2, ang, avg_inference_time)
-    print(f"success rate {config.method_of_select_reference_posture}: {success_rate}")
+    print(
+        f"success rate {config.method_of_select_reference_posture}: {success_rate}")
 
 
 def ikflow():
     set_seed()
-    config = CONFIG_IKP()
+    config = ConfigIKP()
     # Build IKFlowSolver and set weights
     ik_solver, _ = get_ik_solver("panda__full__lp191_5.25m")
     _, P = ik_solver.robot.sample_joint_angles_and_poses(n=config.num_poses)
     l2 = np.zeros((config.num_sols, len(P)))
     ang = np.zeros((config.num_sols, len(P)))
-    J = torch.empty((config.num_sols, len(P), 7), dtype=torch.float32, device="cpu")
+    J = torch.empty((config.num_sols, len(P), 7),
+                    dtype=torch.float32, device="cpu")
     begin = time.time()
     if config.num_poses < config.num_sols:
         for i in trange(config.num_poses):

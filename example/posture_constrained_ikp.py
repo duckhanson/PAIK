@@ -15,12 +15,29 @@ from jkinpylib.evaluation import solution_pose_errors
 NUM_POSES = 300  # 100
 NUM_SOLS = 100  # 1000
 BATCH_SIZE = 5000
-SUCCESS_THRESHOLD = (5e-3, 2)
 STD = 0.25
 WORKDIR = "/home/luca/paik"
 USE_NSF_ONLY = False
-METHOD_OF_SELECT_REFERENCE_POSTURE = "knn"
 
+SUCCESS_DISTANCE_TRHESHOLDS = [20, 30, 40, 60, 80, 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300]
+
+def compute_success_rate(distance_J, success_distance_thresholds=SUCCESS_DISTANCE_TRHESHOLDS):
+    success_rate = []
+    for th in success_distance_thresholds:
+        success_rate.append(f"{np.round(np.mean(distance_J < th) * 100, decimals=1)}%")
+    return success_rate
+
+def display_success_rate(distance_J, success_distance_thresholds=SUCCESS_DISTANCE_TRHESHOLDS):
+    print(
+        tabulate(
+            {
+                "Success Threshold (degrees)": success_distance_thresholds,
+                "Success Rate (out of 100)": compute_success_rate(distance_J, success_distance_thresholds),
+            },
+            headers="keys",
+            tablefmt="pretty",
+        )
+    )
 
 def paik():
     batch_size = BATCH_SIZE
@@ -29,7 +46,6 @@ def paik():
 
     solver_param = DEFAULT_NSF if USE_NSF_ONLY else DEFULT_SOLVER
     solver_param.workdir = WORKDIR
-    solver_param.select_reference_posture_method = METHOD_OF_SELECT_REFERENCE_POSTURE
     solver = Solver(solver_param=solver_param)
 
     J, P = solver.robot.sample_joint_angles_and_poses(n=NUM_POSES)
@@ -62,6 +78,8 @@ def paik():
     )
 
     print(df.describe())
+    
+    display_success_rate(distance_J, SUCCESS_DISTANCE_TRHESHOLDS)
 
 
 def ikflow():
@@ -116,6 +134,7 @@ def ikflow():
     )
 
     print(df.describe())
+    display_success_rate(distance_J, SUCCESS_DISTANCE_TRHESHOLDS)
 
 
 if __name__ == "__main__":

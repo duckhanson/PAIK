@@ -13,8 +13,8 @@ import warp as wp
 from nodeik.robots.robot import Robot
 from nodeik.training import Learner, ModelWrapper
 from pyquaternion import Quaternion
-from mmd import mmd_evaluate_multiple_poses
-# from posture_constrained_ikp import display_success_rate
+from common.evaluate import mmd_evaluate_multiple_poses
+from common.display import display_success_rate
 from common.config import ConfigIKP, ConfigDiversity
 from common.display import display_ikp
 
@@ -223,15 +223,15 @@ def diversity():
         mmd_nodeik[i] = mmd_evaluate_multiple_poses(J_hat, J, num_poses)
 
     save_diversity(
-        config.record_dir, 
-        "nodeik", 
-        J_hat_nodeik, 
-        l2_nodeik, 
-        ang_nodeik, 
-        mmd_nodeik, 
+        config.record_dir,
+        "nodeik",
+        J_hat_nodeik,
+        l2_nodeik,
+        ang_nodeik,
+        mmd_nodeik,
         base_stds
     )
-    
+
 
 if __name__ == "__main__":
     # ikp()

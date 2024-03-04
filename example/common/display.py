@@ -174,7 +174,10 @@ def display_diversity_all(iksolver_names: list, record_dir: str):
             for name in iksolver_names
         }
     except:
-        print("Please run diversity.py for every IK solver first.")
+        print("Please run diversity.py for every IK solver first. For instance, run:")
+        print("python example/diversity.py")
+        print("conda activate nodeik")
+        print("python nodeik_experiments.py: diversity() function.")
         return
 
     df_l2 = pd.DataFrame(

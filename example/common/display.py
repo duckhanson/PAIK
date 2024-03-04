@@ -109,47 +109,29 @@ def display_posture(record_dir: str, name: str, l2: np.ndarray, ang: np.ndarray,
 
 
 def display_posture_all(record_dir, success_distance_thresholds):
+    names_iksolvers = ["IKFlow", "NODEIK", "PAIK"]
+    df_iksolvers = {}
     try:
-        df_ikflow = pd.read_pickle(f"{record_dir}/ikflow_posture.pkl")
-        df_nodeik = pd.read_pickle(f"{record_dir}/nodeik_posture.pkl")
-        df_paik = pd.read_pickle(f"{record_dir}/paik_posture.pkl")
+        df_iksolvers = {name: pd.read_pickle(f"{record_dir}/{name.lower()}_posture.pkl") for name in names_iksolvers}
     except:
         print("Please run display_posture for every IK solver first.")
         return
-
-    success_rate_ikflow = compute_success_rate(
-        df_ikflow["distance_J (deg)"].values,
-        success_distance_thresholds,
-        return_percentage=False,
-    )
-    success_rate_nodeik = compute_success_rate(
-        df_nodeik["distance_J (deg)"].values,
-        success_distance_thresholds,
-        return_percentage=False,
-    )
-    success_rate_paik = compute_success_rate(
-        df_paik["distance_J (deg)"].values,
-        success_distance_thresholds,
-        return_percentage=False,
-    )
+    success_rates_iksolvers = {name: compute_success_rate(df["distance_J (deg)"].values, success_distance_thresholds, return_percentage=False) for name, df in df_iksolvers.items()}
 
     # plot success rate with respect to success_distance_thresholds
     df = pd.DataFrame(
         {
             "Success Threshold (deg)": success_distance_thresholds,
-            "IKFlow": success_rate_ikflow,
-            "NodeIK": success_rate_nodeik,
-            "PAIK": success_rate_paik,
+            **{name: success_rates for name, success_rates in success_rates_iksolvers.items()},
         }
     )
-
     print(df.describe())
 
     fontsize = 24
     figsize = (9, 8)
     ax = df.plot(
         x="Success Threshold (deg)",
-        y=["IKFlow", "NodeIK", "PAIK"],
+        y=[name for name in names_iksolvers],
         grid=True,
         kind="line",
         title="Success Rate",

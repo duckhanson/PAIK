@@ -162,3 +162,47 @@ def display_posture_all(record_dir, success_distance_thresholds):
     ax.set_yticks(np.arange(0, 100, 15))
     ax.legend(fontsize=fontsize)
     plt.show()
+
+
+def display_diversity_all(record_dir: str):
+    try:
+        df_paik = pd.read_pickle(f"{record_dir}/paik_posture_mmd_std.pkl")
+        df_ikflow = pd.read_pickle(f"{record_dir}/ikflow_posture_mmd_std.pkl")
+        df_nodeik = pd.read_pickle(f"{record_dir}/nodeik_posture_mmd_std.pkl")
+    except:
+        print("Please run diversity.py for every IK solver first.")
+        return
+
+    # plot diversity with respect to base_stds
+    fontsize = 24
+    figsize = (9, 8)
+    df_l2 = pd.DataFrame(
+        {
+            "PAIK": df_paik.l2.values * 1000,
+            "IKFlow": df_ikflow.l2.values * 1000,
+            "NODEIK": df_nodeik.l2.values * 1000,
+            "Base std": df_paik.base_std.values,
+        }
+    )
+
+    ax = df_l2.plot(x="Base std", grid=True, fontsize=fontsize, figsize=figsize)
+    ax.set_xlabel("Base std", fontsize=fontsize)
+    ax.set_ylabel("L2 Error (mm)", fontsize=fontsize)
+    ax.set_title("Position Error", fontsize=fontsize)
+    ax.legend(fontsize=fontsize)
+
+    df_mmd = pd.DataFrame(
+        {
+            "PAIK": df_paik.mmd.values,
+            "IKFlow": df_ikflow.mmd.values,
+            "NODEIK": df_nodeik.mmd.values,
+            "Base std": df_paik.base_std.values,
+        }
+    )
+
+    ax1 = df_mmd.plot(x="Base std", grid=True, fontsize=fontsize, figsize=figsize)
+    ax1.set_xlabel("Base std", fontsize=fontsize)
+    ax1.set_ylabel("MMD Score", fontsize=fontsize)
+    ax1.set_title("MMD Score", fontsize=fontsize)
+    ax1.legend(fontsize=fontsize)
+    plt.show()

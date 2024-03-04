@@ -7,8 +7,9 @@ from datetime import datetime
 
 @dataclass()
 class ConfigFile:
-    iksolver_names: List[str] = field(default_factory=lambda: ["IKFlow", "PAIK", "NODEIK"])
-    
+    iksolver_names: List[str] = field(
+        default_factory=lambda: ["IKFlow", "PAIK", "NODEIK"])
+
     # paik
     workdir: str = "/home/luca/paik"
 
@@ -24,8 +25,7 @@ class ConfigFile:
     )  # "2024_02_24"
 
     def __post_init__(self):
-        self.record_dir = f"{self.workdir}/record/{self.date}"
-        os.makedirs(self.record_dir, exist_ok=True)
+        self.update_record_dir()
 
     @property
     def date(self):
@@ -34,7 +34,11 @@ class ConfigFile:
     @date.setter
     def date(self, value):
         self._date = value
+        self.update_record_dir()
+
+    def update_record_dir(self):
         self.record_dir = f"{self.workdir}/record/{self.date}"
+        os.makedirs(self.record_dir, exist_ok=True)
 
 
 @dataclass()
@@ -56,7 +60,8 @@ class ConfigDiversity(ConfigFile):
     # commons
     num_poses: int = 2500
     num_sols: int = 1000
-    base_stds: list = field(default_factory=lambda: list(np.arange(0.1, 1.5, 1)))
+    base_stds: list = field(
+        default_factory=lambda: list(np.arange(0.1, 1.5, 1)))
 
     # nodeik
     pose_error_threshold: Tuple = (3e-2, 30)  # l2 (m), ang (deg)

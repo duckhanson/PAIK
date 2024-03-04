@@ -1,6 +1,7 @@
 # Import required packages
 import numpy as np
 import torch
+from tqdm import tqdm
 from paik.solver import Solver
 from paik.settings import (
     DEFAULT_NSF,
@@ -32,7 +33,7 @@ def klampt_numerical_ik_solver(config: ConfigDiversity, solver: Solver):
     )
 
     # shape: (num_poses, num_sols, num_dofs or n)
-    J_ground_truth = np.asarray([get_numerical_ik_sols(p, config.num_sols) for p in P])
+    J_ground_truth = np.asarray([get_numerical_ik_sols(p, config.num_sols) for p in tqdm(P)])
 
     # Save to repeat the same experiment on NODEIK
     np.save(f"{config.record_dir}/numerical_ik_sols.npy", J_ground_truth)

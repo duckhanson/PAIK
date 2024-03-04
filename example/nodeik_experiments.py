@@ -51,7 +51,7 @@ def evaluate_pose_errors_P2d_P2d(P_hat, P):
     return l2, ang
 
 
-def init_nodeik(args, std: float, robot: Robot=None):
+def init_nodeik(args, std: float, robot: Robot = None):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     device = torch.device(
@@ -142,10 +142,10 @@ def load_poses_and_numerical_ik_sols_nodeik(record_dir: str, nodeik: ModelWrappe
     print(f"P.shape: {P.shape}, J.shape: {J.shape}")
     P_hat = np.empty_like(P)
     for i in range(len(P)):
-        P_hat[i] = nodeik.forward_kinematics(J[i, np.random.randint(0 , J.shape[1])])
+        P_hat[i] = nodeik.forward_kinematics(J[i, np.random.randint(0, J.shape[1])])
     l2, ang = evaluate_pose_errors_P2d_P2d(P_hat, P)
     df = pd.DataFrame({"l2": l2, "ang": ang})
-    assert df["l2"].mean() < 1e-3, f"[LOAD ERROR] l2.mean(): {df['l2'].mean()}" 
+    assert df["l2"].mean() < 1e-3, f"[LOAD ERROR] l2.mean(): {df['l2'].mean()}"
     # check if the numerical ik solutions are correct
     return P, J
 

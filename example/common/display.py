@@ -78,7 +78,14 @@ def display_success_rate(distance_J_deg: np.ndarray, success_distance_thresholds
     )
 
 
-def display_posture(record_dir: str, name: str, l2: np.ndarray, ang: np.ndarray, distance_J: np.ndarray, success_distance_thresholds: list):
+def display_posture(
+    record_dir: str,
+    name: str,
+    l2: np.ndarray,
+    ang: np.ndarray,
+    distance_J: np.ndarray,
+    success_distance_thresholds: list,
+):
     """
     Display the posture of the generated IK solutions and save the posture to a pickle file.
 
@@ -108,20 +115,35 @@ def display_posture(record_dir: str, name: str, l2: np.ndarray, ang: np.ndarray,
     display_success_rate(distance_J, success_distance_thresholds)
 
 
-def display_posture_all(iksolver_names: list, record_dir: str, success_distance_thresholds: list):
+def display_posture_all(
+    iksolver_names: list, record_dir: str, success_distance_thresholds: list
+):
     iksolver_dfs = {}
     try:
-        iksolver_dfs = {name: pd.read_pickle(f"{record_dir}/{name.lower()}_posture.pkl") for name in iksolver_names}
+        iksolver_dfs = {
+            name: pd.read_pickle(f"{record_dir}/{name.lower()}_posture.pkl")
+            for name in iksolver_names
+        }
     except:
         print("Please run display_posture for every IK solver first.")
         return
-    iksolver_success_rates = {name: compute_success_rate(df["distance_J (deg)"].values, success_distance_thresholds, return_percentage=False) for name, df in iksolver_dfs.items()}
+    iksolver_success_rates = {
+        name: compute_success_rate(
+            df["distance_J (deg)"].values,
+            success_distance_thresholds,
+            return_percentage=False,
+        )
+        for name, df in iksolver_dfs.items()
+    }
 
     # plot success rate with respect to success_distance_thresholds
     df = pd.DataFrame(
         {
             "Success Threshold (deg)": success_distance_thresholds,
-            **{name: success_rates for name, success_rates in iksolver_success_rates.items()},
+            **{
+                name: success_rates
+                for name, success_rates in iksolver_success_rates.items()
+            },
         }
     )
     print(df.describe())
@@ -147,19 +169,21 @@ def display_posture_all(iksolver_names: list, record_dir: str, success_distance_
 
 def display_diversity_all(iksolver_names: list, record_dir: str):
     try:
-        iksolver_dfs = {name: pd.read_pickle(f"{record_dir}/{name.lower()}_std.pkl") for name in iksolver_names}
+        iksolver_dfs = {
+            name: pd.read_pickle(f"{record_dir}/{name.lower()}_std.pkl")
+            for name in iksolver_names
+        }
     except:
         print("Please run diversity.py for every IK solver first.")
         return
 
-    
     df_l2 = pd.DataFrame(
         {
             "Base std": iksolver_dfs[iksolver_names[0]].base_std.values,
             **{name: df.l2.values * 1000 for name, df in iksolver_dfs.items()},
         }
     )
-    
+
     # plot diversity with respect to base_stds
     fontsize = 24
     figsize = (9, 8)

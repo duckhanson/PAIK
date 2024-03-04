@@ -7,6 +7,8 @@ from datetime import datetime
 
 @dataclass()
 class ConfigFile:
+    iksolver_names: List[str] = field(default_factory=lambda: ["IKFlow", "PAIK", "NODEIK"])
+    
     # paik
     workdir: str = "/home/luca/paik"
 

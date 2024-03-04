@@ -1,6 +1,11 @@
 import numpy as np
 import pandas as pd
 
+def load_poses_and_numerical_ik_sols(record_dir: str):
+    P = np.load(f"{record_dir}/poses.npy")
+    J = np.load(f"{record_dir}/numerical_ik_sols.npy")
+    print(f"[SUCCESS] loaded from {record_dir}")
+    return P, J
 
 def save_diversity(
     record_dir: str,

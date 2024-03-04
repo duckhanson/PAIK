@@ -1,6 +1,9 @@
 from dataclasses import dataclass
+from json import load
+from math import isnan
 import os
 from datetime import datetime
+from pickle import NONE
 from tqdm import trange
 import numpy as np
 import pandas as pd
@@ -14,18 +17,9 @@ from nodeik.robots.robot import Robot
 from nodeik.training import Learner, ModelWrapper
 from pyquaternion import Quaternion
 from common.evaluate import mmd_evaluate_multiple_poses, compute_distance_J
-from common.display import display_posture, display_success_rate, display_ikp
-from common.config import ConfigIKP, ConfigDiversity, ConfigPosture
-
-paik_WORKDIR = "/home/luca/paik"
-WORK_DIR = "/home/luca/nodeik"
-URDF_PATH = WORK_DIR + "/examples/assets/robots/franka_panda/panda_arm.urdf"
-MODEL_PATH = WORK_DIR + "/model/panda_loss-20.ckpt"
-NUM_POSES = 10
-NUM_SOLS = 1000
-BATCH_SIZE = 5000
-BASE_STDS = np.arange(0.1, 1.5, 0.1)  # start, stop, step
-STD = 0.25
+from common.display import display_posture, display_ikp
+from common.config import ConfigFile, ConfigIKP, ConfigDiversity, ConfigPosture
+from common.file import load_poses_and_numerical_ik_sols
 
 
 @dataclass
@@ -45,7 +39,7 @@ class args:
     num_samples = 4
     num_references = 256
     seed = 1
-    model_checkpoint = MODEL_PATH
+    model_checkpoint = ConfigFile.nodeik_model_path
 
 
 def evaluate_pose_errors_P2d_P2d(P_hat, P):
@@ -57,7 +51,7 @@ def evaluate_pose_errors_P2d_P2d(P_hat, P):
     return l2, ang
 
 
-def init_nodeik(args, std, robot=None):
+def init_nodeik(args, std: float, robot: Robot=None):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     device = torch.device(
@@ -66,7 +60,7 @@ def init_nodeik(args, std, robot=None):
 
     wp.init()
     if robot is None:
-        robot = Robot(robot_path=URDF_PATH, ee_link_name="panda_hand")
+        robot = Robot(robot_path=ConfigFile.nodeik_urdf_path, ee_link_name="panda_hand")
     learn = Learner.load_from_checkpoint(
         args.model_checkpoint,
         model=build_model(args, robot.active_joint_dim, condition_dims=7).to(device),
@@ -143,23 +137,23 @@ def posture_constraint_ikp():
     )
 
 
-def load_poses_and_numerical_ik_sols(date: str, nodeik: ModelWrapper):
-    record_dir = f"{paik_WORKDIR}/record/{date}"
-    P = np.load(f"{record_dir}/poses.npy")
-    J = np.load(f"{record_dir}/numerical_ik_sols.npy")
-    print(f"loaded from {record_dir}")
+def load_poses_and_numerical_ik_sols_nodeik(record_dir: str, nodeik: ModelWrapper):
+    P, J = load_poses_and_numerical_ik_sols(record_dir)
+    print(f"P.shape: {P.shape}, J.shape: {J.shape}")
     P_hat = np.empty_like(P)
     for i in range(len(P)):
-        P_hat[i] = nodeik.forward_kinematics(J[i, np.random.randint(0, J.shape[1])])
+        P_hat[i] = nodeik.forward_kinematics(J[i, np.random.randint(0 , J.shape[1])])
     l2, ang = evaluate_pose_errors_P2d_P2d(P_hat, P)
-    assert l2.mean() < 1e-3  # check if the numerical ik solutions are correct
+    df = pd.DataFrame({"l2": l2, "ang": ang})
+    assert df["l2"].mean() < 1e-3, f"[LOAD ERROR] l2.mean(): {df['l2'].mean()}" 
+    # check if the numerical ik solutions are correct
     return P, J
 
 
 def diversity():
     config = ConfigDiversity()
     robot, nodeik = init_nodeik(args, 0.1)
-    P, J = load_poses_and_numerical_ik_sols(config.date, nodeik)
+    P, J = load_poses_and_numerical_ik_sols_nodeik(config.record_dir, nodeik)
 
     num_poses, num_sols = J.shape[0:2]
     base_stds = config.base_stds
@@ -221,5 +215,5 @@ def diversity():
 
 if __name__ == "__main__":
     # ikp()
-    posture_constraint_ikp()
-    # diversity()
+    # posture_constraint_ikp()
+    diversity()

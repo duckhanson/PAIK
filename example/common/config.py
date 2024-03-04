@@ -12,10 +12,10 @@ class ConfigFile:
 
     # nodeik
     nodeik_workdir: str = "/home/luca/nodeik"
-    urdf_path: str = (
+    nodeik_urdf_path: str = (
         f"{nodeik_workdir}/examples/assets/robots/franka_panda/panda_arm.urdf"
     )
-    model_path: str = f"{nodeik_workdir}/model/panda_loss-20.ckpt"
+    nodeik_model_path: str = f"{nodeik_workdir}/model/panda_loss-20.ckpt"
 
     _date: str = field(
         default_factory=lambda: datetime.today().strftime("%Y_%m_%d")

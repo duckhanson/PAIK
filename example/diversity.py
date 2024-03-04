@@ -1,5 +1,6 @@
 # Import required packages
 import numpy as np
+import pandas as pd
 import torch
 from tqdm import tqdm
 from paik.solver import Solver
@@ -9,7 +10,7 @@ from paik.settings import (
 )
 
 from common.config import ConfigDiversity
-from common.file import save_diversity
+from common.file import save_diversity, load_poses_and_numerical_ik_sols
 from common.evaluate import mmd_evaluate_multiple_poses
 
 from ikflow.utils import set_seed
@@ -35,16 +36,13 @@ def klampt_numerical_ik_solver(config: ConfigDiversity, solver: Solver):
     # shape: (num_poses, num_sols, num_dofs or n)
     J_ground_truth = np.asarray([get_numerical_ik_sols(p, config.num_sols) for p in tqdm(P)])
 
+    l2, ang = solver.evaluate_pose_error_J3d_P2d(J_ground_truth.transpose(1, 0, 2), P, return_all=True)
+    df = pd.DataFrame({"l2": l2, "ang": ang})
+    print(df.describe())
+    
     # Save to repeat the same experiment on NODEIK
     np.save(f"{config.record_dir}/numerical_ik_sols.npy", J_ground_truth)
     np.save(f"{config.record_dir}/poses.npy", P)
-
-
-def load_poses_and_numerical_ik_sols(record_dir: str):
-    P = np.load(f"{record_dir}/poses.npy")
-    J = np.load(f"{record_dir}/numerical_ik_sols.npy")
-    print(f"[SUCCESS] loaded from {record_dir}")
-    return P, J
 
 
 def paik(config: ConfigDiversity, solver: Solver):

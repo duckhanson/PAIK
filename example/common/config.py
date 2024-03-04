@@ -52,8 +52,8 @@ class ConfigIKP(ConfigFile):
 @dataclass()
 class ConfigDiversity(ConfigFile):
     # commons
-    num_poses: int = 100
-    num_sols: int = 200
+    num_poses: int = 2500
+    num_sols: int = 1000
     base_stds: list = field(default_factory=lambda: list(np.arange(0.1, 1.5, 1)))
 
     # nodeik

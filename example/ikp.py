@@ -32,7 +32,7 @@ def paik():
         batch_size=config.batch_size,
         success_threshold=config.success_threshold,
     )  # type: ignore
-    display_ikp(l2, ang, avg_inference_time)
+    display_ikp(l2, ang, avg_inference_time) # type: ignore
     print(f"success rate {config.method_of_select_reference_posture}: {success_rate}")
 
 

@@ -30,7 +30,7 @@ def save_diversity(
             "base_std": base_std,
         }
     )
-
+    print(df.describe())
     df.to_pickle(f"{record_dir}/{name}_std.pkl")
 
     print(f"[SUCCESS] saved to {record_dir}/{name}_std.pkl")

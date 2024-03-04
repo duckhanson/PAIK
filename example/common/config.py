@@ -10,6 +10,7 @@ class ConfigFile:
     iksolver_names: List[str] = field(
         default_factory=lambda: ["IKFlow", "PAIK", "NODEIK"]
     )
+    batch_size: int = 5000
 
     # paik
     workdir: str = "/home/luca/paik"
@@ -51,7 +52,6 @@ class ConfigIKP(ConfigFile):
     success_threshold: Tuple = (5e-3, 2)
 
     # paik
-    batch_size: int = 5000
     use_nsf_only: bool = False
     method_of_select_reference_posture: str = "knn"
 
@@ -61,7 +61,7 @@ class ConfigDiversity(ConfigFile):
     # commons
     num_poses: int = 2500
     num_sols: int = 1000
-    base_stds: list = field(default_factory=lambda: list(np.arange(0.1, 1.5, 1)))
+    base_stds: list = field(default_factory=lambda: list(np.arange(0.1, 1.5, 0.1)))
 
     # nodeik
     pose_error_threshold: Tuple = (3e-2, 30)  # l2 (m), ang (deg)
@@ -72,7 +72,6 @@ class ConfigPosture(ConfigFile):
     # commons
     num_poses: int = 3000
     num_sols: int = 2000
-    batch_size: int = 5000
     std: float = 0.25
     use_nsf_only: bool = False
 

@@ -1,4 +1,5 @@
 # Import required packages
+from typing import Any
 import numpy as np
 import pandas as pd
 import torch
@@ -21,10 +22,12 @@ def get_numerical_ik_sols(pose, num_seeds):
     seeds, _ = solver._robot.sample_joint_angles_and_poses(
         n=num_seeds, return_torch=False
     )
-    
+
     numerical_ik_sols = np.empty((num_seeds, solver.n))
     for i, seed in enumerate(seeds):
-        numerical_ik_sols[i] = solver.robot.inverse_kinematics_klampt(pose=pose, seed=seed)
+        numerical_ik_sols[i] = solver.robot.inverse_kinematics_klampt(
+            pose=pose, seed=seed
+        )
     return numerical_ik_sols
 
 
@@ -34,57 +37,96 @@ def klampt_numerical_ik_solver(config: ConfigDiversity, solver: Solver):
     )
 
     # shape: (num_poses, num_sols, num_dofs or n)
-    J_ground_truth = np.asarray([get_numerical_ik_sols(p, config.num_sols) for p in tqdm(P)])
+    J_ground_truth = np.asarray(
+        [get_numerical_ik_sols(p, config.num_sols) for p in tqdm(P)]
+    )
 
-    l2, ang = solver.evaluate_pose_error_J3d_P2d(J_ground_truth.transpose(1, 0, 2), P, return_all=True)
+    l2, ang = solver.evaluate_pose_error_J3d_P2d(
+        J_ground_truth.transpose(1, 0, 2), P, return_all=True
+    )
     df = pd.DataFrame({"l2": l2, "ang": ang})
     print(df.describe())
-    
+
     # Save to repeat the same experiment on NODEIK
     np.save(f"{config.record_dir}/numerical_ik_sols.npy", J_ground_truth)
     np.save(f"{config.record_dir}/poses.npy", P)
 
 
-def paik(config: ConfigDiversity, solver: Solver):
+def paik_solve(config: ConfigDiversity, solver: Solver, std: float, P: np.ndarray):
+    assert P.shape[:2] == (config.num_poses, config.num_sols)
+
+    solver.base_std = std
+    # shape: (num_poses * num_sols, n)
+    F = solver.F[
+        solver.P_knn.kneighbors(
+            np.atleast_2d(P[:, 0]), n_neighbors=config.num_sols, return_distance=False
+        ).flatten()
+    ]
+
+    # shape: (num_poses * num_sols, n)
+    P = P.reshape(-1, P.shape[-1])
+    J_hat = solver.solve_batch(P, F, 1)  # (1, num_poses * num_sols, n)
+    assert J_hat.shape == (
+        1,
+        config.num_poses * config.num_sols,
+        solver.n,
+    ), f"Expected: {(1, config.num_poses * config.num_sols, solver.n)}, Got: {J_hat.shape}"
+    return J_hat
+
+
+def ikflow_solve(config: ConfigDiversity, solver: Any, std: float, P: np.ndarray):
+    assert P.shape[:2] == (config.num_poses, config.num_sols)
+    P = P.reshape(-1, P.shape[-1])
+    J_hat = solver.solve_n_poses(P, latent_scale=std).cpu().numpy()
+    J_hat = np.expand_dims(J_hat, axis=0)
+    assert J_hat.shape == (
+        1,
+        config.num_poses * config.num_sols,
+        J_hat.shape[-1],
+    ), f"Expected: {(1, config.num_poses * config.num_sols, J_hat.shape[-1])}, Got: {J_hat.shape}"
+    return J_hat
+
+
+def iterate_over_base_stds(
+    config: ConfigDiversity,
+    iksolver_name: str,
+    solver: Any,
+    paik_solver: Solver,
+    solve_fn,
+):
     l2_mean = np.empty((len(config.base_stds)))
     ang_mean = np.empty((len(config.base_stds)))
     mmd_mean = np.empty((len(config.base_stds)))
-    J_hat_paik = np.empty(
-        (len(config.base_stds), config.num_poses, config.num_sols, solver.n)
-    )
     P, J_ground_truth = load_poses_and_numerical_ik_sols(config.record_dir)
+    P = np.expand_dims(P, axis=1).repeat(config.num_sols, axis=1)
+    J_hat_base_stds = np.empty(
+        (
+            len(config.base_stds),
+            config.num_poses,
+            config.num_sols,
+            J_ground_truth.shape[-1],
+        )
+    )
 
     for i, std in enumerate(config.base_stds):
-        solver.base_std = std
-        P_expand_dim = (
-            np.expand_dims(P, axis=1)
-            .repeat(config.num_sols, axis=1)
-            .reshape(-1, P.shape[-1])
-        )
+        J_hat = solve_fn(config, solver, std, P)
 
-        F = solver.F[
-            solver.P_knn.kneighbors(
-                np.atleast_2d(P), n_neighbors=config.num_sols, return_distance=False
-            ).flatten()
-        ]
-        J_hat = solver.solve_batch(P_expand_dim, F, 1)
-
-        l2, ang = solver.evaluate_pose_error_J3d_P2d(
-            J_hat, P_expand_dim, return_all=True
+        l2, ang = paik_solver.evaluate_pose_error_J3d_P2d(
+            J_hat, P.reshape(-1, P.shape[-1]), return_all=True
         )
         J_hat = J_hat.reshape(config.num_poses, config.num_sols, -1)
-        J_hat_paik[i] = J_hat
         l2_mean[i] = l2.mean()
         ang_mean[i] = ang.mean()
         mmd_mean[i] = mmd_evaluate_multiple_poses(
             J_hat, J_ground_truth, num_poses=config.num_poses
         )
+        J_hat_base_stds[i] = J_hat
         assert not np.isnan(mmd_mean[i])
 
     save_diversity(
         config.record_dir,
-        "paik",
-        J_hat_paik,
+        iksolver_name,
+        J_hat_base_stds,
         l2_mean,
         ang_mean,
         mmd_mean,
@@ -92,50 +134,22 @@ def paik(config: ConfigDiversity, solver: Solver):
     )
 
 
+def paik(config: ConfigDiversity, solver: Solver):
+    iterate_over_base_stds(config, "paik", solver, solver, paik_solve)
+
+
 def ikflow(config: ConfigDiversity, solver: Solver):
     set_seed()
     # Build IKFlowSolver and set weights
     ik_solver, _ = get_ik_solver("panda__full__lp191_5.25m")
-    l2_flow = np.empty((len(config.base_stds)))
-    ang_flow = np.empty((len(config.base_stds)))
-    mmd_flow = np.empty((len(config.base_stds)))
-    J_hat_ikflow = np.empty(
-        (len(config.base_stds), config.num_poses, config.num_sols, solver.n)
-    )
-
-    P, J_ground_truth = load_poses_and_numerical_ik_sols(config.record_dir)
-
-    for i, std in enumerate(config.base_stds):
-        J_flow = np.array(
-            [
-                ik_solver.solve(p, n=config.num_sols, latent_scale=std).cpu().numpy()
-                for p in P
-            ]
-        )  # (num_sols, num_poses, n)
-        J_hat_ikflow[i] = J_flow
-
-        l2, ang = solver.evaluate_pose_error_J3d_P2d(
-            J_flow.transpose(1, 0, 2), P, return_all=True
-        )
-        l2_flow[i] = l2.mean()
-        ang_flow[i] = ang.mean()
-        mmd_flow[i] = mmd_evaluate_multiple_poses(
-            J_flow, J_ground_truth, num_poses=config.num_poses
-        )
-
-    save_diversity(
-        config.record_dir,
-        "ikflow",
-        J_hat_ikflow,
-        l2_flow,
-        ang_flow,
-        mmd_flow,
-        config.base_stds,
-    )
+    iterate_over_base_stds(config, "ikflow", ik_solver, solver, ikflow_solve)
 
 
 if __name__ == "__main__":
     config = ConfigDiversity()
+    config.num_poses = 100
+    config.num_sols = 100
+    config.date = "2021-09-15"
     solver_param = DEFULT_SOLVER
     solver_param.workdir = config.workdir
     solver = Solver(solver_param=solver_param)

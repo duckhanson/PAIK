@@ -2,6 +2,13 @@ import numpy as np
 import numpy.typing as npt
 import torch
 
+def make_batches(arr: np.ndarray, batch_size: int):
+    # Split the array into batches
+    return np.split(arr, np.arange(batch_size, arr.shape[0], batch_size))
+
+def batches_back_to_array(batches: list):
+    # Concatenate the batches back into an array
+    return np.concatenate(batches, axis=0)
 
 def compute_distance_J(
     J_hat_3d: np.ndarray, J_ground_truth_2d: np.ndarray

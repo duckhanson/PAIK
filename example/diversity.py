@@ -12,7 +12,11 @@ from paik.settings import (
 
 from common.config import ConfigDiversity
 from common.file import save_diversity, load_poses_and_numerical_ik_sols
-from common.evaluate import mmd_evaluate_multiple_poses, make_batches, batches_back_to_array
+from common.evaluate import (
+    mmd_evaluate_multiple_poses,
+    make_batches,
+    batches_back_to_array,
+)
 
 from ikflow.utils import set_seed
 from ikflow.model_loading import get_ik_solver
@@ -77,8 +81,13 @@ def paik_solve(config: ConfigDiversity, solver: Solver, std: float, P: np.ndarra
 def ikflow_solve(config: ConfigDiversity, solver: Any, std: float, P: np.ndarray):
     assert P.shape[:2] == (config.num_poses, config.num_sols)
     P = P.reshape(-1, P.shape[-1])
-    P = make_batches(P, config.batch_size) # type: ignore
-    J_hat = batches_back_to_array([solver.solve_n_poses(batch_P, latent_scale=std).cpu().numpy() for batch_P in tqdm(P)])
+    P = make_batches(P, config.batch_size)  # type: ignore
+    J_hat = batches_back_to_array(
+        [
+            solver.solve_n_poses(batch_P, latent_scale=std).cpu().numpy()
+            for batch_P in tqdm(P)
+        ]
+    )
     J_hat = np.expand_dims(J_hat, axis=0)
     assert J_hat.shape == (
         1,

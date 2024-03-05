@@ -1,8 +1,5 @@
 # Import required packages
-import time
 import numpy as np
-import pandas as pd
-from tabulate import tabulate
 from tqdm import trange
 import torch
 from paik.solver import Solver

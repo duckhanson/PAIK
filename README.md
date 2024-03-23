@@ -21,7 +21,10 @@ python -m ipykernel install --user --name paik --display-name "paik"
 ### Possible install issues:
 1. ERROR: Could not find a version that satisfies the requirement torch==2.0.1+cu118 (from paik) ERROR: No matching distribution found for torch==2.0.1+cu118
 
-    Ans: try conda install pytorch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 pytorch-cuda=11.8 -c pytorch -c nvidia
+    Ans: try 
+    ``` bash
+    conda install pytorch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 pytorch-cuda=11.8 -c pytorch -c nvidia
+    ```
 
 ## Getting started
 **> Example 1: Use PAIK to generate IK solutions for the Franka Panda**

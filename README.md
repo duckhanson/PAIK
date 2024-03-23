@@ -60,6 +60,7 @@ run example/display_results.ipynb
     ```
 
 ## Citation
+If this project is used in your work, it would be appreciated if you cite the PAIK paper:
 ``` bibtex
 @ARTICLE{}
 ```

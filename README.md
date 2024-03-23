@@ -48,9 +48,9 @@ run example/display_results.ipynb
 python example/sweep.py
 ```
 
-## Possible issues:
+## Possible issues
 
-### Install issues:
+### Install issues
 1. ERROR: Could not find a version that satisfies the requirement torch==2.0.1+cu118 (from paik) ERROR: No matching distribution found for torch==2.0.1+cu118
 
     Ans: try 
@@ -58,7 +58,7 @@ python example/sweep.py
     conda install pytorch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 pytorch-cuda=11.8 -c pytorch -c nvidia
     ```
 
-### Run issues:
+### Run issues
 1. RuntimeError: "addmm_cuda" not implemented for 'Int'
 
     Ans: your gpu may not support int operations, so replace zuko/nn.py:181

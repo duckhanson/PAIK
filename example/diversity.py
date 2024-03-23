@@ -1,4 +1,5 @@
 # Import required packages
+import time
 from typing import Any
 import numpy as np
 import pandas as pd
@@ -41,9 +42,11 @@ def klampt_numerical_ik_solver(config: ConfigDiversity, solver: Solver):
     )
 
     # shape: (num_poses, num_sols, num_dofs or n)
+    begin = time.time()
     J_ground_truth = np.asarray(
         [get_numerical_ik_sols(p, config.num_sols) for p in tqdm(P)]
     )
+    print(f"Time to solve {config.num_poses} poses: {time.time() - begin:.2f}s")
 
     l2, ang = solver.evaluate_pose_error_J3d_P2d(
         J_ground_truth.transpose(1, 0, 2), P, return_all=True
@@ -77,6 +80,26 @@ def paik_solve(config: ConfigDiversity, solver: Solver, std: float, P: np.ndarra
     ), f"Expected: {(1, config.num_poses * config.num_sols, solver.n)}, Got: {J_hat.shape}"
     return J_hat
 
+def nsf_solve(config: ConfigDiversity, solver: Solver, std: float, P: np.ndarray):
+    assert P.shape[:2] == (config.num_poses, config.num_sols)
+
+    solver.base_std = std
+    # shape: (num_poses * num_sols, n)
+    F = solver.F[
+        solver.P_knn.kneighbors(
+            np.atleast_2d(P[:, 0]), n_neighbors=config.num_sols, return_distance=False
+        ).flatten()
+    ]
+
+    # shape: (num_poses * num_sols, n)
+    P = P.reshape(-1, P.shape[-1])
+    J_hat = solver.solve_batch(P, F, 1)  # (1, num_poses * num_sols, n)
+    assert J_hat.shape == (
+        1,
+        config.num_poses * config.num_sols,
+        solver.n,
+    ), f"Expected: {(1, config.num_poses * config.num_sols, solver.n)}, Got: {J_hat.shape}"
+    return J_hat
 
 def ikflow_solve(config: ConfigDiversity, solver: Any, std: float, P: np.ndarray):
     assert P.shape[:2] == (config.num_poses, config.num_sols)
@@ -147,6 +170,12 @@ def iterate_over_base_stds(
 def paik(config: ConfigDiversity, solver: Solver):
     iterate_over_base_stds(config, "paik", solver, solver, paik_solve)
 
+def nsf(config: ConfigDiversity, solver: Solver):
+    solver_param = DEFAULT_NSF
+    solver_param.workdir = config.workdir
+    nsf = Solver(solver_param=solver_param)
+    iterate_over_base_stds(config, "nsf", nsf, solver, nsf_solve)
+
 
 def ikflow(config: ConfigDiversity, solver: Solver):
     set_seed()
@@ -160,7 +189,8 @@ if __name__ == "__main__":
     solver_param = DEFULT_SOLVER
     solver_param.workdir = config.workdir
     solver = Solver(solver_param=solver_param)
-
-    klampt_numerical_ik_solver(config, solver)
-    paik(config, solver)
-    ikflow(config, solver)
+    config.date = "2024_03_04"
+    # klampt_numerical_ik_solver(config, solver)
+    # paik(config, solver)
+    nsf(config, solver)
+    # ikflow(config, solver)

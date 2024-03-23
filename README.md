@@ -58,4 +58,53 @@ run example/display_results.ipynb
     ``` python
     precedence = adjacency.float() @ adjacency.float().t() == adjacency.sum(dim=-1)
     ```
+
+## Citation
+``` bibtex
+@ARTICLE{}
+```
+
     
+## References
+``` bibtex
+@ARTICLE{9793576,
+  author={Ames, Barrett and Morgan, Jeremy and Konidaris, George},
+  journal={IEEE Robotics and Automation Letters}, 
+  title={IKFlow: Generating Diverse Inverse Kinematics Solutions}, 
+  year={2022},
+  volume={7},
+  number={3},
+  pages={7177-7184},
+  doi={10.1109/LRA.2022.3181374}
+}
+
+@inproceedings{park2022nodeik,
+  title={NODEIK: Solving Inverse Kinematics with Neural Ordinary Differential Equations for Path Planning},
+  author={Park, Suhan and Schwartz, Mathew and Park, Jaeheung},
+  booktitle={2022 22nd International Conference on Control, Automation and Systems (ICCAS)},
+  pages={944--949},
+  year={2022},
+  organization={IEEE}
+}
+
+@software{rozet2022zuko,
+  title = {{Zuko}: Normalizing flows in PyTorch},
+  author = {Rozet, François and others},
+  year = {2022},
+  doi = {10.5281/zenodo.7625672},
+  license = {MIT},
+  url = {https://pypi.org/project/zuko},
+}
+
+@article{hnne,
+  title={Hierarchical Nearest Neighbor Graph Embedding for Efficient Dimensionality Reduction},
+  author={M. Saquib Sarfraz, Marios Koulakis, Constantin Seibold, Rainer Stiefelhagen},
+  booktitle = {Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year = {2022}
+}
+
+```
+
+
+
+

@@ -186,17 +186,7 @@ def display_diversity_all(iksolver_names: list, record_dir: str):
             **{name: df.l2.values * 1000 for name, df in iksolver_dfs.items()},
         }
     )
-
-    # plot diversity with respect to base_stds
-    fontsize = 24
-    figsize = (9, 8)
-
-    ax = df_l2.plot(x="Base std", grid=True, fontsize=fontsize, figsize=figsize)
-    ax.set_xlabel("Base std", fontsize=fontsize)
-    ax.set_ylabel("L2 Error (mm)", fontsize=fontsize)
-    ax.set_title("Position Error", fontsize=fontsize)
-    ax.legend(fontsize=fontsize)
-
+    
     df_mmd = pd.DataFrame(
         {
             "Base std": iksolver_dfs[iksolver_names[0]].base_std.values,
@@ -204,9 +194,23 @@ def display_diversity_all(iksolver_names: list, record_dir: str):
         }
     )
 
-    ax1 = df_mmd.plot(x="Base std", grid=True, fontsize=fontsize, figsize=figsize)
-    ax1.set_xlabel("Base std", fontsize=fontsize)
-    ax1.set_ylabel("MMD Score", fontsize=fontsize)
-    ax1.set_title("MMD Score", fontsize=fontsize)
-    ax1.legend(fontsize=fontsize)
+    # plot diversity with respect to base_stds
+    fontsize = 24
+    figsize = (16, 7)
+    
+    fig, sub_ax = plt.subplots(1,2, figsize=figsize)
+    
+    df_l2.plot(x="Base std", grid=True, fontsize=fontsize, ax=sub_ax[0], legend=False)
+    sub_ax[0].set_xlabel("Base std", fontsize=fontsize)
+    sub_ax[0].set_ylabel("L2 Error (mm)", fontsize=fontsize)
+    sub_ax[0].set_title("Position Error", fontsize=fontsize)
+    # sub_ax[0].legend(fontsize=fontsize)
+
+    df_mmd.plot(x="Base std", grid=True, fontsize=fontsize, ax=sub_ax[1], legend=False)
+    sub_ax[1].set_xlabel("Base std", fontsize=fontsize)
+    sub_ax[1].set_ylabel("MMD Score", fontsize=fontsize)
+    sub_ax[1].set_title("MMD Score", fontsize=fontsize)
+    # sub_ax[1].legend(fontsize=fontsize)
+    fig.legend(iksolver_names, loc="center right", bbox_to_anchor=(0.9, 0.7), fontsize=fontsize)
+    
     plt.show()

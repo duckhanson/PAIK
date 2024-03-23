@@ -47,6 +47,8 @@ python example/sweep.py
 
 ### To run nodeik
 1. install nodeik from ["nodeik github"](https://github.com/cadop/nodeik). note: use a new conda environment, because nodeik package conflicts with PAIK package.
+2. change line example/nodeik_experiments.py:42 to your `nodeik workdir`!
+![alt text](image/nodeik_work_dir.png)
 2. run nodeik
     ``` bash
     python example/nodeik_experiments.py

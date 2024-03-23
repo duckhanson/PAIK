@@ -16,11 +16,11 @@ class ConfigFile:
     workdir: str = "/home/luca/paik"
 
     # nodeik
-    nodeik_workdir: str = "/home/luca/nodeik"
+    _nodeik_workdir: str = "/home/luca/nodeik"
     nodeik_urdf_path: str = (
-        f"{nodeik_workdir}/examples/assets/robots/franka_panda/panda_arm.urdf"
+        f"{_nodeik_workdir}/examples/assets/robots/franka_panda/panda_arm.urdf"
     )
-    nodeik_model_path: str = f"{nodeik_workdir}/model/panda_loss-20.ckpt"
+    nodeik_model_path: str = f"{_nodeik_workdir}/model/panda_loss-20.ckpt"
 
     _date: str = field(
         default_factory=lambda: datetime.today().strftime("%Y_%m_%d")
@@ -32,11 +32,22 @@ class ConfigFile:
     @property
     def date(self):
         return self._date
+    
+    @property
+    def nodeik_workdir(self):
+        return self._nodeik_workdir
 
     @date.setter
     def date(self, value):
         self._date = value
         self.update_record_dir()
+        
+    
+    @nodeik_workdir.setter
+    def nodeik_workdir(self, value):
+        self._nodeik_workdir = value
+        self.nodeik_urdf_path = f"{value}/examples/assets/robots/franka_panda/panda_arm.urdf"
+        self.nodeik_model_path = f"{value}/model/panda_loss-20.ckpt"
 
     def update_record_dir(self):
         self.record_dir = f"{self.workdir}/record/{self.date}"

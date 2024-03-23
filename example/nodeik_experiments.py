@@ -39,7 +39,7 @@ class args:
     num_samples = 4
     num_references = 256
     seed = 1
-    model_checkpoint = ConfigFile.nodeik_model_path
+    nodeik_workdir = "/home/luca/nodeik"
 
 
 def evaluate_pose_errors_P2d_P2d(P_hat, P):
@@ -52,6 +52,9 @@ def evaluate_pose_errors_P2d_P2d(P_hat, P):
 
 
 def init_nodeik(args, std: float, robot: Robot = None):
+    config = ConfigFile()
+    config.nodeik_workdir = args.nodeik_workdir
+    
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     device = torch.device(
@@ -62,7 +65,7 @@ def init_nodeik(args, std: float, robot: Robot = None):
     if robot is None:
         robot = Robot(robot_path=ConfigFile.nodeik_urdf_path, ee_link_name="panda_hand")
     learn = Learner.load_from_checkpoint(
-        args.model_checkpoint,
+        ConfigFile.nodeik_model_path,
         model=build_model(args, robot.active_joint_dim, condition_dims=7).to(device),
         robot=robot,
         std=std,
@@ -214,6 +217,6 @@ def diversity():
 
 
 if __name__ == "__main__":
-    # ikp()
+    ikp()
     # posture_constraint_ikp()
-    diversity()
+    # diversity()

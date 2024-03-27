@@ -148,7 +148,8 @@ def display_posture_all(
     )
     print(df.describe())
 
-    fontsize = 24
+    fontsize = 28
+    title_fontsize = fontsize + 4
     figsize = (9, 8)
     ax = df.plot(
         x="Success Threshold (deg)",
@@ -159,11 +160,11 @@ def display_posture_all(
         fontsize=fontsize,
         figsize=figsize,
     )
-    ax.set_ylabel("Success Rate (%)", fontsize=fontsize)
-    ax.set_xlabel("Distance Threshold (deg)", fontsize=fontsize)
-    ax.set_title("Success Rate", fontsize=fontsize)
+    ax.set_ylabel("Success Rate (%)", fontsize=title_fontsize)
+    ax.set_xlabel("Distance Threshold (deg)", fontsize=title_fontsize)
+    ax.set_title("Success Rate", fontsize=title_fontsize)
     ax.set_yticks(np.arange(0, 100, 15))
-    ax.legend(fontsize=fontsize)
+    ax.legend(fontsize=title_fontsize)
     plt.show()
 
 
@@ -196,21 +197,28 @@ def display_diversity_all(iksolver_names: list, record_dir: str):
 
     # plot diversity with respect to base_stds
     fontsize = 24
-    figsize = (16, 7)
+    title_fontsize = fontsize + 4
+    figsize = (14, 7)
+    ax_figsize = (1, 1)
     
     fig, sub_ax = plt.subplots(1,2, figsize=figsize)
-    
+    x_ticks = np.arange(0, 1.5, 0.3)[1:]
     df_l2.plot(x="Base std", grid=True, fontsize=fontsize, ax=sub_ax[0], legend=False)
-    sub_ax[0].set_xlabel("Base std", fontsize=fontsize)
-    sub_ax[0].set_ylabel("L2 Error (mm)", fontsize=fontsize)
-    sub_ax[0].set_title("Position Error", fontsize=fontsize)
+    sub_ax[0].set_xticks(x_ticks)
+    sub_ax[0].set_xlabel("Base std", fontsize=title_fontsize)
+    sub_ax[0].set_ylabel("L2 Error (mm)", fontsize=title_fontsize)
+    sub_ax[0].set_title("Position Error", fontsize=title_fontsize)
+    # sub_ax[0].figure.set_size_inches(ax_figsize)
     # sub_ax[0].legend(fontsize=fontsize)
 
     df_mmd.plot(x="Base std", grid=True, fontsize=fontsize, ax=sub_ax[1], legend=False)
-    sub_ax[1].set_xlabel("Base std", fontsize=fontsize)
-    sub_ax[1].set_ylabel("MMD Score", fontsize=fontsize)
-    sub_ax[1].set_title("MMD Score", fontsize=fontsize)
+    sub_ax[1].set_xticks(x_ticks)
+    sub_ax[1].set_xlabel("Base std", fontsize=title_fontsize)
+    sub_ax[1].set_ylabel("MMD Score", fontsize=title_fontsize)
+    sub_ax[1].set_title("MMD Score", fontsize=title_fontsize)
+    # sub_ax[1].figure.set_size_inches(ax_figsize)
     # sub_ax[1].legend(fontsize=fontsize)
-    fig.legend(iksolver_names, loc="center right", bbox_to_anchor=(0.9, 0.7), fontsize=fontsize)
+    fig.legend(iksolver_names, loc="center right", bbox_to_anchor=(0.9, 0.7), fontsize=title_fontsize)
     
+    plt.subplots_adjust(wspace=0.3)
     plt.show()

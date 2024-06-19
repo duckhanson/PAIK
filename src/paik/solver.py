@@ -107,8 +107,10 @@ class Solver:
             )
             save_numpy(file_path=data_path("J"), arr=J)
             save_numpy(file_path=data_path("P"), arr=P)
-
+            print(f"[SUCCESS] J and P saved in {data_path('J')} and {data_path('P')}.")
+            
         if F is None:
+            print(f"[WARNING] F not found, generate and save in {data_path('F')}.")
             assert self.r > 0, "r should be greater than 0."
             # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
             hnne = HNNE(dim=self.r)
@@ -130,6 +132,7 @@ class Solver:
                 )  # type: ignore
 
             save_numpy(file_path=data_path("F"), arr=F)
+            print(f"[SUCCESS] F saved in {data_path('F')}.")
         print(f"[SUCCESS] F load from {data_path('F')}")
 
         # for normalization

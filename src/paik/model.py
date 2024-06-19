@@ -12,7 +12,7 @@ from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 from zuko.flows.spline import NSF
 from .settings import SolverConfig
-from jrl.robots import Panda
+from jrl.robots import Panda, Fetch, FetchArm, Iiwa7
 
 
 def get_flow_model(config: SolverConfig) -> tuple[Flow, Optimizer, ReduceLROnPlateau]:
@@ -86,8 +86,9 @@ def get_flow_model(config: SolverConfig) -> tuple[Flow, Optimizer, ReduceLROnPla
 
     return flow, optimizer, scheduler
 
+SUPPORTED_ROBOTS = [Panda, Fetch, FetchArm, Iiwa7]
 
-def get_robot(robot_name: str, robot_dirs: Tuple[str, str, str]):
+def get_robot(robot_name: str, robot_dirs: Tuple[str, str, str, str]):
     """
     Return robot model, and create robot directories if not exists
 
@@ -103,5 +104,7 @@ def get_robot(robot_name: str, robot_dirs: Tuple[str, str, str]):
 
     if robot_name == "panda":
         return Panda()
+    elif robot_name == "fetch":
+        return Fetch()
     else:
         raise NotImplementedError()

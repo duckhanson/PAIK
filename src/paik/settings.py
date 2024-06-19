@@ -8,7 +8,7 @@ class SolverConfig:
     # robot
     robot_name: str = "panda"
     n: int = 7
-    m: int = 7
+    m: int = 7  # quaternion = [px, py, pz, qw, qx, qy, qz] the same as ikflow
     r: int = 1
 
     # model
@@ -63,7 +63,7 @@ class SolverConfig:
     # experiment
     traj_dir: str = f"{data_dir}/trajectory/"
 
-    dir_paths: Tuple[str, str, str] = (data_dir, weight_dir, traj_dir)
+    dir_paths: Tuple[str, str, str, str] = (data_dir, weight_dir, traj_dir, train_dir)
 
     @property
     def workdir(self):
@@ -76,7 +76,7 @@ class SolverConfig:
         self.train_dir = f"{self.data_dir}/train"
         self.weight_dir = f"{value}/weights/{self.robot_name}"
         self.traj_dir = f"{self.data_dir}/trajectory/"
-        self.dir_paths = (self.data_dir, self.weight_dir, self.traj_dir)
+        self.dir_paths = (self.data_dir, self.weight_dir, self.traj_dir, self.train_dir)
 
 
 # DEFAULT_SOLVER_PARAM_M7_NORM = SolverConfig(
@@ -94,7 +94,7 @@ class SolverConfig:
 #     ckpt_name="1202-1325",  # 1202-1325, 1205-0023
 # )
 
-DEFAULT_NSF = SolverConfig(
+PANDA_NSF = SolverConfig(
     lr=0.00037,
     gamma=0.086,
     noise_esp=0.0025,
@@ -110,7 +110,28 @@ DEFAULT_NSF = SolverConfig(
     ckpt_name="0115-0234",
 )
 
-DEFULT_SOLVER = SolverConfig(
+PANDA_PAIK = SolverConfig(
+    lr=4e-4,
+    gamma=0.086,
+    noise_esp=0.0025,
+    randperm=False,
+    base_std=0.65,
+    subnet_width=1024,
+    num_transforms=8,
+    lr_weight_decay=0.013,
+    shce_patience=2,
+    noise_esp_decay=0.97,
+    subnet_num_layers=3,
+    batch_size=1024,
+    use_nsf_only=False,
+    ckpt_name="0126-1535",  # "0119-1047", "0118-0827", "0126-1535"
+)
+
+FETCH_PAIK = SolverConfig(
+    robot_name="fetch",
+    n=8,
+    m=7,
+    r=2,
     lr=4e-4,
     gamma=0.086,
     noise_esp=0.0025,

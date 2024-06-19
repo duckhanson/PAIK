@@ -12,7 +12,7 @@ from sklearn.neighbors import NearestNeighbors
 
 from tqdm import trange
 
-from .settings import SolverConfig, DEFULT_SOLVER
+from .settings import SolverConfig, PANDA_PAIK
 from .model import get_flow_model, get_robot
 from .file import load_numpy, save_numpy, save_pickle, load_pickle
 from .evaluate import evaluate_pose_error_P2d_P2d
@@ -21,7 +21,7 @@ from zuko.flows import Flow, Unconditional
 
 
 class Solver:
-    def __init__(self, solver_param: SolverConfig = DEFULT_SOLVER) -> None:
+    def __init__(self, solver_param: SolverConfig = PANDA_PAIK) -> None:
         self.__solver_param = solver_param
         self._robot = get_robot(
             solver_param.robot_name, robot_dirs=solver_param.dir_paths
@@ -97,9 +97,11 @@ class Solver:
             lambda name: f"{self.param.train_dir}/{name}-{self.param.N}-{self.n}-{self.m}-{self.r}.npy"
         )
 
-        J, P, F = [load_numpy(file_path=data_path(name)) for name in ["J", "P", "F"]]
+        J, P, F = [load_numpy(file_path=data_path(name))
+                   for name in ["J", "P", "F"]]
 
         if J is None or P is None:
+            print(f"[WARNING] J or P not found, generate and save in {data_path('J')}.")
             J, P = self._robot.sample_joint_angles_and_poses(
                 n=self.param.N, return_torch=False
             )
@@ -153,7 +155,8 @@ class Solver:
             base=Unconditional(
                 DiagNormal,
                 torch.zeros((self._robot.n_dofs,), device=self._device),
-                torch.ones((self._robot.n_dofs,), device=self._device) * self._base_std,
+                torch.ones((self._robot.n_dofs,),
+                           device=self._device) * self._base_std,
                 buffer=True,
             ),  # type: ignore
         )
@@ -244,7 +247,8 @@ class Solver:
         assert C.ndim == 2
         complementary = batch_size - len(C) % batch_size
         complementary = 0 if complementary == batch_size else complementary
-        C = np.concatenate((C, C[:complementary]), axis=0) if complementary > 0 else C
+        C = np.concatenate((C, C[:complementary]),
+                           axis=0) if complementary > 0 else C
         return C, complementary
 
     def remove_complementary_J(self, J: np.ndarray, complementary: int) -> np.ndarray:
@@ -298,7 +302,8 @@ class Solver:
             C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])
         ).to(self._device)
 
-        J = torch.empty((len(C), batch_size, self._robot.n_dofs), device=self._device)
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
+                        device=self._device)
         iterator = trange(len(C)) if verbose else range(len(C))
         with torch.inference_mode():
             for i in iterator:
@@ -332,7 +337,8 @@ class Solver:
             tuple[Any, Any]: l2 and ang, default shape (1), posewise evaluation with shape (num_poses,), or all evaluation with shape (num_sols * num_poses)
         """
         num_poses, num_sols = len(P), len(J)
-        assert len(J.shape) == 3 and len(P.shape) == 2 and J.shape[1] == num_poses
+        assert len(J.shape) == 3 and len(
+            P.shape) == 2 and J.shape[1] == num_poses
 
         # P: (num_poses, m), P_expand: (num_sols * num_poses, m)
         P_expand = np.tile(P, (num_sols, 1))
@@ -385,7 +391,8 @@ class Solver:
         F = self.select_reference_posture(P)
 
         # Begin inference
-        J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size, verbose=verbose)
+        J_hat = self.solve_batch(
+            P, F, num_sols, batch_size=batch_size, verbose=verbose)
 
         l2, ang = self.evaluate_pose_error_J3d_P2d(J_hat, P, return_all=True)
         avg_inference_time = round((time() - time_begin) / num_poses, 3)

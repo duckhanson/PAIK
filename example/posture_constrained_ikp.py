@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import trange
 import torch
 from paik.solver import Solver
-from paik.settings import DEFAULT_NSF, DEFULT_SOLVER
+from paik.settings import PANDA_NSF, PANDA_PAIK
 
 from ikflow.utils import set_seed
 from ikflow.model_loading import get_ik_solver
@@ -15,7 +15,7 @@ from common.evaluate import compute_distance_J
 
 
 def paik(config: ConfigPosture):
-    solver_param = DEFULT_SOLVER
+    solver_param = PANDA_PAIK
     solver_param.workdir = config.workdir
     solver = Solver(solver_param=solver_param)
 
@@ -41,9 +41,10 @@ def paik(config: ConfigPosture):
         distance_J,
         config.success_distance_thresholds,
     )
-    
+
+
 def nsf(config: ConfigPosture):
-    solver_param = DEFAULT_NSF
+    solver_param = PANDA_NSF
     solver_param.workdir = config.workdir
     solver = Solver(solver_param=solver_param)
 

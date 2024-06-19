@@ -7,8 +7,8 @@ import torch
 from tqdm import tqdm
 from paik.solver import Solver
 from paik.settings import (
-    DEFAULT_NSF,
-    DEFULT_SOLVER,
+    PANDA_NSF,
+    PANDA_PAIK,
 )
 
 from common.config import ConfigDiversity
@@ -46,7 +46,8 @@ def klampt_numerical_ik_solver(config: ConfigDiversity, solver: Solver):
     J_ground_truth = np.asarray(
         [get_numerical_ik_sols(p, config.num_sols) for p in tqdm(P)]
     )
-    print(f"Time to solve {config.num_poses} poses: {time.time() - begin:.2f}s")
+    print(
+        f"Time to solve {config.num_poses} poses: {time.time() - begin:.2f}s")
 
     l2, ang = solver.evaluate_pose_error_J3d_P2d(
         J_ground_truth.transpose(1, 0, 2), P, return_all=True
@@ -80,6 +81,7 @@ def paik_solve(config: ConfigDiversity, solver: Solver, std: float, P: np.ndarra
     ), f"Expected: {(1, config.num_poses * config.num_sols, solver.n)}, Got: {J_hat.shape}"
     return J_hat
 
+
 def nsf_solve(config: ConfigDiversity, solver: Solver, std: float, P: np.ndarray):
     assert P.shape[:2] == (config.num_poses, config.num_sols)
 
@@ -100,6 +102,7 @@ def nsf_solve(config: ConfigDiversity, solver: Solver, std: float, P: np.ndarray
         solver.n,
     ), f"Expected: {(1, config.num_poses * config.num_sols, solver.n)}, Got: {J_hat.shape}"
     return J_hat
+
 
 def ikflow_solve(config: ConfigDiversity, solver: Any, std: float, P: np.ndarray):
     assert P.shape[:2] == (config.num_poses, config.num_sols)
@@ -170,8 +173,9 @@ def iterate_over_base_stds(
 def paik(config: ConfigDiversity, solver: Solver):
     iterate_over_base_stds(config, "paik", solver, solver, paik_solve)
 
+
 def nsf(config: ConfigDiversity, solver: Solver):
-    solver_param = DEFAULT_NSF
+    solver_param = PANDA_NSF
     solver_param.workdir = config.workdir
     nsf = Solver(solver_param=solver_param)
     iterate_over_base_stds(config, "nsf", nsf, solver, nsf_solve)
@@ -186,7 +190,7 @@ def ikflow(config: ConfigDiversity, solver: Solver):
 
 if __name__ == "__main__":
     config = ConfigDiversity()
-    solver_param = DEFULT_SOLVER
+    solver_param = PANDA_PAIK
     solver_param.workdir = config.workdir
     solver = Solver(solver_param=solver_param)
     config.date = "2024_03_04"

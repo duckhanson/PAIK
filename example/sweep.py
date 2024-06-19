@@ -2,12 +2,13 @@
 from datetime import datetime
 from tabulate import tabulate
 import wandb
-from paik.settings import DEFULT_SOLVER
+from paik.settings import PANDA_PAIK, FETCH_PAIK
 from paik.train import Trainer
 
 WORK_DIR = "/home/luca/paik"
 # please change to your own project name
-WANDB_PROJECT_NAME = "msik_ikflow_nsf_norm"
+WANDB_PROJECT_NAME = "fetch_paik"
+SOLVER_PARAM = FETCH_PAIK # [CHANGE THIS]
 WANDB_ENTITY = "luca_nthu"  # please change to your own entity name
 PATIENCE = 7
 POSE_ERR_THRESH = 3.15e-3
@@ -26,7 +27,7 @@ sweep_config = {
     "method": "random",
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
-        "num_transforms": {"values": get_range(4, 7, 1)},
+        "num_transforms": {"values": get_range(6, 9, 1)},
         "lr": {"values": get_range(48, 56, 1e-5)},
         "lr_weight_decay": {"values": get_range(13, 17, 1e-3)},
         "gamma": {"values": get_range(84, 87, 1e-3)},
@@ -44,7 +45,7 @@ def main() -> None:
     begin_time = datetime.now().strftime("%m%d-%H%M")
     wandb.init(name=begin_time)
 
-    solver_param = DEFULT_SOLVER
+    solver_param = SOLVER_PARAM
     solver_param.num_transforms = wandb.config.num_transforms
     solver_param.lr = wandb.config.lr
     solver_param.lr_weight_decay = wandb.config.lr_weight_decay

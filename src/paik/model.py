@@ -106,5 +106,9 @@ def get_robot(robot_name: str, robot_dirs: Tuple[str, str, str, str]):
         return Panda()
     elif robot_name == "fetch":
         return Fetch()
+    elif robot_name == "fetch_arm":
+        return FetchArm()
+    elif robot_name == "iiwa7":
+        return Iiwa7()
     else:
         raise NotImplementedError()

@@ -150,6 +150,52 @@ FETCH_PAIK = SolverConfig(
     ckpt_name="0621-0313",  # "0620-1327", "0620-0225"
 )
 
+FETCH_ARM_PAIK = SolverConfig(
+    robot_name="fetch_arm",
+    n=7,
+    m=7,
+    r=1,
+    num_bins=6,
+    max_num_data_hnne=300_0000,
+    lr=4.9e-4,
+    gamma=0.086,
+    noise_esp=0.0029,
+    randperm=False,
+    base_std=0.4,
+    subnet_width=1024,
+    num_transforms=7,
+    lr_weight_decay=0.015,
+    shce_patience=2,
+    noise_esp_decay=0.95,
+    subnet_num_layers=3,
+    batch_size=1024,
+    use_nsf_only=False,
+    ckpt_name="0622-0958",  # "0622-0958", "0621-2325"
+)
+
+IIWA7_PAIK = SolverConfig(
+    robot_name="iiwa7",
+    n=7,
+    m=7,
+    r=1,
+    num_bins=6,
+    max_num_data_hnne=300_0000,
+    lr=4.9e-4,
+    gamma=0.086,
+    noise_esp=0.0029,
+    randperm=False,
+    base_std=0.4,
+    subnet_width=1024,
+    num_transforms=7,
+    lr_weight_decay=0.015,
+    shce_patience=2,
+    noise_esp_decay=0.95,
+    subnet_num_layers=3,
+    batch_size=1024,
+    use_nsf_only=False,
+    ckpt_name="0621-0313",  # "0620-1327", "0620-0225"
+)
+
 
 if __name__ == "__main__":
     print(SolverConfig())

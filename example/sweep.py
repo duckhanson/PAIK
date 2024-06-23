@@ -2,16 +2,16 @@
 from datetime import datetime
 from tabulate import tabulate
 import wandb
-from paik.settings import PANDA_PAIK, FETCH_PAIK
+from paik.settings import PANDA_PAIK, FETCH_PAIK, FETCH_ARM_PAIK, IIWA7_PAIK
 from paik.train import Trainer
 
 WORK_DIR = "/home/luca/paik"
 # please change to your own project name
-WANDB_PROJECT_NAME = "fetch_paik"
-SOLVER_PARAM = FETCH_PAIK # [CHANGE THIS]
+WANDB_PROJECT_NAME = "fetch_arm_paik"
+SOLVER_PARAM = IIWA7_PAIK # [CHANGE THIS]
 WANDB_ENTITY = "luca_nthu"  # please change to your own entity name
 PATIENCE = 5
-POSE_ERR_THRESH = 8e-3
+POSE_ERR_THRESH = 7e-3
 EXPERMENT_COUNT = 15
 NUM_EPOCHS = 100
 USE_NSF_ONLY = False
@@ -33,7 +33,7 @@ sweep_config = {
         "gamma": {"values": get_range(84, 87, 1e-3)},
         "noise_esp": {"values": get_range(25, 31, 1e-4)},
         "noise_esp_decay": {"values": get_range(95, 98, 1e-2)},
-        "num_bins": {"values": get_range(3, 7, 1)},
+        "num_bins": {"values": get_range(5, 10, 1)},
         "base_std": {"values": get_range(40, 50, 1e-2)},
         "lr_beta_l": {"values": get_range(88, 94, 1e-2)},
         "lr_beta_h": {"values": get_range(91, 95, 1e-2)},

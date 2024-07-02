@@ -48,4 +48,4 @@ def nsf():
 
 if __name__ == "__main__":
     paik()
-    nsf()
+    # nsf()

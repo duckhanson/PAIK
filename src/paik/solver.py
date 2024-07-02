@@ -44,25 +44,29 @@ class Solver:
             self.n == self._robot.n_dofs
         ), f"n should be {self._robot.n_dofs} as the robot"
 
-        path_p_knn = f"{solver_param.weight_dir}/P_knn.pth"
+        path_P_knn = f"{solver_param.weight_dir}/P_knn-{solver_param.N}-{solver_param.n}-{solver_param.m}-{solver_param.r}.pth"
         try:
-            self.P_knn = load_pickle(path_p_knn)
+            self.P_knn = load_pickle(path_P_knn)
         except:
+            print(f"[WARNING] P_knn not found, generate and save in {path_P_knn}.")
             self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.P)
             save_pickle(
-                path_p_knn,
+                path_P_knn,
                 self.P_knn,
             )
+        print(f"[SUCCESS] P_knn load from {path_P_knn}.")
 
-        path_J_knn = f"{solver_param.weight_dir}/J_knn.pth"
+        path_J_knn = f"{solver_param.weight_dir}/J_knn-{solver_param.N}-{solver_param.n}-{solver_param.m}-{solver_param.r}.pth"
         try:
             self.J_knn = load_pickle(path_J_knn)
         except:
+            print(f"[WARNING] J_knn not found, generate and save in {path_J_knn}.")
             self.J_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.J)
             save_pickle(
                 path_J_knn,
                 self.J_knn,
             )
+        print(f"[SUCCESS] J_knn load from {path_J_knn}.")
 
     @property
     def base_std(self):

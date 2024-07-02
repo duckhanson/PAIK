@@ -68,13 +68,6 @@ def main() -> None:
         _,
     ) = trainer.evaluate_ikp_iterative(num_poses=100, num_sols=1000, verbose=False)
 
-    print(
-        tabulate(
-            [[avg_l2_errs, avg_ang_errs, avg_inference_time]],
-            headers=["avg_l2_errs", "avg_ang_errs", "avg_inference_time"],
-        )
-    )
-
     trainer.mini_train(
         num_epochs=NUM_EPOCHS,
         batch_size=solver_param.batch_size,

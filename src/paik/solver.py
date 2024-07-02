@@ -6,6 +6,7 @@ from time import time
 import numpy as np
 import pandas as pd
 import torch
+from tabulate import tabulate
 
 from hnne import HNNE
 from sklearn.neighbors import NearestNeighbors
@@ -405,7 +406,24 @@ class Solver:
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
         df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
-        print(df.describe())
+        # print(df.describe())
+        
+        print(
+            tabulate(
+                [
+                    [
+                        np.round(l2.mean() * 1e3, decimals=2),
+                        np.round(np.rad2deg(ang.mean()), decimals=2),
+                        np.round(avg_inference_time * 1e3, decimals=0),
+                    ]
+                ],
+                headers=[
+                    "l2 (mm)",
+                    "ang (deg)",
+                    "inference_time (ms)",
+                ],
+            )
+        )
 
         return tuple(
             [

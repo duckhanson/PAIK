@@ -14,6 +14,7 @@ from sklearn.neighbors import NearestNeighbors
 from tqdm import trange
 
 import os
+
 from .settings import SolverConfig, PANDA_PAIK
 from .model import get_flow_model, get_robot
 from .file import load_numpy, save_numpy, save_pickle, load_pickle
@@ -21,38 +22,19 @@ from .evaluate import evaluate_pose_error_P2d_P2d
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 
-
 class Solver:
-    def __init__(self, solver_param: SolverConfig = PANDA_PAIK) -> None:
+    def __init__(self, solver_param: SolverConfig = PANDA_PAIK, load_date: str = "", work_dir: str = os.path.abspath(os.getcwd())) -> None:
+        solver_param.workdir = work_dir
         self._robot = get_robot(
             solver_param.robot_name, robot_dirs=solver_param.dir_paths
         )
         
         self.param = solver_param
-
-        path_P_knn = f"{solver_param.weight_dir}/P_knn-{solver_param.N}-{solver_param.n}-{solver_param.m}-{solver_param.r}.pth"
         try:
-            self.P_knn = load_pickle(path_P_knn)
-        except:
-            print(f"[WARNING] P_knn not found, generate and save in {path_P_knn}.")
-            self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.P)
-            save_pickle(
-                path_P_knn,
-                self.P_knn,
-            )
-        print(f"[SUCCESS] P_knn load from {path_P_knn}.")
-
-        path_J_knn = f"{solver_param.weight_dir}/J_knn-{solver_param.N}-{solver_param.n}-{solver_param.m}-{solver_param.r}.pth"
-        try:
-            self.J_knn = load_pickle(path_J_knn)
-        except:
-            print(f"[WARNING] J_knn not found, generate and save in {path_J_knn}.")
-            self.J_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.J)
-            save_pickle(
-                path_J_knn,
-                self.J_knn,
-            )
-        print(f"[SUCCESS] J_knn load from {path_J_knn}.")
+            self.load_by_date(load_date)    
+        except FileNotFoundError:        
+            pass
+        
 
     @property
     def base_std(self):
@@ -111,6 +93,9 @@ class Solver:
         print(f"[SUCCESS] save model, J, P, F, J_knn, P_knn in {save_dir}")
         
     def load_by_date(self, date: str):
+        if not isdir(os.path.join(self.param.weight_dir, date)):
+            raise FileNotFoundError(f"{date} not found in {self.param.weight_dir}.")
+
         load_dir = os.path.join(self.param.weight_dir, date)
         model_path = os.path.join(load_dir, "model.pth")
         param_path = os.path.join(load_dir, "param.pth")
@@ -194,6 +179,30 @@ class Solver:
                 "std": np.concatenate((C.std(axis=0), np.ones((1)))),
             },
         }
+        
+        path_P_knn = f"{self.__solver_param.weight_dir}/P_knn-{self.__solver_param.N}-{self.n}-{self.m}-{self.r}.pth"
+        try:
+            self.P_knn = load_pickle(path_P_knn)
+        except:
+            print(f"[WARNING] P_knn not found, generate and save in {path_P_knn}.")
+            self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.P)
+            save_pickle(
+                path_P_knn,
+                self.P_knn,
+            )
+        print(f"[SUCCESS] P_knn load from {path_P_knn}.")
+
+        path_J_knn = f"{self.__solver_param.weight_dir}/J_knn-{self.__solver_param.N}-{self.n}-{self.m}-{self.r}.pth"
+        try:
+            self.J_knn = load_pickle(path_J_knn)
+        except:
+            print(f"[WARNING] J_knn not found, generate and save in {path_J_knn}.")
+            self.J_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.J)
+            save_pickle(
+                path_J_knn,
+                self.J_knn,
+            )
+        print(f"[SUCCESS] J_knn load from {path_J_knn}.")
 
         return J, P, F
 

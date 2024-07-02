@@ -74,6 +74,7 @@ class Solver:
     def save_if_top3(self, date: str, l2: float):
         top3_date_path = os.path.join(self.param.weight_dir, "top3_date.pth")
         if not os.path.exists(top3_date_path):
+            self.save_by_date(date)
             save_pickle(top3_date_path, {"date": [date], "l2": [l2]})
         else:
             top3_date = load_pickle(top3_date_path)

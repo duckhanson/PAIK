@@ -13,6 +13,7 @@ from sklearn.neighbors import NearestNeighbors
 
 from tqdm import trange
 
+import os
 from .settings import SolverConfig, PANDA_PAIK
 from .model import get_flow_model, get_robot
 from .file import load_numpy, save_numpy, save_pickle, load_pickle
@@ -23,27 +24,11 @@ from zuko.flows import Flow, Unconditional
 
 class Solver:
     def __init__(self, solver_param: SolverConfig = PANDA_PAIK) -> None:
-        self.__solver_param = solver_param
         self._robot = get_robot(
             solver_param.robot_name, robot_dirs=solver_param.dir_paths
         )
-        self._method_of_select_reference_posture = (
-            solver_param.select_reference_posture_method
-        )
-        self._device = solver_param.device
-        self._use_nsf_only = solver_param.use_nsf_only
-        # Neural spline flow (NSF) with 3 sample features and 5 context features
-        self.n, self.m, self.r = solver_param.n, solver_param.m, solver_param.r
-        self.J, self.P, self.F = self.__load_training_data()
-
-        self._solver, self._optimizer, self._scheduler = get_flow_model(
-            solver_param
-        )  # type: ignore
-        self._base_std = solver_param.base_std
-        # load inference data
-        assert (
-            self.n == self._robot.n_dofs
-        ), f"n should be {self._robot.n_dofs} as the robot"
+        
+        self.param = solver_param
 
         path_P_knn = f"{solver_param.weight_dir}/P_knn-{solver_param.N}-{solver_param.n}-{solver_param.m}-{solver_param.r}.pth"
         try:
@@ -80,12 +65,70 @@ class Solver:
     @property
     def param(self):
         return self.__solver_param
+    
+    @param.setter
+    def param(self, value: SolverConfig):
+        self.__solver_param = value
+        self._method_of_select_reference_posture = (
+            value.select_reference_posture_method
+        )
+        self._device = value.device
+        self._use_nsf_only = value.use_nsf_only
+        # Neural spline flow (NSF) with 3 sample features and 5 context features
+        self.n, self.m, self.r = value.n, value.m, value.r
+        self.J, self.P, self.F = self.__load_training_data()
+        self._solver, self._optimizer, self._scheduler = get_flow_model(value)  # type: ignore
+        self._base_std = value.base_std
+        # load inference data
+        assert (
+            self.n == self._robot.n_dofs
+        ), f"n should be {self._robot.n_dofs} as the robot"
 
     @base_std.setter
     def base_std(self, value: float):
         assert value >= 0, "base_std should be greater than or equal to 0."
         self._base_std = value
         self.__change_solver_base()
+        
+    # save model, J, P, F, J_knn, P_knn in the directory of date in the weight_dir
+    def save_by_date(self, date: str):
+        save_dir = os.path.join(self.param.weight_dir, date)
+        os.makedirs(save_dir, exist_ok=True)
+        torch.save(
+            {
+                "solver": self._solver.state_dict(),
+            },
+            os.path.join(save_dir, "model.pth"),
+        )
+        save_numpy(os.path.join(save_dir, "J.npy"), self.J)
+        save_numpy(os.path.join(save_dir, "P.npy"), self.P)
+        save_numpy(os.path.join(save_dir, "F.npy"), self.F)
+
+        save_pickle(os.path.join(save_dir, "param.pth"), self.param)
+        save_pickle(os.path.join(save_dir, "J_knn.pth"), self.J_knn)
+        save_pickle(os.path.join(save_dir, "P_knn.pth"), self.P_knn)
+        
+        print(f"[SUCCESS] save model, J, P, F, J_knn, P_knn in {save_dir}")
+        
+    def load_by_date(self, date: str):
+        load_dir = os.path.join(self.param.weight_dir, date)
+        model_path = os.path.join(load_dir, "model.pth")
+        param_path = os.path.join(load_dir, "param.pth")
+        J_path = os.path.join(load_dir, "J.npy")
+        P_path = os.path.join(load_dir, "P.npy")
+        F_path = os.path.join(load_dir, "F.npy")
+        J_knn_path = os.path.join(load_dir, "J_knn.pth")
+        P_knn_path = os.path.join(load_dir, "P_knn.pth")
+        
+        self.param = load_pickle(param_path)
+        self._solver.load_state_dict(torch.load(model_path)["solver"])
+        self.J = np.load(J_path)
+        self.P = np.load(P_path)
+        self.F = np.load(F_path)
+        self.J_knn = load_pickle(J_knn_path)
+        self.P_knn = load_pickle(P_knn_path)
+        
+        print(f"[SUCCESS] load model, J, P, F, J_knn, P_knn from {load_dir}")
 
     # private methods
     def __load_training_data(self):

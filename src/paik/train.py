@@ -214,9 +214,7 @@ class EarlyStopping:
                 self.trace_func(
                     f"Validation loss decreased ({self.val_loss_min:.4f} --> {val_loss:.4f})."
                 )
-
-            if val_loss < self.val_loss_threshold:
-                paik.save_by_date(date)
+            paik.save_if_top3(date, val_loss)
         else:
             if self.verbose:
                 self.trace_func(

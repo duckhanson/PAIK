@@ -1,19 +1,17 @@
 # Import required packages
 from __future__ import annotations
 from typing import Any, Tuple
+import os
+import shutil
 from os.path import isdir
 from time import time
 import numpy as np
 import pandas as pd
 import torch
 from tabulate import tabulate
-
 from hnne import HNNE
 from sklearn.neighbors import NearestNeighbors
-
 from tqdm import trange
-
-import os
 
 from .settings import SolverConfig, PANDA_PAIK
 from .model import get_flow_model, get_robot
@@ -71,6 +69,42 @@ class Solver:
         assert value >= 0, "base_std should be greater than or equal to 0."
         self._base_std = value
         self.__change_solver_base()
+    
+    # a dictionary in weight_dir to store the information of top3 dates, their l2, and their model by save_by_date, save the date if the current model is better, and remove the worst date
+    def save_if_top3(self, date: str, l2: float):
+        top3_date_path = os.path.join(self.param.weight_dir, "top3_date.pth")
+        if not os.path.exists(top3_date_path):
+            save_pickle(top3_date_path, {"date": [date], "l2": [l2]})
+        else:
+            top3_date = load_pickle(top3_date_path)
+            if len(top3_date["date"]) < 3:
+                self.save_by_date(date)
+                top3_date["date"].append(date)
+                top3_date["l2"].append(l2)
+                save_pickle(top3_date_path, top3_date)
+                print(f"[SUCCESS] save the date {date} with l2 {l2:.5f} in {top3_date_path}")
+            else:
+                if l2 < max(top3_date["l2"]):
+                    idx = top3_date["l2"].index(max(top3_date["l2"]))
+                    if top3_date["date"][idx] != date:
+                        self.remove_by_date(top3_date["date"][idx])
+
+                    self.save_by_date(date)
+                    top3_date["date"][idx] = date
+                    top3_date["l2"][idx] = l2
+                    save_pickle(top3_date_path, top3_date)
+                    print(f"[SUCCESS] save the date {date} with l2 {l2:.5f} in {top3_date_path}")
+                else:
+                    print(f"[INFO] current model is not better than the top3 model in {top3_date_path}")
+                    
+    # remove by date
+    def remove_by_date(self, date: str):
+        if isdir(os.path.join(self.param.weight_dir, date)):
+            shutil.rmtree(os.path.join(self.param.weight_dir, date), ignore_errors=True)
+            print(f"[SUCCESS] remove {date} in {self.param.weight_dir}.")
+        else:
+            print(f"[WARNING] {date} not found in {self.param.weight_dir}. Remove failed.")
+        
         
     # save model, J, P, F, J_knn, P_knn in the directory of date in the weight_dir
     def save_by_date(self, date: str):
@@ -82,14 +116,18 @@ class Solver:
             },
             os.path.join(save_dir, "model.pth"),
         )
-        save_numpy(os.path.join(save_dir, "J.npy"), self.J)
-        save_numpy(os.path.join(save_dir, "P.npy"), self.P)
-        save_numpy(os.path.join(save_dir, "F.npy"), self.F)
-
-        save_pickle(os.path.join(save_dir, "param.pth"), self.param)
-        save_pickle(os.path.join(save_dir, "J_knn.pth"), self.J_knn)
-        save_pickle(os.path.join(save_dir, "P_knn.pth"), self.P_knn)
         
+        # if path exists, do not save again
+        if not os.path.exists(os.path.join(save_dir, "J.npy")):
+            save_numpy(os.path.join(save_dir, "J.npy"), self.J)
+            save_numpy(os.path.join(save_dir, "P.npy"), self.P)
+            save_numpy(os.path.join(save_dir, "F.npy"), self.F)
+
+            save_pickle(os.path.join(save_dir, "param.pth"), self.param)
+            save_pickle(os.path.join(save_dir, "J_knn.pth"), self.J_knn)
+            save_pickle(os.path.join(save_dir, "P_knn.pth"), self.P_knn)
+        else:
+            print(f"[INFO] J, P, F, J_knn, P_knn already exist in {save_dir}.")
         print(f"[SUCCESS] save model, J, P, F, J_knn, P_knn in {save_dir}")
         
     def load_by_date(self, date: str):

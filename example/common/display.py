@@ -18,8 +18,8 @@ def display_ikp(l2: np.ndarray, ang: np.ndarray, inference_time: float):
         tabulate(
             [
                 [
-                    l2 * 1e3,
-                    np.rad2deg(ang),
+                    np.round(l2 * 1e3, decimals=2),
+                    np.round(np.rad2deg(ang), decimals=2),
                     np.round(inference_time * 1e3, decimals=0),
                 ]
             ],

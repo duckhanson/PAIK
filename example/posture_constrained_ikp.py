@@ -5,12 +5,12 @@ import torch
 from paik.solver import Solver
 from paik.settings import PANDA_NSF, PANDA_PAIK
 
-from common.config import ConfigPosture
+from common.config import Config_Posture
 from common.display import display_posture
 from common.evaluate import compute_distance_J
 
 
-def paik(config: ConfigPosture):
+def paik(config: Config_Posture):
     solver_param = PANDA_PAIK
     solver_param.workdir = config.workdir
     solver = Solver(solver_param=solver_param)
@@ -39,7 +39,7 @@ def paik(config: ConfigPosture):
     )
 
 
-def nsf(config: ConfigPosture):
+def nsf(config: Config_Posture):
     solver_param = PANDA_NSF
     solver_param.workdir = config.workdir
     solver = Solver(solver_param=solver_param)
@@ -67,8 +67,9 @@ def nsf(config: ConfigPosture):
         config.success_distance_thresholds,
     )
 
+
 if __name__ == "__main__":
-    config = ConfigPosture()
+    config = Config_Posture()
     config.date = "2024_03_02"
     # paik(config)
     nsf(config)

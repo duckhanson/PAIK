@@ -6,12 +6,12 @@ import torch
 from paik.solver import Solver
 from paik.settings import PANDA_NSF, PANDA_PAIK
 
-from common.config import ConfigIKP
+from common.config import Config_IKP
 from common.display import display_ikp
 
 
 def paik():
-    config = ConfigIKP()
+    config = Config_IKP()
     solver_param = PANDA_NSF if config.use_nsf_only else PANDA_PAIK
     solver_param.workdir = config.workdir
     solver_param.select_reference_posture_method = (

@@ -11,13 +11,14 @@ from paik.settings import (
     PANDA_PAIK,
 )
 
-from common.config import ConfigDiversity
+from common.config import Config_Diversity
 from common.file import save_diversity, load_poses_and_numerical_ik_sols
 from common.evaluate import (
     mmd_evaluate_multiple_poses,
     make_batches,
     batches_back_to_array,
 )
+
 
 def get_numerical_ik_sols(pose, num_seeds):
     seeds, _ = solver._robot.sample_joint_angles_and_poses(
@@ -32,7 +33,7 @@ def get_numerical_ik_sols(pose, num_seeds):
     return numerical_ik_sols
 
 
-def klampt_numerical_ik_solver(config: ConfigDiversity, solver: Solver):
+def klampt_numerical_ik_solver(config: Config_Diversity, solver: Solver):
     _, P = solver._robot.sample_joint_angles_and_poses(
         n=config.num_poses, return_torch=False
     )
@@ -56,7 +57,7 @@ def klampt_numerical_ik_solver(config: ConfigDiversity, solver: Solver):
     np.save(f"{config.record_dir}/poses.npy", P)
 
 
-def paik_solve(config: ConfigDiversity, solver: Solver, std: float, P: np.ndarray):
+def paik_solve(config: Config_Diversity, solver: Solver, std: float, P: np.ndarray):
     assert P.shape[:2] == (config.num_poses, config.num_sols)
 
     solver.base_std = std
@@ -78,7 +79,7 @@ def paik_solve(config: ConfigDiversity, solver: Solver, std: float, P: np.ndarra
     return J_hat
 
 
-def nsf_solve(config: ConfigDiversity, solver: Solver, std: float, P: np.ndarray):
+def nsf_solve(config: Config_Diversity, solver: Solver, std: float, P: np.ndarray):
     assert P.shape[:2] == (config.num_poses, config.num_sols)
 
     solver.base_std = std
@@ -98,9 +99,10 @@ def nsf_solve(config: ConfigDiversity, solver: Solver, std: float, P: np.ndarray
         solver.n,
     ), f"Expected: {(1, config.num_poses * config.num_sols, solver.n)}, Got: {J_hat.shape}"
     return J_hat
+
 
 def iterate_over_base_stds(
-    config: ConfigDiversity,
+    config: Config_Diversity,
     iksolver_name: str,
     solver: Any,
     paik_solver: Solver,
@@ -146,18 +148,19 @@ def iterate_over_base_stds(
     )
 
 
-def paik(config: ConfigDiversity, solver: Solver):
+def paik(config: Config_Diversity, solver: Solver):
     iterate_over_base_stds(config, "paik", solver, solver, paik_solve)
 
 
-def nsf(config: ConfigDiversity, solver: Solver):
+def nsf(config: Config_Diversity, solver: Solver):
     solver_param = PANDA_NSF
     solver_param.workdir = config.workdir
     nsf = Solver(solver_param=solver_param)
     iterate_over_base_stds(config, "nsf", nsf, solver, nsf_solve)
 
+
 if __name__ == "__main__":
-    config = ConfigDiversity()
+    config = Config_Diversity()
     solver_param = PANDA_PAIK
     solver_param.workdir = config.workdir
     solver = Solver(solver_param=solver_param)

@@ -6,7 +6,7 @@ from datetime import datetime
 
 
 @dataclass()
-class ConfigFile:
+class Config_File:
     iksolver_names: List[str] = field(
         default_factory=lambda: ["IKFlow", "NODEIK", "NSF", "PAIK"]
     )
@@ -32,7 +32,7 @@ class ConfigFile:
     @property
     def date(self):
         return self._date
-    
+
     @property
     def nodeik_workdir(self):
         return self._nodeik_workdir
@@ -41,8 +41,7 @@ class ConfigFile:
     def date(self, value):
         self._date = value
         self.update_record_dir()
-        
-    
+
     @nodeik_workdir.setter
     def nodeik_workdir(self, value):
         self._nodeik_workdir = value
@@ -55,7 +54,7 @@ class ConfigFile:
 
 
 @dataclass()
-class ConfigIKP(ConfigFile):
+class Config_IKP(Config_File):
     # commons
     num_poses: int = 300
     num_sols: int = 100
@@ -68,18 +67,19 @@ class ConfigIKP(ConfigFile):
 
 
 @dataclass()
-class ConfigDiversity(ConfigFile):
+class Config_Diversity(Config_File):
     # commons
     num_poses: int = 2500
     num_sols: int = 1000
-    base_stds: list = field(default_factory=lambda: list(np.arange(0.1, 1.5, 0.1)))
+    base_stds: list = field(
+        default_factory=lambda: list(np.arange(0.1, 1.5, 0.1)))
 
     # nodeik
     pose_error_threshold: Tuple = (3e-2, 30)  # l2 (m), ang (deg)
 
 
 @dataclass()
-class ConfigPosture(ConfigFile):
+class Config_Posture(Config_File):
     # commons
     num_poses: int = 3000
     num_sols: int = 2000

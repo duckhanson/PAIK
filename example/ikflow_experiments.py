@@ -10,14 +10,14 @@ from ikflow.utils import set_seed
 from ikflow.model_loading import get_ik_solver
 from jkinpylib.evaluation import solution_pose_errors
 
-from common.config import ConfigIKP
+from common.config import Config_IKP
 from common.display import display_ikp
 
-from common.config import ConfigPosture
+from common.config import Config_Posture
 from common.display import display_posture
 from common.evaluate import compute_distance_J
 
-from common.config import ConfigDiversity
+from common.config import Config_Diversity
 from common.file import save_diversity, load_poses_and_numerical_ik_sols
 from common.evaluate import (
     mmd_evaluate_multiple_poses,
@@ -25,9 +25,10 @@ from common.evaluate import (
     batches_back_to_array,
 )
 
+
 def ikp():
     set_seed()
-    config = ConfigIKP()
+    config = Config_IKP()
     # Build IKFlowSolver and set weights
     ik_solver, _ = get_ik_solver("panda__full__lp191_5.25m")
     _, P = ik_solver.robot.sample_joint_angles_and_poses(n=config.num_poses)
@@ -63,7 +64,7 @@ def ikp():
     display_ikp(l2.mean(), ang.mean(), avg_inference_time)
 
 
-def posture(config: ConfigPosture):
+def posture(config: Config_Posture):
     set_seed()
     # Build IKFlowSolver and set weights
     ik_solver, _ = get_ik_solver("panda__full__lp191_5.25m")
@@ -110,7 +111,7 @@ def posture(config: ConfigPosture):
     )
 
 
-def diversity(config: ConfigDiversity, solver: Any, std: float, P: np.ndarray):
+def diversity(config: Config_Diversity, solver: Any, std: float, P: np.ndarray):
     assert P.shape[:2] == (config.num_poses, config.num_sols)
     P = P.reshape(-1, P.shape[-1])
     P = make_batches(P, config.batch_size)  # type: ignore
@@ -129,14 +130,15 @@ def diversity(config: ConfigDiversity, solver: Any, std: float, P: np.ndarray):
     return J_hat
 
 
-def ikflow(config: ConfigDiversity, solver: Solver):
+def ikflow(config: Config_Diversity, solver: Solver):
     set_seed()
     # Build IKFlowSolver and set weights
     ik_solver, _ = get_ik_solver("panda__full__lp191_5.25m")
     iterate_over_base_stds(config, "ikflow", ik_solver, solver, ikflow_solve)
 
+
 def iterate_over_base_stds(
-    config: ConfigDiversity,
+    config: Config_Diversity,
     iksolver_name: str,
     solver: Any,
     paik_solver: Solver,
@@ -180,7 +182,6 @@ def iterate_over_base_stds(
         mmd_mean,
         config.base_stds,
     )
-
 
 
 if __name__ == "__main__":

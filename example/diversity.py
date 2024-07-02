@@ -19,10 +19,6 @@ from common.evaluate import (
     batches_back_to_array,
 )
 
-from ikflow.utils import set_seed
-from ikflow.model_loading import get_ik_solver
-
-
 def get_numerical_ik_sols(pose, num_seeds):
     seeds, _ = solver._robot.sample_joint_angles_and_poses(
         n=num_seeds, return_torch=False
@@ -103,26 +99,6 @@ def nsf_solve(config: ConfigDiversity, solver: Solver, std: float, P: np.ndarray
     ), f"Expected: {(1, config.num_poses * config.num_sols, solver.n)}, Got: {J_hat.shape}"
     return J_hat
 
-
-def ikflow_solve(config: ConfigDiversity, solver: Any, std: float, P: np.ndarray):
-    assert P.shape[:2] == (config.num_poses, config.num_sols)
-    P = P.reshape(-1, P.shape[-1])
-    P = make_batches(P, config.batch_size)  # type: ignore
-    J_hat = batches_back_to_array(
-        [
-            solver.solve_n_poses(batch_P, latent_scale=std).cpu().numpy()
-            for batch_P in tqdm(P)
-        ]
-    )
-    J_hat = np.expand_dims(J_hat, axis=0)
-    assert J_hat.shape == (
-        1,
-        config.num_poses * config.num_sols,
-        J_hat.shape[-1],
-    ), f"Expected: {(1, config.num_poses * config.num_sols, J_hat.shape[-1])}, Got: {J_hat.shape}"
-    return J_hat
-
-
 def iterate_over_base_stds(
     config: ConfigDiversity,
     iksolver_name: str,
@@ -180,14 +156,6 @@ def nsf(config: ConfigDiversity, solver: Solver):
     nsf = Solver(solver_param=solver_param)
     iterate_over_base_stds(config, "nsf", nsf, solver, nsf_solve)
 
-
-def ikflow(config: ConfigDiversity, solver: Solver):
-    set_seed()
-    # Build IKFlowSolver and set weights
-    ik_solver, _ = get_ik_solver("panda__full__lp191_5.25m")
-    iterate_over_base_stds(config, "ikflow", ik_solver, solver, ikflow_solve)
-
-
 if __name__ == "__main__":
     config = ConfigDiversity()
     solver_param = PANDA_PAIK
@@ -195,6 +163,5 @@ if __name__ == "__main__":
     solver = Solver(solver_param=solver_param)
     config.date = "2024_03_04"
     # klampt_numerical_ik_solver(config, solver)
-    # paik(config, solver)
-    nsf(config, solver)
-    # ikflow(config, solver)
+    paik(config, solver)
+    # nsf(config, solver)

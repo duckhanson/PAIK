@@ -5,10 +5,6 @@ import torch
 from paik.solver import Solver
 from paik.settings import PANDA_NSF, PANDA_PAIK
 
-from ikflow.utils import set_seed
-from ikflow.model_loading import get_ik_solver
-from jkinpylib.evaluation import solution_pose_errors
-
 from common.config import ConfigPosture
 from common.display import display_posture
 from common.evaluate import compute_distance_J
@@ -71,57 +67,8 @@ def nsf(config: ConfigPosture):
         config.success_distance_thresholds,
     )
 
-
-def ikflow(config: ConfigPosture):
-    set_seed()
-    # Build IKFlowSolver and set weights
-    ik_solver, _ = get_ik_solver("panda__full__lp191_5.25m")
-    J, P = ik_solver.robot.sample_joint_angles_and_poses(n=config.num_poses)
-    l2 = np.zeros((config.num_sols, config.num_poses))
-    ang = np.zeros((config.num_sols, config.num_poses))
-    J_hat = torch.empty(
-        (config.num_sols, config.num_poses, ik_solver.robot.n_dofs),
-        dtype=torch.float32,
-        device="cpu",
-    )
-    if config.num_poses < config.num_sols:
-        for i in trange(config.num_poses):
-            J_hat[:, i, :] = ik_solver.solve(
-                P[i],
-                n=config.num_sols,
-                latent_scale=config.std,
-                refine_solutions=False,
-                return_detailed=False,
-            ).cpu()  # type: ignore
-
-            l2[:, i], ang[:, i] = solution_pose_errors(
-                ik_solver.robot, J_hat[:, i, :], P[i]
-            )
-    else:
-        for i in trange(config.num_sols):
-            J_hat[i] = ik_solver.solve_n_poses(
-                P,
-                latent_scale=config.std,
-                refine_solutions=False,
-                return_detailed=False,
-            ).cpu()
-            l2[i], ang[i] = solution_pose_errors(ik_solver.robot, J_hat[i], P)
-    # J_hat.shape = (num_sols, num_poses, num_dofs or n)
-    # J.shape = (num_poses, num_dofs or n)
-    distance_J = compute_distance_J(J_hat, J)
-    display_posture(
-        config.record_dir,
-        "ikflow",
-        l2.flatten(),
-        ang.flatten(),
-        distance_J.flatten(),
-        config.success_distance_thresholds,
-    )
-
-
 if __name__ == "__main__":
     config = ConfigPosture()
     config.date = "2024_03_02"
     # paik(config)
     nsf(config)
-    # ikflow(config)

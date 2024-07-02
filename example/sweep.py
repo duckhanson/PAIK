@@ -7,11 +7,11 @@ from paik.train import Trainer
 
 WORK_DIR = "/home/luca/paik"
 # please change to your own project name
-WANDB_PROJECT_NAME = "fetch_arm_paik"
-SOLVER_PARAM = IIWA7_PAIK # [CHANGE THIS]
+WANDB_PROJECT_NAME = f"FETCH_PAIK_{FETCH_PAIK.r}"
+SOLVER_PARAM = FETCH_PAIK # [CHANGE THIS]
 WANDB_ENTITY = "luca_nthu"  # please change to your own entity name
 PATIENCE = 5
-POSE_ERR_THRESH = 7e-3
+POSE_ERR_THRESH = 6e-3
 EXPERMENT_COUNT = 15
 NUM_EPOCHS = 100
 USE_NSF_ONLY = False
@@ -27,7 +27,7 @@ sweep_config = {
     "method": "random",
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
-        "num_transforms": {"values": get_range(6, 9, 1)},
+        "num_transforms": {"values": get_range(8, 12, 1)},
         "lr": {"values": get_range(48, 56, 1e-5)},
         "lr_weight_decay": {"values": get_range(13, 17, 1e-3)},
         "gamma": {"values": get_range(84, 87, 1e-3)},

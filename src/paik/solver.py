@@ -28,10 +28,12 @@ class Solver:
         )
         
         self.param = solver_param
+        
         try:
-            self.load_by_date(load_date)    
-        except FileNotFoundError:        
-            pass
+            self.load_by_date(load_date)
+        except FileNotFoundError as e:  
+            print(f"[WARNING] {e}. Load training data instead.")
+            self.__load_training_data()
         
 
     @property
@@ -56,7 +58,6 @@ class Solver:
         self._use_nsf_only = value.use_nsf_only
         # Neural spline flow (NSF) with 3 sample features and 5 context features
         self.n, self.m, self.r = value.n, value.m, value.r
-        self.J, self.P, self.F = self.__load_training_data()
         self._solver, self._optimizer, self._scheduler = get_flow_model(value)  # type: ignore
         self._base_std = value.base_std
         # load inference data
@@ -147,24 +148,34 @@ class Solver:
         self.J = np.load(J_path)
         self.P = np.load(P_path)
         self.F = np.load(F_path)
+        self.__compute_normalizing_elements()
         self.J_knn = load_pickle(J_knn_path)
         self.P_knn = load_pickle(P_knn_path)
         
         print(f"[SUCCESS] load model, J, P, F, J_knn, P_knn from {load_dir}")
 
     # private methods
+    def __compute_normalizing_elements(self):
+        C = np.column_stack((self.P, self.F))
+
+        self.__normalization_elements = {
+            "J": {"mean": self.J.mean(axis=0), "std": self.J.std(axis=0)},
+            "C": {
+                # extra column for tuning std of noise for training data
+                "mean": np.concatenate((C.mean(axis=0), np.zeros((1)))),
+                "std": np.concatenate((C.std(axis=0), np.ones((1)))),
+            },
+        }
+    
     def __load_training_data(self):
         """
         Load training data from the given path, if not found, generate and save it.
-
-        Returns:
-            Tuple: J, P, F
         """
         assert isdir(
-            self.param.train_dir
-        ), f"{self.param.train_dir} not found, please change workdir to the project root!"
+            self.__solver_param.train_dir
+        ), f"{self.__solver_param.train_dir} not found, please change workdir to the project root!"
         data_path = (
-            lambda name: f"{self.param.train_dir}/{name}-{self.param.N}-{self.n}-{self.m}-{self.r}.npy"
+            lambda name: f"{self.__solver_param.train_dir}/{name}-{self.__solver_param.N}-{self.n}-{self.m}-{self.r}.npy"
         )
 
         J, P, F = [load_numpy(file_path=data_path(name))
@@ -173,7 +184,7 @@ class Solver:
         if J is None or P is None:
             print(f"[WARNING] J or P not found, generate and save in {data_path('J')}.")
             J, P = self._robot.sample_joint_angles_and_poses(
-                n=self.param.N, return_torch=False
+                n=self.__solver_param.N, return_torch=False
             )
             save_numpy(file_path=data_path("J"), arr=J)
             save_numpy(file_path=data_path("P"), arr=P)
@@ -185,7 +196,7 @@ class Solver:
             # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
             hnne = HNNE(dim=self.r)
             # maximum number of data for hnne (11M), we use max_num_data_hnne to test
-            num_data = min(self.param.max_num_data_hnne, len(J))
+            num_data = min(self.__solver_param.max_num_data_hnne, len(J))
             F = hnne.fit_transform(X=J[:num_data], dim=self.r, verbose=True)
             # query nearest neighbors for the rest of J
             if len(F) != len(J):
@@ -205,17 +216,9 @@ class Solver:
             print(f"[SUCCESS] F saved in {data_path('F')}.")
         print(f"[SUCCESS] F load from {data_path('F')}")
 
+        self.J, self.P, self.F = J, P, F
         # for normalization
-        C = np.column_stack((P, F))
-
-        self.__normalization_elements = {
-            "J": {"mean": J.mean(axis=0), "std": J.std(axis=0)},
-            "C": {
-                # extra column for tuning std of noise for training data
-                "mean": np.concatenate((C.mean(axis=0), np.zeros((1)))),
-                "std": np.concatenate((C.std(axis=0), np.ones((1)))),
-            },
-        }
+        self.__compute_normalizing_elements()
         
         path_P_knn = f"{self.__solver_param.weight_dir}/P_knn-{self.__solver_param.N}-{self.n}-{self.m}-{self.r}.pth"
         try:

@@ -32,9 +32,7 @@ def paik():
 
 def nsf():
     config = Config_IKP()
-    solver_param = PANDA_NSF
-    solver_param.workdir = config.workdir
-    solver = Solver(solver_param=solver_param)
+    solver = Solver(solver_param=PANDA_NSF, load_date='0115-0234', work_dir=config.workdir)
 
     (l2, ang, avg_inference_time, success_rate) = solver.evaluate_ikp_iterative(
         config.num_poses,

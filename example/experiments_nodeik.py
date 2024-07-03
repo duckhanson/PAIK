@@ -18,7 +18,7 @@ from nodeik.training import Learner, ModelWrapper
 from pyquaternion import Quaternion
 from common.evaluate import mmd_evaluate_multiple_poses, compute_distance_J
 from common.display import display_posture, display_ikp
-from common.config import ConfigFile, ConfigIKP, ConfigDiversity, ConfigPosture
+from common.config import Config_File, Config_IKP, Config_Diversity, Config_Posture
 from common.file import load_poses_and_numerical_ik_sols
 
 
@@ -47,14 +47,15 @@ def evaluate_pose_errors_P2d_P2d(P_hat, P):
     l2 = np.linalg.norm(P[:, :3] - P_hat[:, :3], axis=1)
     a_quats = np.array([Quaternion(array=a[3:]) for a in P])
     b_quats = np.array([Quaternion(array=b[3:]) for b in P_hat])
-    ang = np.array([Quaternion.distance(a, b) for a, b in zip(a_quats, b_quats)])
+    ang = np.array([Quaternion.distance(a, b)
+                   for a, b in zip(a_quats, b_quats)])
     return l2, ang
 
 
 def init_nodeik(args, std: float, robot: Robot = None):
-    config = ConfigFile()
+    config = Config_File()
     config.nodeik_workdir = args.nodeik_workdir
-    
+
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     device = torch.device(
@@ -63,10 +64,12 @@ def init_nodeik(args, std: float, robot: Robot = None):
 
     wp.init()
     if robot is None:
-        robot = Robot(robot_path=ConfigFile.nodeik_urdf_path, ee_link_name="panda_hand")
+        robot = Robot(robot_path=Config_File.nodeik_urdf_path,
+                      ee_link_name="panda_hand")
     learn = Learner.load_from_checkpoint(
-        ConfigFile.nodeik_model_path,
-        model=build_model(args, robot.active_joint_dim, condition_dims=7).to(device),
+        Config_File.nodeik_model_path,
+        model=build_model(args, robot.active_joint_dim,
+                          condition_dims=7).to(device),
         robot=robot,
         std=std,
         state_dim=robot.active_joint_dim,
@@ -79,17 +82,17 @@ def init_nodeik(args, std: float, robot: Robot = None):
 
 
 def get_pair_from_robot(robot, num_poses):
-    x = robot.get_pair()[robot.active_joint_dim :]
+    x = robot.get_pair()[robot.active_joint_dim:]
     J = np.empty((num_poses, robot.active_joint_dim))
     P = np.empty((num_poses, len(x)))
     for i in trange(num_poses):
         J[i] = robot.get_pair()[: robot.active_joint_dim]
-        P[i] = robot.get_pair()[robot.active_joint_dim :]
+        P[i] = robot.get_pair()[robot.active_joint_dim:]
     return J, P
 
 
 def ikp():
-    config = ConfigIKP()
+    config = Config_IKP()
     robot, nodeik = init_nodeik(args, config.std)
 
     _, P = get_pair_from_robot(robot, config.num_poses)
@@ -98,7 +101,8 @@ def ikp():
     )  # (config.num_poses, config.num_sols, len(x))
 
     begin = time.time()
-    J_hat = np.empty((config.num_poses, config.num_sols, robot.active_joint_dim))
+    J_hat = np.empty(
+        (config.num_poses, config.num_sols, robot.active_joint_dim))
     P_hat = np.empty_like(P)
     for i in trange(config.num_poses):
         J_hat[i], _ = nodeik.inverse_kinematics(P[i])
@@ -111,14 +115,15 @@ def ikp():
 
 
 def posture_constraint_ikp():
-    config = ConfigPosture()
+    config = Config_Posture()
     robot, nodeik = init_nodeik(args, config.std)
     J, P = get_pair_from_robot(robot, config.num_poses)
 
     # P.shape = (config.num_sols, config.num_poses, len(x))
     P = np.repeat(np.expand_dims(P, axis=0), config.num_sols, axis=0)
 
-    J_hat = np.empty((config.num_sols, config.num_poses, robot.active_joint_dim))
+    J_hat = np.empty(
+        (config.num_sols, config.num_poses, robot.active_joint_dim))
     P_hat = np.empty_like(P)
     for i in trange(config.num_sols):
         J_hat[i], _ = nodeik.inverse_kinematics(P[i])
@@ -145,7 +150,8 @@ def load_poses_and_numerical_ik_sols_nodeik(record_dir: str, nodeik: ModelWrappe
     print(f"P.shape: {P.shape}, J.shape: {J.shape}")
     P_hat = np.empty_like(P)
     for i in range(len(P)):
-        P_hat[i] = nodeik.forward_kinematics(J[i, np.random.randint(0, J.shape[1])])
+        P_hat[i] = nodeik.forward_kinematics(
+            J[i, np.random.randint(0, J.shape[1])])
     l2, ang = evaluate_pose_errors_P2d_P2d(P_hat, P)
     df = pd.DataFrame({"l2": l2, "ang": ang})
     assert df["l2"].mean() < 1e-3, f"[LOAD ERROR] l2.mean(): {df['l2'].mean()}"
@@ -154,7 +160,7 @@ def load_poses_and_numerical_ik_sols_nodeik(record_dir: str, nodeik: ModelWrappe
 
 
 def diversity():
-    config = ConfigDiversity()
+    config = Config_Diversity()
     robot, nodeik = init_nodeik(args, 0.1)
     P, J = load_poses_and_numerical_ik_sols_nodeik(config.record_dir, nodeik)
 

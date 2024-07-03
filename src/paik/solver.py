@@ -1,15 +1,16 @@
 # Import required packages
 from __future__ import annotations
 from typing import Any, Tuple
+import os
+import shutil
 from os.path import isdir
 from time import time
 import numpy as np
 import pandas as pd
 import torch
-
+from tabulate import tabulate
 from hnne import HNNE
 from sklearn.neighbors import NearestNeighbors
-
 from tqdm import trange
 
 from .settings import SolverConfig, PANDA_PAIK
@@ -19,50 +20,21 @@ from .evaluate import evaluate_pose_error_P2d_P2d
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 
-
 class Solver:
-    def __init__(self, solver_param: SolverConfig = PANDA_PAIK) -> None:
-        self.__solver_param = solver_param
+    def __init__(self, solver_param: SolverConfig = PANDA_PAIK, load_date: str = "", work_dir: str = os.path.abspath(os.getcwd())) -> None:
+        solver_param.workdir = work_dir
         self._robot = get_robot(
             solver_param.robot_name, robot_dirs=solver_param.dir_paths
         )
-        self._method_of_select_reference_posture = (
-            solver_param.select_reference_posture_method
-        )
-        self._device = solver_param.device
-        self._use_nsf_only = solver_param.use_nsf_only
-        # Neural spline flow (NSF) with 3 sample features and 5 context features
-        self.n, self.m, self.r = solver_param.n, solver_param.m, solver_param.r
-        self.J, self.P, self.F = self.__load_training_data()
-
-        self._solver, self._optimizer, self._scheduler = get_flow_model(
-            solver_param
-        )  # type: ignore
-        self._base_std = solver_param.base_std
-        # load inference data
-        assert (
-            self.n == self._robot.n_dofs
-        ), f"n should be {self._robot.n_dofs} as the robot"
-
-        path_p_knn = f"{solver_param.weight_dir}/P_knn.pth"
+        
+        self.param = solver_param
+        
         try:
-            self.P_knn = load_pickle(path_p_knn)
-        except:
-            self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.P)
-            save_pickle(
-                path_p_knn,
-                self.P_knn,
-            )
-
-        path_J_knn = f"{solver_param.weight_dir}/J_knn.pth"
-        try:
-            self.J_knn = load_pickle(path_J_knn)
-        except:
-            self.J_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.J)
-            save_pickle(
-                path_J_knn,
-                self.J_knn,
-            )
+            self.load_by_date(load_date)
+        except FileNotFoundError as e:  
+            print(f"[WARNING] {e}. Load training data instead.")
+            self.__load_training_data()
+        
 
     @property
     def base_std(self):
@@ -75,26 +47,132 @@ class Solver:
     @property
     def param(self):
         return self.__solver_param
+    
+    @param.setter
+    def param(self, value: SolverConfig):
+        self.__solver_param = value
+        self._device = value.device
+        self._use_nsf_only = value.use_nsf_only
+        # Neural spline flow (NSF) with 3 sample features and 5 context features
+        self.n, self.m, self.r = value.n, value.m, value.r
+        self._solver, self._optimizer, self._scheduler = get_flow_model(value)  # type: ignore
+        self._base_std = value.base_std
+        # load inference data
+        assert (
+            self.n == self._robot.n_dofs
+        ), f"n should be {self._robot.n_dofs} as the robot"
 
     @base_std.setter
     def base_std(self, value: float):
         assert value >= 0, "base_std should be greater than or equal to 0."
         self._base_std = value
         self.__change_solver_base()
+    
+    # a dictionary in weight_dir to store the information of top3 dates, their l2, and their model by save_by_date, save the date if the current model is better, and remove the worst date
+    def save_if_top3(self, date: str, l2: float):
+        top3_date_path = os.path.join(self.param.weight_dir, "top3_date.pth")
+        if not os.path.exists(top3_date_path):
+            save_pickle(top3_date_path, {"date": ["", "", ""], "l2": [1000, 1000, 1000]})
+        top3_date = load_pickle(top3_date_path)
+        save_idx = -1
+        # # if the top3 date has the current date, then check if the current model is better, if so, replace it
+        if date in top3_date["date"]:
+            if l2 < top3_date["l2"][top3_date["date"].index(date)]:
+                save_idx = top3_date["date"].index(date)
+        elif l2 < max(top3_date["l2"]):
+            save_idx = top3_date["l2"].index(max(top3_date["l2"]))
+        
+        if save_idx == -1:
+            print(f"[INFO] current model is not better than the top3 model in {top3_date_path}")
+        else:
+            if top3_date["date"][save_idx] != "" and top3_date["date"][save_idx] != date:
+                self.remove_by_date(top3_date["date"][save_idx])
+            top3_date["date"][save_idx] = date
+            top3_date["l2"][save_idx] = l2
+            save_pickle(top3_date_path, top3_date)
+            self.save_by_date(date)
+            print(f"[SUCCESS] save the date {date} with l2 {l2:.5f} in {top3_date_path}")
+        print(f"[INFO] top3 dates: {top3_date['date']}, top3 l2: {top3_date['l2']}")
+                    
+    # remove by date
+    def remove_by_date(self, date: str):
+        if isdir(os.path.join(self.param.weight_dir, date)):
+            shutil.rmtree(os.path.join(self.param.weight_dir, date), ignore_errors=True)
+            print(f"[SUCCESS] remove {date} in {self.param.weight_dir}.")
+        else:
+            print(f"[WARNING] {date} not found in {self.param.weight_dir}. Remove failed.")
+        
+        
+    # save model, J, P, F, J_knn, P_knn in the directory of date in the weight_dir
+    def save_by_date(self, date: str):
+        save_dir = os.path.join(self.param.weight_dir, date)
+        os.makedirs(save_dir, exist_ok=True)
+        torch.save(
+            {
+                "solver": self._solver.state_dict(),
+            },
+            os.path.join(save_dir, "model.pth"),
+        )
+        
+        # if path exists, do not save again
+        if not os.path.exists(os.path.join(save_dir, "J.npy")):
+            save_numpy(os.path.join(save_dir, "J.npy"), self.J)
+            save_numpy(os.path.join(save_dir, "P.npy"), self.P)
+            save_numpy(os.path.join(save_dir, "F.npy"), self.F)
+
+            save_pickle(os.path.join(save_dir, "param.pth"), self.param)
+            save_pickle(os.path.join(save_dir, "J_knn.pth"), self.J_knn)
+            save_pickle(os.path.join(save_dir, "P_knn.pth"), self.P_knn)
+        else:
+            print(f"[INFO] J, P, F, J_knn, P_knn already exist in {save_dir}.")
+        print(f"[SUCCESS] save model, J, P, F, J_knn, P_knn in {save_dir}")
+        
+    def load_by_date(self, date: str):
+        if not isdir(os.path.join(self.param.weight_dir, date)):
+            raise FileNotFoundError(f"{date} not found in {self.param.weight_dir}.")
+
+        load_dir = os.path.join(self.param.weight_dir, date)
+        model_path = os.path.join(load_dir, "model.pth")
+        param_path = os.path.join(load_dir, "param.pth")
+        J_path = os.path.join(load_dir, "J.npy")
+        P_path = os.path.join(load_dir, "P.npy")
+        F_path = os.path.join(load_dir, "F.npy")
+        J_knn_path = os.path.join(load_dir, "J_knn.pth")
+        P_knn_path = os.path.join(load_dir, "P_knn.pth")
+        
+        self.param = load_pickle(param_path)
+        self._solver.load_state_dict(torch.load(model_path)["solver"])
+        self.J = np.load(J_path)
+        self.P = np.load(P_path)
+        self.F = np.load(F_path)
+        self.__compute_normalizing_elements()
+        self.J_knn = load_pickle(J_knn_path)
+        self.P_knn = load_pickle(P_knn_path)
+        
+        print(f"[SUCCESS] load model, J, P, F, J_knn, P_knn from {load_dir}")
 
     # private methods
+    def __compute_normalizing_elements(self):
+        C = np.column_stack((self.P, self.F))
+
+        self.__normalization_elements = {
+            "J": {"mean": self.J.mean(axis=0), "std": self.J.std(axis=0)},
+            "C": {
+                # extra column for tuning std of noise for training data
+                "mean": np.concatenate((C.mean(axis=0), np.zeros((1)))),
+                "std": np.concatenate((C.std(axis=0), np.ones((1)))),
+            },
+        }
+    
     def __load_training_data(self):
         """
         Load training data from the given path, if not found, generate and save it.
-
-        Returns:
-            Tuple: J, P, F
         """
         assert isdir(
-            self.param.train_dir
-        ), f"{self.param.train_dir} not found, please change workdir to the project root!"
+            self.__solver_param.train_dir
+        ), f"{self.__solver_param.train_dir} not found, please change workdir to the project root!"
         data_path = (
-            lambda name: f"{self.param.train_dir}/{name}-{self.param.N}-{self.n}-{self.m}-{self.r}.npy"
+            lambda name: f"{self.__solver_param.train_dir}/{name}-{self.__solver_param.N}-{self.n}-{self.m}-{self.r}.npy"
         )
 
         J, P, F = [load_numpy(file_path=data_path(name))
@@ -103,7 +181,7 @@ class Solver:
         if J is None or P is None:
             print(f"[WARNING] J or P not found, generate and save in {data_path('J')}.")
             J, P = self._robot.sample_joint_angles_and_poses(
-                n=self.param.N, return_torch=False
+                n=self.__solver_param.N, return_torch=False
             )
             save_numpy(file_path=data_path("J"), arr=J)
             save_numpy(file_path=data_path("P"), arr=P)
@@ -115,7 +193,7 @@ class Solver:
             # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
             hnne = HNNE(dim=self.r)
             # maximum number of data for hnne (11M), we use max_num_data_hnne to test
-            num_data = min(self.param.max_num_data_hnne, len(J))
+            num_data = min(self.__solver_param.max_num_data_hnne, len(J))
             F = hnne.fit_transform(X=J[:num_data], dim=self.r, verbose=True)
             # query nearest neighbors for the rest of J
             if len(F) != len(J):
@@ -135,17 +213,33 @@ class Solver:
             print(f"[SUCCESS] F saved in {data_path('F')}.")
         print(f"[SUCCESS] F load from {data_path('F')}")
 
+        self.J, self.P, self.F = J, P, F
         # for normalization
-        C = np.column_stack((P, F))
+        self.__compute_normalizing_elements()
+        
+        path_P_knn = f"{self.__solver_param.weight_dir}/P_knn-{self.__solver_param.N}-{self.n}-{self.m}-{self.r}.pth"
+        try:
+            self.P_knn = load_pickle(path_P_knn)
+        except:
+            print(f"[WARNING] P_knn not found, generate and save in {path_P_knn}.")
+            self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(P)
+            save_pickle(
+                path_P_knn,
+                self.P_knn,
+            )
+        print(f"[SUCCESS] P_knn load from {path_P_knn}.")
 
-        self.__normalization_elements = {
-            "J": {"mean": J.mean(axis=0), "std": J.std(axis=0)},
-            "C": {
-                # extra column for tuning std of noise for training data
-                "mean": np.concatenate((C.mean(axis=0), np.zeros((1)))),
-                "std": np.concatenate((C.std(axis=0), np.ones((1)))),
-            },
-        }
+        path_J_knn = f"{self.__solver_param.weight_dir}/J_knn-{self.__solver_param.N}-{self.n}-{self.m}-{self.r}.pth"
+        try:
+            self.J_knn = load_pickle(path_J_knn)
+        except:
+            print(f"[WARNING] J_knn not found, generate and save in {path_J_knn}.")
+            self.J_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(J)
+            save_pickle(
+                path_J_knn,
+                self.J_knn,
+            )
+        print(f"[SUCCESS] J_knn load from {path_J_knn}.")
 
         return J, P, F
 
@@ -358,18 +452,18 @@ class Solver:
             return l2, ang
         return l2.mean(), ang.mean()
 
-    def select_reference_posture(self, P: np.ndarray):
-        if self._method_of_select_reference_posture == "knn":
+    def select_reference_posture(self, P: np.ndarray, select_reference: str = 'knn'):
+        if select_reference == "knn":
             # type: ignore
             return self.F[
                 self.P_knn.kneighbors(
                     np.atleast_2d(P), n_neighbors=1, return_distance=False
                 ).flatten()  # type: ignore
             ]
-        elif self._method_of_select_reference_posture == "random":
+        elif select_reference == "random":
             min_F, max_F = np.min(self.F), np.max(self.F)
             return np.random.rand(len(P), self.r) * (max_F - min_F) + min_F
-        elif self._method_of_select_reference_posture == "pick":
+        elif select_reference == "pick":
             # randomly pick one posture from train set
             return self.F[np.random.randint(0, len(self.F), len(P))]
         else:
@@ -382,6 +476,7 @@ class Solver:
         batch_size: int = 5000,
         std: float = 0.25,
         success_threshold: Tuple[float, float] = (1e-4, 1e-4),
+        select_reference: str = 'knn',
         verbose: bool = True,
     ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
         self.base_std = std
@@ -391,7 +486,7 @@ class Solver:
         )
         time_begin = time()
         # Data Preprocessing
-        F = self.select_reference_posture(P)
+        F = self.select_reference_posture(P, select_reference)
 
         # Begin inference
         J_hat = self.solve_batch(
@@ -401,7 +496,24 @@ class Solver:
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
         df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
-        print(df.describe())
+        # print(df.describe())
+        
+        print(
+            tabulate(
+                [
+                    [
+                        np.round(l2.mean() * 1e3, decimals=2),
+                        np.round(np.rad2deg(ang.mean()), decimals=2),
+                        np.round(avg_inference_time * 1e3, decimals=0),
+                    ]
+                ],
+                headers=[
+                    "l2 (mm)",
+                    "ang (deg)",
+                    "inference_time (ms)",
+                ],
+            )
+        )
 
         return tuple(
             [

@@ -3,16 +3,18 @@ from datetime import datetime
 import torch
 import torch.backends.cudnn
 import numpy as np
+import os
 
 from tqdm import tqdm
 from pprint import pprint
 import wandb
 from torch.utils.data import DataLoader, TensorDataset
+
 from .settings import SolverConfig, PANDA_PAIK
 from .solver import Solver
+from .file import save_numpy, save_pickle, load_numpy, load_pickle
 
 PATIENCE = 4
-POSE_ERR_THRESH = 6e-3
 
 
 def init_seeds(seed=42):
@@ -43,7 +45,6 @@ class Trainer(Solver):
         num_epochs,
         batch_size=128,
         patience=4,
-        pose_err_thres=1e-2,
         num_eval_poses=100,
         num_eval_sols=100,
         seed=42,
@@ -53,8 +54,6 @@ class Trainer(Solver):
             patience=patience,
             verbose=True,
             enable_save=True,
-            path=f"{self.param.weight_dir}/{begin_time}.pth",
-            val_loss_threshold=pose_err_thres,
         )
         # data generation
         assert self._device == "cuda", "device should be cuda"
@@ -123,8 +122,7 @@ class Trainer(Solver):
 
             wandb.log(log_info)
 
-            early_stopping(avg_pos_errs, self._solver,
-                           self._optimizer)  # type: ignore
+            early_stopping(avg_pos_errs, self, begin_time)  # type: ignore
 
             if early_stopping.early_stop:
                 print("Early stopping")
@@ -155,6 +153,7 @@ class Trainer(Solver):
 
         return loss.item()
 
+        
 
 class EarlyStopping:
     # https://github.com/Bjarten/early-stopping-pytorch/blob/master/pytorchtools.py
@@ -166,8 +165,6 @@ class EarlyStopping:
         verbose=False,
         delta=0,
         enable_save=False,
-        path="checkpoint.pt",
-        val_loss_threshold=0.0,
         trace_func=print,
     ):
         """
@@ -178,8 +175,6 @@ class EarlyStopping:
                             Default: False
             delta (float): Minimum change in the monitored quantity to qualify as an improvement.
                             Default: 0
-            path (str): Path for the checkpoint to be saved to.
-                            Default: 'checkpoint.pt'
             trace_func (function): trace print function.
                             Default: print
         """
@@ -187,19 +182,17 @@ class EarlyStopping:
         self.verbose = verbose
         self.counter = 0
         self.early_stop = False
-        self.val_loss_threshold = val_loss_threshold
         self.val_loss_min = np.Inf
         self.delta = delta
         self.enable_save = enable_save
-        self.path = path
         self.trace_func = trace_func
 
-    def __call__(self, val_loss, model, optimizer):
+    def __call__(self, val_loss, paik, date):
         if np.isnan(val_loss):
             self.early_stop = True
             self.trace_func(f"EarlyStopping counter: val_loss: nan")
         elif self.val_loss_min is None or val_loss < self.val_loss_min:
-            self.save_checkpoint(val_loss, model, optimizer=optimizer)
+            self.save_checkpoint(val_loss, paik, date)
             self.counter = 0
         elif val_loss - self.val_loss_min > self.delta:
             self.counter += 1
@@ -209,23 +202,14 @@ class EarlyStopping:
             if self.counter >= self.patience:
                 self.early_stop = True
 
-    def save_checkpoint(self, val_loss, model, optimizer):
+    def save_checkpoint(self, val_loss, paik, date):
         """Saves model when validation loss decrease."""
         if self.enable_save:
             if self.verbose:
                 self.trace_func(
                     f"Validation loss decreased ({self.val_loss_min:.4f} --> {val_loss:.4f})."
                 )
-
-            if val_loss < self.val_loss_threshold:
-                self.trace_func(f"Saving model to {self.path}.")
-                torch.save(
-                    {
-                        "solver": model.state_dict(),
-                        "opt": optimizer.state_dict(),
-                    },
-                    self.path,
-                )
+            paik.save_if_top3(date, val_loss)
         else:
             if self.verbose:
                 self.trace_func(

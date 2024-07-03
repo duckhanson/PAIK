@@ -95,35 +95,17 @@ class SolverConfig:
 # )
 
 PANDA_NSF = SolverConfig(
-    lr=0.00037,
-    gamma=0.086,
-    noise_esp=0.0025,
-    randperm=False,
-    base_std=0.68,
     subnet_width=1024,
     num_transforms=8,
-    lr_weight_decay=0.012,
-    noise_esp_decay=0.97,
     subnet_num_layers=3,
-    batch_size=1024,
     use_nsf_only=True,
     ckpt_name="0115-0234",
 )
 
 PANDA_PAIK = SolverConfig(
-    lr=4e-4,
-    gamma=0.086,
-    noise_esp=0.0025,
-    randperm=False,
-    base_std=0.65,
     subnet_width=1024,
     num_transforms=8,
-    lr_weight_decay=0.013,
-    shce_patience=2,
-    noise_esp_decay=0.97,
     subnet_num_layers=3,
-    batch_size=1024,
-    use_nsf_only=False,
     ckpt_name="0126-1535",  # "0119-1047", "0118-0827", "0126-1535"
 )
 

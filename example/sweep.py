@@ -10,8 +10,7 @@ WORK_DIR = "/home/luca/paik"
 WANDB_PROJECT_NAME = f"PANDA_PAIK {PANDA_PAIK.r}"
 SOLVER_PARAM = PANDA_PAIK # [CHANGE THIS]
 WANDB_ENTITY = "luca_nthu"  # please change to your own entity name
-PATIENCE = 5
-POSE_ERR_THRESH = 5e-3
+PATIENCE = 7
 EXPERMENT_COUNT = 15
 NUM_EPOCHS = 100
 USE_NSF_ONLY = False
@@ -24,17 +23,17 @@ def get_range(left_bound, right_bound, scale):
 
 sweep_config = {
     "name": "sweep",
-    "method": "random",
+    "method": "bayes",
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
-        "num_transforms": {"values": get_range(6, 9, 1)},
-        "lr": {"values": get_range(48, 56, 1e-5)},
-        "lr_weight_decay": {"values": get_range(13, 17, 1e-3)},
+        "num_transforms": {"values": get_range(7, 9, 1)},
+        "lr": {"values": get_range(40, 75, 1e-5)},
+        "lr_weight_decay": {"values": get_range(14, 20, 1e-3)},
         "gamma": {"values": get_range(84, 87, 1e-3)},
-        "noise_esp": {"values": get_range(25, 31, 1e-4)},
-        "noise_esp_decay": {"values": get_range(95, 98, 1e-2)},
-        "num_bins": {"values": get_range(5, 10, 1)},
-        "base_std": {"values": get_range(40, 50, 1e-2)},
+        "noise_esp": {"values": get_range(17, 33, 1e-4)},
+        "noise_esp_decay": {"values": get_range(94, 99, 1e-2)},
+        "num_bins": {"values": get_range(7, 11, 1)},
+        "base_std": {"values": get_range(55, 66, 1e-2)},
         "lr_beta_l": {"values": get_range(88, 94, 1e-2)},
         "lr_beta_h": {"values": get_range(91, 95, 1e-2)},
     },
@@ -68,19 +67,11 @@ def main() -> None:
         _,
     ) = trainer.evaluate_ikp_iterative(num_poses=100, num_sols=1000, verbose=False)
 
-    print(
-        tabulate(
-            [[avg_l2_errs, avg_ang_errs, avg_inference_time]],
-            headers=["avg_l2_errs", "avg_ang_errs", "avg_inference_time"],
-        )
-    )
-
     trainer.mini_train(
         num_epochs=NUM_EPOCHS,
         batch_size=solver_param.batch_size,
         begin_time=begin_time,
         patience=PATIENCE,
-        pose_err_thres=POSE_ERR_THRESH,
         num_eval_poses=1000,
         num_eval_sols=100,
     )

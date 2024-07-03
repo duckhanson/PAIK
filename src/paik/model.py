@@ -13,6 +13,7 @@ from zuko.flows import Flow, Unconditional
 from zuko.flows.spline import NSF
 from .settings import SolverConfig
 from jrl.robots import Panda, Fetch, FetchArm, Iiwa7
+from pprint import pprint
 
 
 def get_flow_model(config: SolverConfig) -> tuple[Flow, Optimizer, ReduceLROnPlateau]:
@@ -25,7 +26,7 @@ def get_flow_model(config: SolverConfig) -> tuple[Flow, Optimizer, ReduceLROnPla
     Returns:
         tuple[Flow, Optimizer, ReduceLROnPlateau]: flow model, optimizer, and scheduler
     """
-
+    pprint(f"[INFO] create new model with config: {config}")
     assert config.model_architecture in ["nsf"]
     # Build Generative model, NSF
     # Neural spline flow (NSF) with inputs 7 features and 3 + 4 + 1 context
@@ -56,23 +57,8 @@ def get_flow_model(config: SolverConfig) -> tuple[Flow, Optimizer, ReduceLROnPla
         amsgrad=config.lr_amsgrad,
         betas=config.lr_beta,
     )
-    path_solver = f"{config.weight_dir}/{config.ckpt_name}.pth"
-    if config.enable_load_model and os.path.exists(path=path_solver):
-        try:
-            state = torch.load(path_solver)
-            flow.load_state_dict(state["solver"])
-            print(f"[SUCCESS] model load (solver) from {path_solver}.")
-            optimizer.load_state_dict(state["opt"])
-            print(f"[SUCCESS] model load (opt) from {path_solver}.")
-        except Exception as e:
-            print(f"[WARNING]{e}")
-            print("[WARNING] try again will solve it :)")
-            torch.save(
-                {"solver": flow.state_dict(), "opt": optimizer.state_dict()},
-                path_solver,
-            )
-    else:
-        print("[WARNING] create a new model and start training.")
+
+    print("[WARNING] not load model yet.")
 
     # Train to maximize the log-likelihood
     scheduler = ReduceLROnPlateau(

@@ -23,10 +23,10 @@ def get_range(left_bound, right_bound, scale):
 
 sweep_config = {
     "name": "sweep",
-    "method": "random",
+    "method": "bayes",
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
-        "num_transforms": {"values": get_range(6, 9, 1)},
+        "num_transforms": {"values": get_range(7, 9, 1)},
         "lr": {"values": get_range(40, 75, 1e-5)},
         "lr_weight_decay": {"values": get_range(14, 20, 1e-3)},
         "gamma": {"values": get_range(84, 87, 1e-3)},

@@ -51,9 +51,6 @@ class Solver:
     @param.setter
     def param(self, value: SolverConfig):
         self.__solver_param = value
-        self._method_of_select_reference_posture = (
-            value.select_reference_posture_method
-        )
         self._device = value.device
         self._use_nsf_only = value.use_nsf_only
         # Neural spline flow (NSF) with 3 sample features and 5 context features
@@ -455,18 +452,18 @@ class Solver:
             return l2, ang
         return l2.mean(), ang.mean()
 
-    def select_reference_posture(self, P: np.ndarray):
-        if self._method_of_select_reference_posture == "knn":
+    def select_reference_posture(self, P: np.ndarray, select_reference: str = 'knn'):
+        if select_reference == "knn":
             # type: ignore
             return self.F[
                 self.P_knn.kneighbors(
                     np.atleast_2d(P), n_neighbors=1, return_distance=False
                 ).flatten()  # type: ignore
             ]
-        elif self._method_of_select_reference_posture == "random":
+        elif select_reference == "random":
             min_F, max_F = np.min(self.F), np.max(self.F)
             return np.random.rand(len(P), self.r) * (max_F - min_F) + min_F
-        elif self._method_of_select_reference_posture == "pick":
+        elif select_reference == "pick":
             # randomly pick one posture from train set
             return self.F[np.random.randint(0, len(self.F), len(P))]
         else:
@@ -479,6 +476,7 @@ class Solver:
         batch_size: int = 5000,
         std: float = 0.25,
         success_threshold: Tuple[float, float] = (1e-4, 1e-4),
+        select_reference: str = 'knn',
         verbose: bool = True,
     ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
         self.base_std = std
@@ -488,7 +486,7 @@ class Solver:
         )
         time_begin = time()
         # Data Preprocessing
-        F = self.select_reference_posture(P)
+        F = self.select_reference_posture(P, select_reference)
 
         # Begin inference
         J_hat = self.solve_batch(

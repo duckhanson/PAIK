@@ -63,7 +63,7 @@ class Config_IKP(Config_File):
 
     # paik
     use_nsf_only: bool = False
-    method_of_select_reference_posture: str = "knn"
+    select_reference: str = "knn"
 
 
 @dataclass()

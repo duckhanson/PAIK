@@ -74,29 +74,27 @@ class Solver:
     def save_if_top3(self, date: str, l2: float):
         top3_date_path = os.path.join(self.param.weight_dir, "top3_date.pth")
         if not os.path.exists(top3_date_path):
-            self.save_by_date(date)
-            save_pickle(top3_date_path, {"date": [date], "l2": [l2]})
+            save_pickle(top3_date_path, {"date": ["", "", ""], "l2": [1000, 1000, 1000]})
+        top3_date = load_pickle(top3_date_path)
+        save_idx = -1
+        # # if the top3 date has the current date, then check if the current model is better, if so, replace it
+        if date in top3_date["date"]:
+            if l2 < top3_date["l2"][top3_date["date"].index(date)]:
+                save_idx = top3_date["date"].index(date)
+        elif l2 < max(top3_date["l2"]):
+            save_idx = top3_date["l2"].index(max(top3_date["l2"]))
+        
+        if save_idx == -1:
+            print(f"[INFO] current model is not better than the top3 model in {top3_date_path}")
         else:
-            top3_date = load_pickle(top3_date_path)
-            if len(top3_date["date"]) < 3:
-                self.save_by_date(date)
-                top3_date["date"].append(date)
-                top3_date["l2"].append(l2)
-                save_pickle(top3_date_path, top3_date)
-                print(f"[SUCCESS] save the date {date} with l2 {l2:.5f} in {top3_date_path}")
-            else:
-                if l2 < max(top3_date["l2"]):
-                    idx = top3_date["l2"].index(max(top3_date["l2"]))
-                    if top3_date["date"][idx] != date:
-                        self.remove_by_date(top3_date["date"][idx])
-
-                    self.save_by_date(date)
-                    top3_date["date"][idx] = date
-                    top3_date["l2"][idx] = l2
-                    save_pickle(top3_date_path, top3_date)
-                    print(f"[SUCCESS] save the date {date} with l2 {l2:.5f} in {top3_date_path}")
-                else:
-                    print(f"[INFO] current model is not better than the top3 model in {top3_date_path}")
+            if top3_date["date"][save_idx] != "" and top3_date["date"][save_idx] != date:
+                self.remove_by_date(top3_date["date"][save_idx])
+            top3_date["date"][save_idx] = date
+            top3_date["l2"][save_idx] = l2
+            save_pickle(top3_date_path, top3_date)
+            self.save_by_date(date)
+            print(f"[SUCCESS] save the date {date} with l2 {l2:.5f} in {top3_date_path}")
+        print(f"[INFO] top3 dates: {top3_date['date']}, top3 l2: {top3_date['l2']}")
                     
     # remove by date
     def remove_by_date(self, date: str):
@@ -224,7 +222,7 @@ class Solver:
             self.P_knn = load_pickle(path_P_knn)
         except:
             print(f"[WARNING] P_knn not found, generate and save in {path_P_knn}.")
-            self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.P)
+            self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(P)
             save_pickle(
                 path_P_knn,
                 self.P_knn,
@@ -236,7 +234,7 @@ class Solver:
             self.J_knn = load_pickle(path_J_knn)
         except:
             print(f"[WARNING] J_knn not found, generate and save in {path_J_knn}.")
-            self.J_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.J)
+            self.J_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(J)
             save_pickle(
                 path_J_knn,
                 self.J_knn,

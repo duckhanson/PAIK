@@ -15,7 +15,6 @@ from .solver import Solver
 from .file import save_numpy, save_pickle, load_numpy, load_pickle
 
 PATIENCE = 4
-POSE_ERR_THRESH = 6e-3
 
 
 def init_seeds(seed=42):
@@ -46,7 +45,6 @@ class Trainer(Solver):
         num_epochs,
         batch_size=128,
         patience=4,
-        pose_err_thres=1e-2,
         num_eval_poses=100,
         num_eval_sols=100,
         seed=42,
@@ -56,7 +54,6 @@ class Trainer(Solver):
             patience=patience,
             verbose=True,
             enable_save=True,
-            val_loss_threshold=pose_err_thres,
         )
         # data generation
         assert self._device == "cuda", "device should be cuda"
@@ -168,7 +165,6 @@ class EarlyStopping:
         verbose=False,
         delta=0,
         enable_save=False,
-        val_loss_threshold=0.0,
         trace_func=print,
     ):
         """
@@ -186,7 +182,6 @@ class EarlyStopping:
         self.verbose = verbose
         self.counter = 0
         self.early_stop = False
-        self.val_loss_threshold = val_loss_threshold
         self.val_loss_min = np.Inf
         self.delta = delta
         self.enable_save = enable_save

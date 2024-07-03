@@ -11,7 +11,6 @@ WANDB_PROJECT_NAME = f"PANDA_PAIK {PANDA_PAIK.r}"
 SOLVER_PARAM = PANDA_PAIK # [CHANGE THIS]
 WANDB_ENTITY = "luca_nthu"  # please change to your own entity name
 PATIENCE = 7
-POSE_ERR_THRESH = 5e-3
 EXPERMENT_COUNT = 15
 NUM_EPOCHS = 100
 USE_NSF_ONLY = False
@@ -73,7 +72,6 @@ def main() -> None:
         batch_size=solver_param.batch_size,
         begin_time=begin_time,
         patience=PATIENCE,
-        pose_err_thres=POSE_ERR_THRESH,
         num_eval_poses=1000,
         num_eval_sols=100,
     )

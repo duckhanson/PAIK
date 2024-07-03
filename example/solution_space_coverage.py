@@ -153,18 +153,16 @@ def paik(config: Config_Diversity, solver: Solver):
 
 
 def nsf(config: Config_Diversity, solver: Solver):
-    solver_param = PANDA_NSF
-    solver_param.workdir = config.workdir
-    nsf = Solver(solver_param=solver_param)
+    nsf = Solver(solver_param=PANDA_NSF,
+                    load_date='0115-0234', work_dir=config.workdir)
     iterate_over_base_stds(config, "nsf", nsf, solver, nsf_solve)
 
 
 if __name__ == "__main__":
     config = Config_Diversity()
-    solver_param = PANDA_PAIK
-    solver_param.workdir = config.workdir
-    solver = Solver(solver_param=solver_param)
+    solver = Solver(solver_param=PANDA_PAIK,
+                    load_date='0703-0717', work_dir=config.workdir)
     config.date = "2024_03_04"
     # klampt_numerical_ik_solver(config, solver)
     paik(config, solver)
-    # nsf(config, solver)
+    nsf(config, solver)

@@ -385,39 +385,88 @@ def oscillate_target(ik_solver: Solver, nb_sols=5):
     )
 
 
-# def random_target_pose(ik_solver: IKFlowSolver, nb_sols=5):
-#     """Set the end effector to a randomly drawn pose. Generate and visualize `nb_sols` solutions for the pose"""
+def random_target_pose(ik_solver: Solver, nb_sols=20):
+    """Set the end effector to a randomly drawn pose. Generate and visualize `nb_sols` solutions for the pose"""
 
-#     raise NotImplementedError("need to fix this function")
+    time_p_loop = 5
+    title = "Solutions for random target pose"
+    
+    robot = ik_solver.robot
+    
+    def generate_random_pose():
+        J, P = robot.sample_joint_angles_and_poses(n=1)
+        return P.reshape(-1)
 
-#     def setup_fn(worlds):
-#         vis.add(f"robot_goal", worlds[0].robot(0))
-#         vis.setColor(f"robot_goal", 0.5, 1, 1, 0)
+    def setup_fn(worlds):
+        vis.add("coordinates", coordinates.manager())
+        for i in range(len(worlds)):
+            vis.add(f"robot_{i}", worlds[i].robot(0))
 
-#         for i in range(1, nb_sols + 1):
-#             vis.add(f"robot_{i}", worlds[i].robot(0))
-#             vis.setColor(f"robot_{i}", 1, 1, 1, 1)
+        # Add target pose plot
+        vis.addPlot("target_pose")
+        vis.logPlot("target_pose", "target_pose x", 0)
+        vis.setPlotDuration("target_pose", 5)
+        vis.addPlot("solution_error")
+        vis.addPlot("solution_error")
+        vis.logPlot("solution_error", "l2 (mm)", 0)
+        vis.logPlot("solution_error", "angular (deg)", 0)
+        vis.setPlotDuration("solution_error", 5)
+        vis.setPlotRange("solution_error", 0, 15)
 
-#     def loop_fn(worlds, _demo_state):
-#         # Get random sample
-#         random_sample = self.robot.sample_joint_angles(1)
-#         random_sample_q = self.robot._x_to_qs(random_sample)
-#         worlds[0].robot(0).setConfig(random_sample_q[0])
-#         target_pose = self.robot.forward_kinematics_klampt(random_sample)[0]
+        # update the cameras pose
+        vp = vis.getViewport()
+        camera_tf = vp.get_transform()
+        vis.setViewport(vp)
+        vp.fit((0, 0.25, 0.5), 1.5)
 
-#         # Get solutions to pose of random sample
-#         ik_solutions = self.ik_solver.generate_ik_solutions(target_pose, nb_sols)
-#         qs = self.robot._x_to_qs(ik_solutions)
-#         for i in range(nb_sols):
-#             worlds[i + 1].robot(0).setConfig(qs[i])
+    @dataclass
+    class DemoState:
+        counter: int
+        target_pose: np.ndarray
+        ave_l2_error: float
+        ave_angular_error: float
+        
+    def solve_pose(solver, P):
+        if len(P.shape) == 1:
+            P = P.reshape(1, -1)
+        # num_sols from locality.
+        F = solver.select_reference_posture(P, "knn", num_sols=nb_sols)
+        P = np.repeat(P, nb_sols, axis=0)
+        assert F.shape[0] == P.shape[0], (F.shape, P.shape)
+        J_hat = solver.generate_ik_solutions(P, F, num_sols=1, std=0.0, latent=np.zeros(solver.n))
+        # (1, 1, solver.n)
+        return J_hat.reshape(nb_sols, 1, solver.n)
 
-#     time_p_loop = 2.5
-#     title = "Solutions for randomly drawn poses - Green link is the target pose"
+    def loop_fn(worlds, _demo_state):
+        # Update target pose
+        _demo_state.target_pose = generate_random_pose()
+        # Get solutions to pose of random sample
+        ik_solutions = solve_pose(ik_solver, _demo_state.target_pose)
+        l2_errors, ang_errors = ik_solver.evaluate_pose_error_J3d_P2d(ik_solutions, _demo_state.target_pose.reshape(-1, solver.m), return_all=True)
+        # print(f"l2_errors.shape: {l2_errors.shape}")
+        _demo_state.ave_l2_error = l2_errors.mean().item() * 1000
+        _demo_state.ave_ang_error = np.rad2deg(ang_errors.mean().item())
+        ik_solutions = ik_solutions.reshape(nb_sols, solver.n)
 
-#     def viz_update_fn(worlds, _demo_state):
-#         return
+        # Update viz with solutions
+        qs = robot._x_to_qs(ik_solutions)
+        for i in range(nb_sols):
+            worlds[i].robot(0).setConfig(qs[i])
 
-#     self._run_demo(nb_sols + 1, setup_fn, loop_fn, viz_update_fn, time_p_loop=time_p_loop, title=title)
+        # Update _demo_state
+        _demo_state.counter += 1
+
+    def viz_update_fn(worlds, _demo_state):
+        del worlds
+        _plot_pose("target_pose.", _demo_state.target_pose)
+        vis.logPlot("target_pose", "target_pose x", _demo_state.target_pose[0])
+        vis.logPlot("solution_error", "l2 (mm)", _demo_state.ave_l2_error)
+        vis.logPlot("solution_error", "angular (deg)", _demo_state.ave_ang_error)
+
+    demo_state = DemoState(counter=0, target_pose=generate_random_pose(), ave_l2_error=0, ave_angular_error=0)
+    _run_demo(
+        robot, nb_sols, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=time_p_loop, title=title
+    )
 
 
 def oscillate_joints(robot: Robot):
@@ -477,4 +526,5 @@ if __name__ == "__main__":
     solver = Solver(solver_param=PANDA_PAIK, load_date="0703-0717", work_dir="/home/luca/paik")
     # oscillate_latent(solver)
     # oscillate_locality(solver)
-    oscillate_target(solver)
+    # oscillate_target(solver)
+    random_target_pose(solver)

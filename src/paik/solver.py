@@ -48,6 +48,10 @@ class Solver:
     def param(self):
         return self.__solver_param
     
+    @property
+    def latent(self):
+        return self._latent
+    
     @param.setter
     def param(self, value: SolverConfig):
         self.__solver_param = value
@@ -57,6 +61,7 @@ class Solver:
         self.n, self.m, self.r = value.n, value.m, value.r
         self._solver, self._optimizer, self._scheduler = get_flow_model(value)  # type: ignore
         self._base_std = value.base_std
+        self._latent = torch.zeros((self.n,), device=self._device)
         # load inference data
         assert (
             self.n == self._robot.n_dofs
@@ -66,6 +71,12 @@ class Solver:
     def base_std(self, value: float):
         assert value >= 0, "base_std should be greater than or equal to 0."
         self._base_std = value
+        self.__change_solver_base()
+    
+    @latent.setter
+    def latent(self, value: np.ndarray):
+        assert len(value) == self.n, f"latent should have length {self.n}."
+        self._latent = torch.from_numpy(value.astype(np.float32)).to(self._device)
         self.__change_solver_base()
     
     # a dictionary in weight_dir to store the information of top3 dates, their l2, and their model by save_by_date, save the date if the current model is better, and remove the worst date
@@ -251,7 +262,7 @@ class Solver:
             transforms=self._solver.transforms,  # type: ignore
             base=Unconditional(
                 DiagNormal,
-                torch.zeros((self._robot.n_dofs,), device=self._device),
+                torch.zeros((self._robot.n_dofs,), device=self._device) + self._latent,
                 torch.ones((self._robot.n_dofs,),
                            device=self._device) * self._base_std,
                 buffer=True,
@@ -468,7 +479,16 @@ class Solver:
             return self.F[np.random.randint(0, len(self.F), len(P))]
         else:
             raise NotImplementedError
-
+        
+    def generate_ik_solutions(self, P: np.ndarray, F: np.ndarray, num_sols: int, std: float, latent: np.ndarray):
+        assert len(P) == len(F), "P and F should have the same length."
+        if std != self.base_std:
+            self.base_std = std
+        if not np.array_equal(latent, np.zeros((self.n,))):
+            self.latent = latent
+        J_hat = self.solve_batch(P, F, num_sols)
+        return J_hat
+        
     def evaluate_ikp_iterative(
         self,
         num_poses: int,
@@ -496,7 +516,7 @@ class Solver:
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
         df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
-        # print(df.describe())
+        print(df.describe())
         
         print(
             tabulate(

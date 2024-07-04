@@ -3,38 +3,42 @@ from time import sleep
 from dataclasses import dataclass
 
 from jrl.robot import Robot
-from jrl.robots import Panda, Fetch, FetchArm, Rizon4
+from jrl.robots import Panda, Fetch, FetchArm
 from klampt.math import so3
 from klampt.model import coordinates, trajectory
-from klampt import vis
-from klampt import WorldModel
+from klampt import IKSolver, vis, WorldModel
 import numpy as np
 import torch
 import torch.optim
 
-from ikflow.ikflow_solver import IKFlowSolver
-from ikflow.config import device, DEFAULT_TORCH_DTYPE
-from ikflow.evaluation_utils import solution_pose_errors
+# from ikflow.ikflow_solver import IKFlowSolver
+# from ikflow.config import device, DEFAULT_TORCH_DTYPE
+# from ikflow.evaluation_utils import solution_pose_errors
 
+# Import required packages
+import numpy as np
+from tqdm import trange
+
+from paik.solver import Solver
+from paik.settings import (
+    PANDA_NSF,
+    PANDA_PAIK,
+)
 
 _OSCILLATE_LATENT_TARGET_POSES = {
-    Panda.name: torch.tensor([0.25, 0.65, 0.45, 1.0, 0.0, 0.0, 0.0], dtype=DEFAULT_TORCH_DTYPE),
-    Fetch.name: torch.tensor([0.45, 0.65, 0.55, 1.0, 0.0, 0.0, 0.0], dtype=DEFAULT_TORCH_DTYPE),
-    Rizon4.name: torch.tensor([0.4, 0.4, 0.45, 1.0, 0.0, 0.0, 0.0], dtype=DEFAULT_TORCH_DTYPE),
+    Panda.name: np.array([0.25, 0.65, 0.45, 1.0, 0.0, 0.0, 0.0]),
+    Fetch.name: np.array([0.45, 0.65, 0.55, 1.0, 0.0, 0.0, 0.0]),
 }
 
 _TARGET_POSE_FUNCTIONS = {
     Panda.name: lambda counter: torch.tensor(
-        [0.4 * np.sin(counter / 50), 0.6, 0.75, 0.7071068, -0.7071068, 0.0, 0.0], dtype=DEFAULT_TORCH_DTYPE
+        [0.4 * np.sin(counter / 50), 0.6, 0.75, 0.7071068, -0.7071068, 0.0, 0.0]
     ),
     Fetch.name: lambda counter: torch.tensor(
-        [0.25 * np.sin(counter / 50) + 0.5, 0.5, 0.75, 1.0, 0.0, 0.0, 0.0], dtype=DEFAULT_TORCH_DTYPE
+        [0.25 * np.sin(counter / 50) + 0.5, 0.5, 0.75, 1.0, 0.0, 0.0, 0.0]
     ),
     FetchArm.name: lambda counter: torch.tensor(
-        [0.6, 0.15 * np.sin(counter / 50) + 0.5, 0.75, 1.0, 0.0, 0.0, 0.0], dtype=DEFAULT_TORCH_DTYPE
-    ),
-    Rizon4.name: lambda counter: torch.tensor(
-        [0.25 * np.sin(counter / 50) + 0.5, 0.5, 0.75, 1.0, 0.0, 0.0, 0.0], dtype=DEFAULT_TORCH_DTYPE
+        [0.6, 0.15 * np.sin(counter / 50) + 0.5, 0.75, 1.0, 0.0, 0.0, 0.0]
     ),
 }
 
@@ -105,50 +109,50 @@ def _run_demo(
     vis.kill()
 
 
-def visualize_fk(ik_solver: IKFlowSolver, solver="klampt"):
-    """Set the robot to a random config. Visualize the poses returned by fk"""
-    assert solver in ["klampt", "batch_fk"]
+# def visualize_fk(ik_solver: IKFlowSolver, solver="klampt"):
+#     """Set the robot to a random config. Visualize the poses returned by fk"""
+#     assert solver in ["klampt", "batch_fk"]
 
-    n_worlds = 1
-    time_p_loop = 30
-    title = "Visualize poses returned by FK"
-    robot = ik_solver.robot
+#     n_worlds = 1
+#     time_p_loop = 30
+#     title = "Visualize poses returned by FK"
+#     robot = ik_solver.robot
 
-    def setup_fn(worlds):
-        vis.add(f"robot", worlds[0].robot(0))
+#     def setup_fn(worlds):
+#         vis.add(f"robot", worlds[0].robot(0))
 
-    def loop_fn(worlds, _demo_state):
-        x_random = robot.sample_joint_angles(1)
-        q_random = robot._x_to_qs(x_random)
-        worlds[0].robot(0).setConfig(q_random[0])
+#     def loop_fn(worlds, _demo_state):
+#         x_random = robot.sample_joint_angles(1)
+#         q_random = robot._x_to_qs(x_random)
+#         worlds[0].robot(0).setConfig(q_random[0])
 
-        if solver == "klampt":
-            fk = robot.forward_kinematics_klampt(x_random)
-            ee_pose = fk[0, 0:7]
-            vis.add("ee", (so3.from_quaternion(ee_pose[3:]), ee_pose[0:3]), length=0.15, width=2)
-        else:
-            # (B x 3*(n+1) )
-            x_torch = torch.from_numpy(x_random).float().to(device)
-            fk = robot.forward_kinematics(x_torch)
-            ee_pose = fk[0, 0:3]
-            vis.add("ee", (so3.identity(), ee_pose[0:3]), length=0.15, width=2)
+#         if solver == "klampt":
+#             fk = robot.forward_kinematics_klampt(x_random)
+#             ee_pose = fk[0, 0:7]
+#             vis.add("ee", (so3.from_quaternion(ee_pose[3:]), ee_pose[0:3]), length=0.15, width=2)
+#         else:
+#             # (B x 3*(n+1) )
+#             x_torch = torch.from_numpy(x_random).float().to(device)
+#             fk = robot.forward_kinematics(x_torch)
+#             ee_pose = fk[0, 0:3]
+#             vis.add("ee", (so3.identity(), ee_pose[0:3]), length=0.15, width=2)
 
-    def viz_update_fn(worlds, _demo_state):
-        return
+#     def viz_update_fn(worlds, _demo_state):
+#         return
 
-    _run_demo(robot, n_worlds, setup_fn, loop_fn, viz_update_fn, time_p_loop=time_p_loop, title=title)
+#     _run_demo(robot, n_worlds, setup_fn, loop_fn, viz_update_fn, time_p_loop=time_p_loop, title=title)
 
 
-def oscillate_latent(ik_solver: IKFlowSolver):
+def oscillate_latent(ik_solver: Solver):
     """Fixed end pose, oscillate through the latent space"""
-
+    ik_solver.base_std = 0.0
     n_worlds = 2
     time_p_loop = 0.01
     time_dilation = 0.75
     title = "Fixed end pose with oscillation through the latent space"
     robot = ik_solver.robot
-    target_pose = _OSCILLATE_LATENT_TARGET_POSES[ik_solver.robot.name]
-    rev_input = torch.zeros(1, ik_solver.network_width).to(device)
+    target_pose = _OSCILLATE_LATENT_TARGET_POSES[ik_solver.param.robot_name]
+    latent = np.zeros((ik_solver.n))
 
     def setup_fn(worlds):
         del worlds
@@ -173,28 +177,36 @@ def oscillate_latent(ik_solver: IKFlowSolver):
         counter: int
         last_joint_vector: np.ndarray
         last_latent: np.ndarray
+    
+    def solve_latent(solver, P, latent):
+        if len(P.shape) == 1:
+            P = P.reshape(1, -1)
+        F = solver.select_reference_posture(P, "knn")
+        
+        J_hat = solver.generate_ik_solutions(P, F, num_sols=1, std=0.0, latent=latent)
+        # (1, 1, solver.n)
+        return J_hat.reshape(solver.n)
 
     def loop_fn(worlds, _demo_state):
-        for i in range(ik_solver.network_width):
+        for i in range(ik_solver.n):
             counter = time_dilation * _demo_state.counter
-            offset = 2 * PI * i / ik_solver.network_width
-            rev_input[0, i] = (
+            offset = 2 * PI * i / ik_solver.n
+            latent[i] = (
                 0.5 * np.cos(counter / 25 + offset)
                 - 0.5 * np.cos(counter / 100 + offset)
                 + 0.25 * np.sin(counter / (100 + i * 100))
             )
-        _demo_state.last_latent = rev_input.detach().cpu().numpy()[0]
+        _demo_state.last_latent = latent
 
         # Get solutions to pose of random sample
-        solutions = ik_solver.generate_ik_solutions(target_pose, 1, latent=rev_input)
-        solutions = solutions.detach().cpu().numpy()
+        solution = solve_latent(ik_solver, target_pose, latent)
         # qs = robot._x_to_qs(solutions)
-        robot.set_klampt_robot_config(solutions[0])
+        robot.set_klampt_robot_config(solution)
 
         # Update _demo_state
         _demo_state.counter += 1
-        _demo_state.last_joint_vector = solutions[0]
-
+        _demo_state.last_joint_vector = solution
+        
     def viz_update_fn(worlds, _demo_state):
         del worlds
         for i in range(3):
@@ -203,7 +215,7 @@ def oscillate_latent(ik_solver: IKFlowSolver):
             vis.logPlot(f"latent_vector", f"latent_{i}", _demo_state.last_latent[i])
 
     demo_state = DemoState(
-        counter=0, last_joint_vector=np.zeros(robot.ndof), last_latent=np.zeros(ik_solver.network_width)
+        counter=0, last_joint_vector=np.zeros(ik_solver.n), last_latent=np.zeros(ik_solver.n)
     )
     _run_demo(
         robot, n_worlds, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=time_p_loop, title=title
@@ -211,112 +223,112 @@ def oscillate_latent(ik_solver: IKFlowSolver):
 
 
 # TODO(@jeremysm): Add/flesh out plots. Consider plotting each solutions x, or error
-def oscillate_target(ik_solver: IKFlowSolver, nb_sols=5, fixed_latent=True):
-    """Oscillating target pose"""
+# def oscillate_target(ik_solver: IKFlowSolver, nb_sols=5, fixed_latent=True):
+#     """Oscillating target pose"""
 
-    time_p_loop = 0.01
-    title = "Solutions for oscillating target pose"
-    latent = None
-    if fixed_latent:
-        latent = torch.randn((nb_sols, ik_solver.network_width)).to(device)
+#     time_p_loop = 0.01
+#     title = "Solutions for oscillating target pose"
+#     latent = None
+#     if fixed_latent:
+#         latent = torch.randn((nb_sols, ik_solver.network_width)).to(device)
 
-    robot = ik_solver.robot
-    target_pose_fn = _TARGET_POSE_FUNCTIONS[robot.name]
+#     robot = ik_solver.robot
+#     target_pose_fn = _TARGET_POSE_FUNCTIONS[robot.name]
 
-    def setup_fn(worlds):
-        vis.add("coordinates", coordinates.manager())
-        for i in range(len(worlds)):
-            vis.add(f"robot_{i}", worlds[i].robot(0))
+#     def setup_fn(worlds):
+#         vis.add("coordinates", coordinates.manager())
+#         for i in range(len(worlds)):
+#             vis.add(f"robot_{i}", worlds[i].robot(0))
 
-        # Add target pose plot
-        vis.addPlot("target_pose")
-        vis.logPlot("target_pose", "target_pose x", 0)
-        vis.setPlotDuration("target_pose", 5)
-        vis.addPlot("solution_error")
-        vis.addPlot("solution_error")
-        vis.logPlot("solution_error", "l2 (mm)", 0)
-        vis.logPlot("solution_error", "angular (deg)", 0)
-        vis.setPlotDuration("solution_error", 5)
-        vis.setPlotRange("solution_error", 0, 25)
+#         # Add target pose plot
+#         vis.addPlot("target_pose")
+#         vis.logPlot("target_pose", "target_pose x", 0)
+#         vis.setPlotDuration("target_pose", 5)
+#         vis.addPlot("solution_error")
+#         vis.addPlot("solution_error")
+#         vis.logPlot("solution_error", "l2 (mm)", 0)
+#         vis.logPlot("solution_error", "angular (deg)", 0)
+#         vis.setPlotDuration("solution_error", 5)
+#         vis.setPlotRange("solution_error", 0, 25)
 
-        # update the cameras pose
-        # vp = vis.getViewport()
-        # camera_tf = vp.get_transform()
-        # vis.setViewport(vp)
-        # vp.fit((0, 0.25, 0.5), 1.5)
+#         # update the cameras pose
+#         # vp = vis.getViewport()
+#         # camera_tf = vp.get_transform()
+#         # vis.setViewport(vp)
+#         # vp.fit((0, 0.25, 0.5), 1.5)
 
-    @dataclass
-    class DemoState:
-        counter: int
-        target_pose: np.ndarray
-        ave_l2_error: float
-        ave_angular_error: float
+#     @dataclass
+#     class DemoState:
+#         counter: int
+#         target_pose: np.ndarray
+#         ave_l2_error: float
+#         ave_angular_error: float
 
-    def loop_fn(worlds, _demo_state):
-        # Update target pose
-        _demo_state.target_pose = target_pose_fn(_demo_state.counter)
+#     def loop_fn(worlds, _demo_state):
+#         # Update target pose
+#         _demo_state.target_pose = target_pose_fn(_demo_state.counter)
 
-        # Get solutions to pose of random sample
-        ik_solutions = ik_solver.generate_ik_solutions(_demo_state.target_pose, nb_sols, latent=latent)
-        l2_errors, ang_errors = solution_pose_errors(ik_solver.robot, ik_solutions, _demo_state.target_pose)
+#         # Get solutions to pose of random sample
+#         ik_solutions = ik_solver.generate_ik_solutions(_demo_state.target_pose, nb_sols, latent=latent)
+#         l2_errors, ang_errors = solution_pose_errors(ik_solver.robot, ik_solutions, _demo_state.target_pose)
 
-        _demo_state.ave_l2_error = l2_errors.mean().item() * 1000
-        _demo_state.ave_ang_error = np.rad2deg(ang_errors.mean().item())
+#         _demo_state.ave_l2_error = l2_errors.mean().item() * 1000
+#         _demo_state.ave_ang_error = np.rad2deg(ang_errors.mean().item())
 
-        # Update viz with solutions
-        qs = robot._x_to_qs(ik_solutions.detach().cpu().numpy())
-        for i in range(nb_sols):
-            worlds[i].robot(0).setConfig(qs[i])
+#         # Update viz with solutions
+#         qs = robot._x_to_qs(ik_solutions.detach().cpu().numpy())
+#         for i in range(nb_sols):
+#             worlds[i].robot(0).setConfig(qs[i])
 
-        # Update _demo_state
-        _demo_state.counter += 1
+#         # Update _demo_state
+#         _demo_state.counter += 1
 
-    def viz_update_fn(worlds, _demo_state):
-        del worlds
-        _plot_pose("target_pose.", _demo_state.target_pose)
-        vis.logPlot("target_pose", "target_pose x", _demo_state.target_pose[0])
-        vis.logPlot("solution_error", "l2 (mm)", _demo_state.ave_l2_error)
-        vis.logPlot("solution_error", "angular (deg)", _demo_state.ave_ang_error)
+#     def viz_update_fn(worlds, _demo_state):
+#         del worlds
+#         _plot_pose("target_pose.", _demo_state.target_pose)
+#         vis.logPlot("target_pose", "target_pose x", _demo_state.target_pose[0])
+#         vis.logPlot("solution_error", "l2 (mm)", _demo_state.ave_l2_error)
+#         vis.logPlot("solution_error", "angular (deg)", _demo_state.ave_ang_error)
 
-    demo_state = DemoState(counter=0, target_pose=target_pose_fn(0), ave_l2_error=0, ave_angular_error=0)
-    _run_demo(
-        robot, nb_sols, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=time_p_loop, title=title
-    )
+#     demo_state = DemoState(counter=0, target_pose=target_pose_fn(0), ave_l2_error=0, ave_angular_error=0)
+#     _run_demo(
+#         robot, nb_sols, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=time_p_loop, title=title
+#     )
 
 
-def random_target_pose(ik_solver: IKFlowSolver, nb_sols=5):
-    """Set the end effector to a randomly drawn pose. Generate and visualize `nb_sols` solutions for the pose"""
+# def random_target_pose(ik_solver: IKFlowSolver, nb_sols=5):
+#     """Set the end effector to a randomly drawn pose. Generate and visualize `nb_sols` solutions for the pose"""
 
-    raise NotImplementedError("need to fix this function")
+#     raise NotImplementedError("need to fix this function")
 
-    def setup_fn(worlds):
-        vis.add(f"robot_goal", worlds[0].robot(0))
-        vis.setColor(f"robot_goal", 0.5, 1, 1, 0)
+#     def setup_fn(worlds):
+#         vis.add(f"robot_goal", worlds[0].robot(0))
+#         vis.setColor(f"robot_goal", 0.5, 1, 1, 0)
 
-        for i in range(1, nb_sols + 1):
-            vis.add(f"robot_{i}", worlds[i].robot(0))
-            vis.setColor(f"robot_{i}", 1, 1, 1, 1)
+#         for i in range(1, nb_sols + 1):
+#             vis.add(f"robot_{i}", worlds[i].robot(0))
+#             vis.setColor(f"robot_{i}", 1, 1, 1, 1)
 
-    def loop_fn(worlds, _demo_state):
-        # Get random sample
-        random_sample = self.robot.sample_joint_angles(1)
-        random_sample_q = self.robot._x_to_qs(random_sample)
-        worlds[0].robot(0).setConfig(random_sample_q[0])
-        target_pose = self.robot.forward_kinematics_klampt(random_sample)[0]
+#     def loop_fn(worlds, _demo_state):
+#         # Get random sample
+#         random_sample = self.robot.sample_joint_angles(1)
+#         random_sample_q = self.robot._x_to_qs(random_sample)
+#         worlds[0].robot(0).setConfig(random_sample_q[0])
+#         target_pose = self.robot.forward_kinematics_klampt(random_sample)[0]
 
-        # Get solutions to pose of random sample
-        ik_solutions = self.ik_solver.generate_ik_solutions(target_pose, nb_sols)
-        qs = self.robot._x_to_qs(ik_solutions)
-        for i in range(nb_sols):
-            worlds[i + 1].robot(0).setConfig(qs[i])
+#         # Get solutions to pose of random sample
+#         ik_solutions = self.ik_solver.generate_ik_solutions(target_pose, nb_sols)
+#         qs = self.robot._x_to_qs(ik_solutions)
+#         for i in range(nb_sols):
+#             worlds[i + 1].robot(0).setConfig(qs[i])
 
-    time_p_loop = 2.5
-    title = "Solutions for randomly drawn poses - Green link is the target pose"
+#     time_p_loop = 2.5
+#     title = "Solutions for randomly drawn poses - Green link is the target pose"
 
-    def viz_update_fn(worlds, _demo_state):
-        return
+#     def viz_update_fn(worlds, _demo_state):
+#         return
 
-    self._run_demo(nb_sols + 1, setup_fn, loop_fn, viz_update_fn, time_p_loop=time_p_loop, title=title)
+#     self._run_demo(nb_sols + 1, setup_fn, loop_fn, viz_update_fn, time_p_loop=time_p_loop, title=title)
 
 
 def oscillate_joints(robot: Robot):
@@ -370,3 +382,8 @@ def oscillate_joints(robot: Robot):
         title=title,
         demo_state=demo_state,
     )
+
+
+if __name__ == "__main__":
+    solver = Solver(solver_param=PANDA_PAIK, load_date="0703-0717", work_dir="/home/luca/paik")
+    oscillate_latent(solver)

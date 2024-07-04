@@ -220,6 +220,87 @@ def oscillate_latent(ik_solver: Solver):
     _run_demo(
         robot, n_worlds, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=time_p_loop, title=title
     )
+    
+def oscillate_locality(ik_solver: Solver):
+    """Fixed end pose, oscillate through the locality space"""
+    ik_solver.base_std = 0.0
+    n_worlds = 2
+    time_p_loop = 0.01
+    time_dilation = 0.75
+    title = "Fixed end pose with oscillation through the locality space"
+    robot = ik_solver.robot
+    target_pose = _OSCILLATE_LATENT_TARGET_POSES[ik_solver.param.robot_name]
+    locality = np.zeros((ik_solver.r))
+
+    def setup_fn(worlds):
+        del worlds
+        vis.add(f"robot", robot._klampt_robot)
+
+        # Axis
+        vis.add("coordinates", coordinates.manager())
+        _plot_pose("target_pose.", target_pose, hide_label=True)
+
+        # Configure joint angle plot
+        vis.addPlot("joint_vector")
+        vis.setPlotDuration("joint_vector", 5)
+        vis.setPlotRange("joint_vector", -PI, PI)
+
+        # Configure joint angle plot
+        vis.addPlot("locality_vector")
+        vis.setPlotDuration("locality_vector", 5)
+        vis.setPlotRange("locality_vector", -1.25, 1.25)
+
+    @dataclass
+    class DemoState:
+        counter: int
+        last_joint_vector: np.ndarray
+        last_locality: np.ndarray
+    
+    def solve_locality(solver, P, locality):
+        if len(P.shape) == 1:
+            P = P.reshape(1, -1)
+        if len(locality.shape) == 1:
+            locality = locality.reshape(1, -1)
+        assert locality.shape == (1, solver.r), locality.shape
+        J_hat = solver.generate_ik_solutions(P, locality, num_sols=1, std=0.0, latent=np.zeros(solver.n))
+        # (1, 1, solver.n)
+        return J_hat.reshape(solver.n)
+
+    def loop_fn(worlds, _demo_state):
+        for i in range(ik_solver.r):
+            counter = time_dilation * _demo_state.counter
+            offset = 2 * PI * i / ik_solver.r
+            locality[i] = (
+                0.5 * np.cos(counter / 25 + offset)
+                - 0.5 * np.cos(counter / 100 + offset)
+                + 0.25 * np.sin(counter / (100 + i * 100))
+            )
+        counter = time_dilation * _demo_state.counter
+        
+        _demo_state.last_locality = locality
+
+        # Get solutions to pose of random sample
+        solution = solve_locality(ik_solver, target_pose, locality)
+        # qs = robot._x_to_qs(solutions)
+        robot.set_klampt_robot_config(solution)
+
+        # Update _demo_state
+        _demo_state.counter += 1
+        _demo_state.last_joint_vector = solution
+        
+    def viz_update_fn(worlds, _demo_state):
+        del worlds
+        for i in range(3):
+            vis.logPlot(f"joint_vector", f"joint_{i}", _demo_state.last_joint_vector[i])
+        for i in range(ik_solver.r):
+            vis.logPlot(f"locality_vector", f"locality_{i}", _demo_state.last_locality[i])
+
+    demo_state = DemoState(
+        counter=0, last_joint_vector=np.zeros(ik_solver.n), last_locality=np.zeros(ik_solver.n)
+    )
+    _run_demo(
+        robot, n_worlds, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=time_p_loop, title=title
+    )
 
 
 # TODO(@jeremysm): Add/flesh out plots. Consider plotting each solutions x, or error
@@ -386,4 +467,5 @@ def oscillate_joints(robot: Robot):
 
 if __name__ == "__main__":
     solver = Solver(solver_param=PANDA_PAIK, load_date="0703-0717", work_dir="/home/luca/paik")
-    oscillate_latent(solver)
+    # oscillate_latent(solver)
+    oscillate_locality(solver)

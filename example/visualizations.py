@@ -485,7 +485,7 @@ def oscillate_joints(robot: Robot):
 
     def loop_fn(worlds, _demo_state):
         no_change = True
-        for i in range(robot.ndof):
+        for i in range(robot.n_dofs):
             joint_limits = robot.actuated_joints_limits[i]
             if _demo_state.increasing:
                 if _demo_state.q[i] < joint_limits[1]:
@@ -527,4 +527,5 @@ if __name__ == "__main__":
     # oscillate_latent(solver)
     # oscillate_locality(solver)
     # oscillate_target(solver)
-    random_target_pose(solver)
+    # random_target_pose(solver)
+    oscillate_joints(solver.robot)

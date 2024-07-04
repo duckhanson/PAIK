@@ -463,12 +463,12 @@ class Solver:
             return l2, ang
         return l2.mean(), ang.mean()
 
-    def select_reference_posture(self, P: np.ndarray, select_reference: str = 'knn'):
+    def select_reference_posture(self, P: np.ndarray, select_reference: str = 'knn', num_sols: int = 1):
         if select_reference == "knn":
             # type: ignore
             return self.F[
                 self.P_knn.kneighbors(
-                    np.atleast_2d(P), n_neighbors=1, return_distance=False
+                    np.atleast_2d(P), n_neighbors=num_sols, return_distance=False
                 ).flatten()  # type: ignore
             ]
         elif select_reference == "random":

@@ -6,7 +6,7 @@ from jrl.robot import Robot
 from jrl.robots import Panda, Fetch, FetchArm
 from klampt.math import so3
 from klampt.model import coordinates, trajectory
-from klampt import IKSolver, vis, WorldModel
+from klampt import IKSolver, vis, WorldModel, Geometry3D
 import numpy as np
 import torch
 import torch.optim
@@ -520,6 +520,106 @@ def oscillate_joints(robot: Robot):
         title=title,
         demo_state=demo_state,
     )
+    
+
+def mug_moving(ik_solver: Solver, nb_sols=5, from_locality=True):
+    """Oscillating target pose"""
+
+    time_p_loop = 0.01
+    title = "Solutions for oscillating target pose"
+    
+    robot = ik_solver.robot
+    target_pose_fn = _TARGET_POSE_FUNCTIONS[robot.name]
+    
+    mug_path = "/home/luca/paik/data/visualization_resources/objects/mug.obj"
+    # load a mug and attach it to the end effector of the robot
+    mug = Geometry3D()
+    mug.loadFile(mug_path)
+
+    
+    def setup_fn(worlds):
+        vis.add("coordinates", coordinates.manager())
+        for i in range(len(worlds)):
+            vis.add(f"robot_{i}", worlds[i].robot(0))
+
+        vis.add("mug",mug)
+        # Add target pose plot
+        vis.addPlot("target_pose")
+        vis.logPlot("target_pose", "target_pose x", 0)
+        vis.setPlotDuration("target_pose", 5)
+        vis.addPlot("solution_error")
+        vis.addPlot("solution_error")
+        vis.logPlot("solution_error", "l2 (mm)", 0)
+        vis.logPlot("solution_error", "angular (deg)", 0)
+        vis.setPlotDuration("solution_error", 5)
+        vis.setPlotRange("solution_error", 0, 8)
+
+        # update the cameras pose
+        # vp = vis.getViewport()
+        # camera_tf = vp.get_transform()
+        # vis.setViewport(vp)
+        # vp.fit((0, 0.25, 0.5), 1.5)
+
+    @dataclass
+    class DemoState:
+        counter: int
+        target_pose: np.ndarray
+        ave_l2_error: float
+        ave_angular_error: float
+        
+    def solve_pose(solver, P):
+        if len(P.shape) == 1:
+            P = P.reshape(1, -1)
+        # num_sols from locality.
+        F = solver.select_reference_posture(P, "knn", num_sols=nb_sols)
+        P = np.repeat(P, nb_sols, axis=0)
+        assert F.shape[0] == P.shape[0], (F.shape, P.shape)
+        J_hat = solver.generate_ik_solutions(P, F, num_sols=1, std=0.0, latent=np.zeros(solver.n))
+        # (1, 1, solver.n)
+        return J_hat.reshape(nb_sols, 1, solver.n)
+
+    def loop_fn(worlds, _demo_state):
+        # Update target pose
+        _demo_state.target_pose = target_pose_fn(_demo_state.counter)
+
+        # Get solutions to pose of random sample
+        ik_solutions = solve_pose(ik_solver, _demo_state.target_pose)
+        l2_errors, ang_errors = ik_solver.evaluate_pose_error_J3d_P2d(ik_solutions, _demo_state.target_pose.reshape(-1, solver.m), return_all=True)
+        # print(f"l2_errors.shape: {l2_errors.shape}")
+        _demo_state.ave_l2_error = l2_errors.mean().item() * 1000
+        _demo_state.ave_ang_error = np.rad2deg(ang_errors.mean().item())
+        ik_solutions = ik_solutions.reshape(nb_sols, solver.n)
+
+        # Update viz with solutions
+        qs = robot._x_to_qs(ik_solutions)
+        for i in range(nb_sols):
+            worlds[i].robot(0).setConfig(qs[i])
+
+        # Update _demo_state
+        _demo_state.counter += 1
+
+    def viz_update_fn(worlds, _demo_state):
+        del worlds
+        R, t = robot._klampt_ee_link.getTransform()
+        R = np.array(R)
+        t = np.array(t)
+        print(R)
+        # position += -3drRowVector * distanceToMove;
+        distance_to_move = 0.1
+        t += R[-3:] * distance_to_move
+        t += np.array([0.1, 0, 0])
+        
+
+        mug.setCurrentTransform(R, t)
+        _plot_pose("target_pose.", _demo_state.target_pose)
+        vis.logPlot("target_pose", "target_pose x", _demo_state.target_pose[0])
+        vis.logPlot("solution_error", "l2 (mm)", _demo_state.ave_l2_error)
+        vis.logPlot("solution_error", "angular (deg)", _demo_state.ave_ang_error)
+
+    demo_state = DemoState(counter=0, target_pose=target_pose_fn(0), ave_l2_error=0, ave_angular_error=0)
+    _run_demo(
+        robot, nb_sols, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=time_p_loop, title=title
+    )
 
 
 if __name__ == "__main__":
@@ -528,4 +628,5 @@ if __name__ == "__main__":
     # oscillate_locality(solver)
     # oscillate_target(solver)
     # random_target_pose(solver)
-    oscillate_joints(solver.robot)
+    # oscillate_joints(solver.robot)
+    mug_moving(solver)

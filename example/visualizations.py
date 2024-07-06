@@ -14,6 +14,7 @@ import torch.optim
 # from ikflow.ikflow_solver import IKFlowSolver
 # from ikflow.config import device, DEFAULT_TORCH_DTYPE
 # from ikflow.evaluation_utils import solution_pose_errors
+np.random.seed(47)
 
 # Import required packages
 import numpy as np
@@ -153,6 +154,10 @@ def oscillate_latent(ik_solver: Solver):
     robot = ik_solver.robot
     target_pose = _OSCILLATE_LATENT_TARGET_POSES[ik_solver.param.robot_name]
     latent = np.zeros((ik_solver.n))
+    F = solver.select_reference_posture(target_pose, "knn", num_sols=50)
+    F = F[np.random.randint(7, F.shape[0])]
+    print(f"[INFO] F={F}")
+    
 
     def setup_fn(worlds):
         del worlds
@@ -181,7 +186,6 @@ def oscillate_latent(ik_solver: Solver):
     def solve_latent(solver, P, latent):
         if len(P.shape) == 1:
             P = P.reshape(1, -1)
-        F = solver.select_reference_posture(P, "knn")
         
         J_hat = solver.generate_ik_solutions(P, F, num_sols=1, std=0.0, latent=latent)
         # (1, 1, solver.n)
@@ -209,9 +213,9 @@ def oscillate_latent(ik_solver: Solver):
         
     def viz_update_fn(worlds, _demo_state):
         del worlds
-        for i in range(3):
+        for i in range(ik_solver.n):
             vis.logPlot(f"joint_vector", f"joint_{i}", _demo_state.last_joint_vector[i])
-        for i in range(3):
+        for i in range(ik_solver.n):
             vis.logPlot(f"latent_vector", f"latent_{i}", _demo_state.last_latent[i])
 
     demo_state = DemoState(
@@ -623,7 +627,8 @@ def mug_moving(ik_solver: Solver, nb_sols=5, from_locality=True):
 
 
 if __name__ == "__main__":
-    solver = Solver(solver_param=PANDA_PAIK, load_date="0703-0717", work_dir="/home/luca/paik")
+    solver = Solver(solver_param=PANDA_PAIK, load_date="0705-1600", work_dir="/home/luca/paik")
+    # solver = Solver(solver_param=PANDA_NSF, load_date="0115-0234", work_dir="/home/luca/paik")
     # oscillate_latent(solver)
     # oscillate_locality(solver)
     # oscillate_target(solver)

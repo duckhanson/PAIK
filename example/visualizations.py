@@ -14,7 +14,7 @@ import torch.optim
 # from ikflow.ikflow_solver import IKFlowSolver
 # from ikflow.config import device, DEFAULT_TORCH_DTYPE
 # from ikflow.evaluation_utils import solution_pose_errors
-np.random.seed(47)
+np.random.seed(47) # 37 stable, 
 
 # Import required packages
 import numpy as np
@@ -27,7 +27,7 @@ from paik.settings import (
 )
 
 _OSCILLATE_LATENT_TARGET_POSES = {
-    Panda.name: np.array([0.25, 0.65, 0.45, 1.0, 0.0, 0.0, 0.0]),
+    Panda.name: np.array([0.25, 0.35, 0.6, 0.5, -0.5,  0.5, 0.5]),
     Fetch.name: np.array([0.45, 0.65, 0.55, 1.0, 0.0, 0.0, 0.0]),
 }
 
@@ -49,7 +49,7 @@ PI = np.pi
 def _plot_pose(name: str, pose: np.ndarray, hide_label: bool = False):
     vis.add(
         name,
-        coordinates.Frame(name=name, worldCoordinates=(so3.from_quaternion(pose[3:]), pose[0:3])),
+        coordinates.Frame(name=name, worldCoordinates=(so3.from_quaternion(pose[3:]), pose[0:3])),  # type: ignore
         hide_label=hide_label,
     )
 
@@ -144,24 +144,28 @@ def _run_demo(
 #     _run_demo(robot, n_worlds, setup_fn, loop_fn, viz_update_fn, time_p_loop=time_p_loop, title=title)
 
 
-def oscillate_latent(ik_solver: Solver):
+def oscillate_latent(ik_solver: Solver, show_mug: bool = False, change_F: bool = False):
     """Fixed end pose, oscillate through the latent space"""
-    ik_solver.base_std = 0.0
     n_worlds = 2
     time_p_loop = 0.01
     time_dilation = 0.75
     title = "Fixed end pose with oscillation through the latent space"
     robot = ik_solver.robot
-    target_pose = _OSCILLATE_LATENT_TARGET_POSES[ik_solver.param.robot_name]
+    target_pose = _OSCILLATE_LATENT_TARGET_POSES[ik_solver.param.robot_name]  # type: ignore
+    print(f"[INFO] target_pose={target_pose}")
     latent = np.zeros((ik_solver.n))
-    F = solver.select_reference_posture(target_pose, "knn", num_sols=50)
-    F = F[np.random.randint(7, F.shape[0])]
-    print(f"[INFO] F={F}")
+    F_min, F_max = solver.F.min(), solver.F.max()
+    if show_mug:
+        mug_path = "/home/luca/paik/data/visualization_resources/objects/mug.obj"
+        mug = Geometry3D()
+        mug.loadFile(mug_path)
     
 
     def setup_fn(worlds):
         del worlds
         vis.add(f"robot", robot._klampt_robot)
+        if show_mug:
+            vis.add("mug",mug)
 
         # Axis
         vis.add("coordinates", coordinates.manager())
@@ -175,70 +179,122 @@ def oscillate_latent(ik_solver: Solver):
         # Configure joint angle plot
         vis.addPlot("latent_vector")
         vis.setPlotDuration("latent_vector", 5)
-        vis.setPlotRange("latent_vector", -1.25, 1.25)
+        vis.setPlotRange("latent_vector", -0.644, 0.644) # confidence interval of 99% for a normal distribution with std=0.25 and mean=0, 0.644
+
+        # Configure locality plot
+        vis.addPlot("locality_vector")
+        vis.setPlotDuration("locality_vector", 5)
+        vis.setPlotRange("locality_vector", F_min, F_max) # confidence interval of 99% for a normal distribution with std=0.25 and mean=0, 0.644
+
+        # Add target pose errors plot
+        vis.addPlot("solution_error")
+        vis.addPlot("solution_error")
+        vis.logPlot("solution_error", "l2 (mm)", 0)
+        vis.logPlot("solution_error", "angular (deg)", 0)
+        vis.setPlotDuration("solution_error", 5)
+        vis.setPlotRange("solution_error", 0, 8)
 
     @dataclass
     class DemoState:
         counter: int
         last_joint_vector: np.ndarray
         last_latent: np.ndarray
+        last_locality: np.ndarray
+        ave_l2_error: float
+        ave_angular_error: float
     
-    def solve_latent(solver, P, latent):
+    def solve_latent(solver, P, F, latent):
         if len(P.shape) == 1:
             P = P.reshape(1, -1)
         
         J_hat = solver.generate_ik_solutions(P, F, num_sols=1, std=0.0, latent=latent)
         # (1, 1, solver.n)
-        return J_hat.reshape(solver.n)
+        return J_hat
 
     def loop_fn(worlds, _demo_state):
         for i in range(ik_solver.n):
             counter = time_dilation * _demo_state.counter
             offset = 2 * PI * i / ik_solver.n
             latent[i] = (
-                0.5 * np.cos(counter / 25 + offset)
-                - 0.5 * np.cos(counter / 100 + offset)
+                0.25 * np.cos(counter / 25 + offset)
+                - 0.25 * np.cos(counter / 100 + offset)
                 + 0.25 * np.sin(counter / (100 + i * 100))
-            )
+            ) - 0.1
         _demo_state.last_latent = latent
 
         # Get solutions to pose of random sample
-        solution = solve_latent(ik_solver, target_pose, latent)
+        ik_solution = solve_latent(ik_solver, target_pose, _demo_state.last_locality, latent)
+        _demo_state.ave_l2_error, _demo_state.ave_ang_error = ik_solver.evaluate_pose_error_J3d_P2d(ik_solution, target_pose.reshape(-1, solver.m))
         # qs = robot._x_to_qs(solutions)
-        robot.set_klampt_robot_config(solution)
+        ik_solution = ik_solution.reshape(ik_solver.n)
+        robot.set_klampt_robot_config(ik_solution)
 
         # Update _demo_state
         _demo_state.counter += 1
-        _demo_state.last_joint_vector = solution
+        
+        if change_F and _demo_state.counter % 120 == 0:
+            print(f"[INFO] counter={_demo_state.counter}")
+            F = solver.select_reference_posture(target_pose, "knn", num_sols=100)
+            F = F[np.random.randint(0, F.shape[0])]
+            print(f"[INFO] chaning F={F}")
+            _demo_state.last_locality = F
+        _demo_state.last_joint_vector = ik_solution
         
     def viz_update_fn(worlds, _demo_state):
         del worlds
+        if show_mug:
+            R, t = robot._klampt_ee_link.getTransform() # type: ignore
+            R, t = np.array(R), np.array(t)
+            distance_to_move = 0.15
+            t += R[-3:] * distance_to_move
+            # rotate the mug around the z-axis of the end effector with 90 degrees
+            R = so3.mul(R, so3.from_axis_angle(([0, 0, 1], PI / 2)))  # type: ignore
+            # rotate the mug around the y-axis of the end effector with -120 degrees
+            R = so3.mul(R, so3.from_axis_angle(([0, 1, 0], PI * -120 / 180)))  # type: ignore
+            mug.setCurrentTransform(R, t)  # type: ignore
+            
         for i in range(ik_solver.n):
             vis.logPlot(f"joint_vector", f"joint_{i}", _demo_state.last_joint_vector[i])
         for i in range(ik_solver.n):
             vis.logPlot(f"latent_vector", f"latent_{i}", _demo_state.last_latent[i])
+        for i in range(ik_solver.r):
+            vis.logPlot(f"locality_vector", f"locality_{i}", _demo_state.last_locality[i])
+        vis.logPlot("solution_error", "l2 (mm)", _demo_state.ave_l2_error)
+        vis.logPlot("solution_error", "angular (deg)", _demo_state.ave_ang_error)
 
     demo_state = DemoState(
-        counter=0, last_joint_vector=np.zeros(ik_solver.n), last_latent=np.zeros(ik_solver.n)
+        counter=0, last_joint_vector=np.zeros(ik_solver.n), last_latent=np.zeros(ik_solver.n), last_locality=solver.select_reference_posture(target_pose, "knn"), ave_l2_error=0, ave_angular_error=0
     )
+
     _run_demo(
         robot, n_worlds, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=time_p_loop, title=title
     )
     
-def oscillate_locality(ik_solver: Solver):
+def oscillate_locality(ik_solver: Solver, show_mug: bool = False, from_nn: bool = False):
     """Fixed end pose, oscillate through the locality space"""
     ik_solver.base_std = 0.0
     n_worlds = 2
     time_p_loop = 0.01
-    time_dilation = 0.75
+    time_dilation = 1
     title = "Fixed end pose with oscillation through the locality space"
     robot = ik_solver.robot
-    target_pose = _OSCILLATE_LATENT_TARGET_POSES[ik_solver.param.robot_name]
-    locality = np.zeros((ik_solver.r))
+    target_pose = _OSCILLATE_LATENT_TARGET_POSES[ik_solver.param.robot_name]  # type: ignore
+    locality_nn = solver.select_reference_posture(target_pose, "knn", num_sols=100)
+    locality_nn = np.sort(locality_nn, axis=0) # type: ignore
+    F_min, F_max = solver.F.min(), solver.F.max()
+    print(f"[INFO] F_min={F_min}, F_max={F_max}")
+    # -0.277 < F < 0.263
+        
+    if show_mug:
+        mug_path = "/home/luca/paik/data/visualization_resources/objects/mug.obj"
+        mug = Geometry3D()
+        mug.loadFile(mug_path)
 
     def setup_fn(worlds):
         del worlds
         vis.add(f"robot", robot._klampt_robot)
+        if show_mug:
+            vis.add("mug",mug)
 
         # Axis
         vis.add("coordinates", coordinates.manager())
@@ -252,13 +308,23 @@ def oscillate_locality(ik_solver: Solver):
         # Configure joint angle plot
         vis.addPlot("locality_vector")
         vis.setPlotDuration("locality_vector", 5)
-        vis.setPlotRange("locality_vector", -1.25, 1.25)
+        vis.setPlotRange("locality_vector", F_min, F_max)
+        
+        # Add target pose errors plot
+        vis.addPlot("solution_error")
+        vis.addPlot("solution_error")
+        vis.logPlot("solution_error", "l2 (mm)", 0)
+        vis.logPlot("solution_error", "angular (deg)", 0)
+        vis.setPlotDuration("solution_error", 5)
+        vis.setPlotRange("solution_error", 0, 30)
 
     @dataclass
     class DemoState:
         counter: int
         last_joint_vector: np.ndarray
         last_locality: np.ndarray
+        ave_l2_error: float
+        ave_angular_error: float
     
     def solve_locality(solver, P, locality):
         if len(P.shape) == 1:
@@ -268,39 +334,61 @@ def oscillate_locality(ik_solver: Solver):
         assert locality.shape == (1, solver.r), locality.shape
         J_hat = solver.generate_ik_solutions(P, locality, num_sols=1, std=0.0, latent=np.zeros(solver.n))
         # (1, 1, solver.n)
-        return J_hat.reshape(solver.n)
+        return J_hat
 
     def loop_fn(worlds, _demo_state):
-        for i in range(ik_solver.r):
-            counter = time_dilation * _demo_state.counter
-            offset = 2 * PI * i / ik_solver.r
-            locality[i] = (
-                0.5 * np.cos(counter / 25 + offset)
-                - 0.5 * np.cos(counter / 100 + offset)
-                + 0.25 * np.sin(counter / (100 + i * 100))
-            )
-        counter = time_dilation * _demo_state.counter
+        if from_nn:
+            locality = locality_nn[_demo_state.counter % locality_nn.shape[0]]
+            print(f"[INFO] locality={locality}, counter={_demo_state.counter}")
+        else:
+            locality = np.zeros((ik_solver.r))
+            for i in range(ik_solver.r):
+                counter = time_dilation * _demo_state.counter
+                offset = 2 * PI * i / ik_solver.r
+                locality[i] = (
+                    F_max * np.sin(counter / 25 + offset)
+                )
         
         _demo_state.last_locality = locality
 
         # Get solutions to pose of random sample
-        solution = solve_locality(ik_solver, target_pose, locality)
+        ik_solutions = solve_locality(ik_solver, target_pose, locality)
+        
+        l2_errors, ang_errors = ik_solver.evaluate_pose_error_J3d_P2d(ik_solutions, target_pose.reshape(-1, solver.m), return_all=True)
+        # print(f"l2_errors.shape: {l2_errors.shape}")
+        _demo_state.ave_l2_error = l2_errors.mean().item() * 1000
+        _demo_state.ave_ang_error = np.rad2deg(ang_errors.mean().item())
         # qs = robot._x_to_qs(solutions)
-        robot.set_klampt_robot_config(solution)
+        ik_solutions = ik_solutions.reshape(ik_solver.n)
+        robot.set_klampt_robot_config(ik_solutions)
 
         # Update _demo_state
         _demo_state.counter += 1
-        _demo_state.last_joint_vector = solution
+        _demo_state.last_joint_vector = ik_solutions
         
     def viz_update_fn(worlds, _demo_state):
         del worlds
+        if show_mug:
+            R, t = robot._klampt_ee_link.getTransform() # type: ignore
+            R, t = np.array(R), np.array(t)
+            distance_to_move = 0.15
+            t += R[-3:] * distance_to_move
+            # rotate the mug around the z-axis of the end effector with 90 degrees
+            R = so3.mul(R, so3.from_axis_angle(([0, 0, 1], PI / 2)))  # type: ignore
+            # rotate the mug around the y-axis of the end effector with -120 degrees
+            R = so3.mul(R, so3.from_axis_angle(([0, 1, 0], PI * -120 / 180)))  # type: ignore
+            mug.setCurrentTransform(R, t)  # type: ignore
+        
         for i in range(3):
             vis.logPlot(f"joint_vector", f"joint_{i}", _demo_state.last_joint_vector[i])
         for i in range(ik_solver.r):
             vis.logPlot(f"locality_vector", f"locality_{i}", _demo_state.last_locality[i])
+        
+        vis.logPlot("solution_error", "l2 (mm)", _demo_state.ave_l2_error)
+        vis.logPlot("solution_error", "angular (deg)", _demo_state.ave_ang_error)
 
     demo_state = DemoState(
-        counter=0, last_joint_vector=np.zeros(ik_solver.n), last_locality=np.zeros(ik_solver.n)
+        counter=0, last_joint_vector=np.zeros(ik_solver.n), last_locality=np.zeros(ik_solver.r), ave_l2_error=0, ave_angular_error=0
     )
     _run_demo(
         robot, n_worlds, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=time_p_loop, title=title
@@ -314,7 +402,7 @@ def oscillate_target(ik_solver: Solver, nb_sols=5):
     title = "Solutions for oscillating target pose"
     
     robot = ik_solver.robot
-    target_pose_fn = _TARGET_POSE_FUNCTIONS[robot.name]
+    target_pose_fn = _TARGET_POSE_FUNCTIONS[robot.name] # type: ignore
 
     def setup_fn(worlds):
         vis.add("coordinates", coordinates.manager())
@@ -533,10 +621,9 @@ def mug_moving(ik_solver: Solver, nb_sols=5, from_locality=True):
     title = "Solutions for oscillating target pose"
     
     robot = ik_solver.robot
-    target_pose_fn = _TARGET_POSE_FUNCTIONS[robot.name]
+    target_pose_fn = _TARGET_POSE_FUNCTIONS[robot.name] # type: ignore
     
     mug_path = "/home/luca/paik/data/visualization_resources/objects/mug.obj"
-    # load a mug and attach it to the end effector of the robot
     mug = Geometry3D()
     mug.loadFile(mug_path)
 
@@ -604,17 +691,12 @@ def mug_moving(ik_solver: Solver, nb_sols=5, from_locality=True):
 
     def viz_update_fn(worlds, _demo_state):
         del worlds
-        R, t = robot._klampt_ee_link.getTransform()
-        R = np.array(R)
-        t = np.array(t)
-        print(R)
-        # position += -3drRowVector * distanceToMove;
+        R, t = robot._klampt_ee_link.getTransform() # type: ignore
+        R, t = np.array(R), np.array(t)
         distance_to_move = 0.1
-        t += R[-3:] * distance_to_move
-        t += np.array([0.1, 0, 0])
-        
+        t += R[-3:] * distance_to_move + np.array([0.1, 0, 0])
 
-        mug.setCurrentTransform(R, t)
+        mug.setCurrentTransform(R, t) # type: ignore
         _plot_pose("target_pose.", _demo_state.target_pose)
         vis.logPlot("target_pose", "target_pose x", _demo_state.target_pose[0])
         vis.logPlot("solution_error", "l2 (mm)", _demo_state.ave_l2_error)
@@ -627,11 +709,11 @@ def mug_moving(ik_solver: Solver, nb_sols=5, from_locality=True):
 
 
 if __name__ == "__main__":
-    solver = Solver(solver_param=PANDA_PAIK, load_date="0705-1600", work_dir="/home/luca/paik")
+    solver = Solver(solver_param=PANDA_PAIK, load_date="0707-1713", work_dir="/home/luca/paik")
     # solver = Solver(solver_param=PANDA_NSF, load_date="0115-0234", work_dir="/home/luca/paik")
-    # oscillate_latent(solver)
-    # oscillate_locality(solver)
+    oscillate_latent(solver, show_mug=True)
+    # oscillate_locality(solver, show_mug=True, from_nn=True)
     # oscillate_target(solver)
     # random_target_pose(solver)
     # oscillate_joints(solver.robot)
-    mug_moving(solver)
+    # mug_moving(solver)

@@ -14,7 +14,7 @@ PATIENCE = 20
 EXPERMENT_COUNT = 10
 NUM_EPOCHS = 150
 USE_NSF_ONLY = False
-ENABLE_LODE_MODEL = False
+ENABLE_LOAD_MODEL = False
 
 
 def get_range(left_bound, right_bound, scale):
@@ -54,7 +54,7 @@ def main() -> None:
     solver_param.num_bins = wandb.config.num_bins
     solver_param.base_std = wandb.config.base_std
     solver_param.lr_beta = (wandb.config.lr_beta_l, wandb.config.lr_beta_h)
-    solver_param.enable_load_model = ENABLE_LODE_MODEL  # type: ignore
+    solver_param.enable_load_model = ENABLE_LOAD_MODEL  # type: ignore
     solver_param.use_nsf_only = USE_NSF_ONLY  # type: ignore
     solver_param.workdir = WORK_DIR
 

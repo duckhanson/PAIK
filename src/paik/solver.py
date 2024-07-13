@@ -30,7 +30,10 @@ class Solver:
         self.param = solver_param
         
         try:
-            self.load_by_date(load_date)
+            if load_date == "best":
+                self.load_best_date()
+            else:
+                self.load_by_date(load_date)
         except FileNotFoundError as e:  
             print(f"[WARNING] {e}. Load training data instead.")
             self.__load_training_data()
@@ -161,6 +164,15 @@ class Solver:
         self.P_knn = load_pickle(P_knn_path)
         
         print(f"[SUCCESS] load model, J, P, F, J_knn, P_knn from {load_dir}")
+        
+    def load_best_date(self):
+        top3_date_path = os.path.join(self.param.weight_dir, "top3_date.pth")
+        if not os.path.exists(top3_date_path):
+            raise FileNotFoundError(f"{top3_date_path} not found.")
+        top3_date = load_pickle(top3_date_path)
+        best_date = top3_date["date"][top3_date["l2"].index(min(top3_date["l2"]))]
+        self.load_by_date(best_date)
+        print(f"[SUCCESS] load best date {best_date} with l2 {min(top3_date['l2']):.5f} from {top3_date_path}.")
 
     # private methods
     def __compute_normalizing_elements(self):

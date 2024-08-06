@@ -161,7 +161,7 @@ def nsf(config: Config_Diversity, solver: Solver):
 if __name__ == "__main__":
     config = Config_Diversity()
     solver = Solver(solver_param=PANDA_PAIK,
-                    load_date='0703-0717', work_dir=config.workdir)
+                    load_date='best', work_dir=config.workdir)
     config.date = "2024_03_04"
     # klampt_numerical_ik_solver(config, solver)
     paik(config, solver)

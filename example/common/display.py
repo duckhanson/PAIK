@@ -181,8 +181,8 @@ def display_diversity_all(iksolver_names: list, record_dir: str):
         print("python nodeik_experiments.py: diversity() function.")
         return
     
-    iksolver_dfs["NSF"] = iksolver_dfs["IKFlow"]
-    iksolver_dfs["PAIK"] = iksolver_dfs["IKFlow"]
+    # iksolver_dfs["NSF"] = iksolver_dfs["IKFlow"]
+    # iksolver_dfs["PAIK"] = iksolver_dfs["IKFlow"]
 
     df_l2 = pd.DataFrame(
         {

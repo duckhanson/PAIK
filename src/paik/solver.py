@@ -10,6 +10,7 @@ import pandas as pd
 import torch
 from tabulate import tabulate
 from hnne import HNNE
+from finch import FINCH
 from sklearn.neighbors import NearestNeighbors
 from tqdm import trange
 
@@ -213,11 +214,20 @@ class Solver:
         if F is None:
             print(f"[WARNING] F not found, generate and save in {data_path('F')}.")
             assert self.r > 0, "r should be greater than 0."
-            # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
-            hnne = HNNE(dim=self.r)
             # maximum number of data for hnne (11M), we use max_num_data_hnne to test
             num_data = min(self.__solver_param.max_num_data_hnne, len(J))
-            F = hnne.fit_transform(X=J[:num_data], dim=self.r, verbose=True)
+
+            if self.param.use_dimension_reduction:
+                print(f"[INFO] Use HNNE to cluster the posture features.")
+                # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
+                hnne = HNNE(dim=self.r)
+                F = hnne.fit_transform(X=J[:num_data], dim=self.r, verbose=True)
+            else:
+                print(f"[INFO] Use FINCH to cluster the posture features.")
+                cluster_labels_all_partitions, num_clusters, required_clusters = FINCH(J[:num_data])
+                closest_idx_to_num_clusters_20 = np.argmin(np.abs(np.array(num_clusters) - 20))
+                F = cluster_labels_all_partitions[:, closest_idx_to_num_clusters_20]
+                
             # query nearest neighbors for the rest of J
             if len(F) != len(J):
                 knn = NearestNeighbors(n_neighbors=1).fit(J[:num_data])

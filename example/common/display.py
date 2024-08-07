@@ -180,6 +180,9 @@ def display_diversity_all(iksolver_names: list, record_dir: str):
         print("conda activate nodeik")
         print("python nodeik_experiments.py: diversity() function.")
         return
+    
+    # iksolver_dfs["NSF"] = iksolver_dfs["IKFlow"]
+    # iksolver_dfs["PAIK"] = iksolver_dfs["IKFlow"]
 
     df_l2 = pd.DataFrame(
         {
@@ -187,6 +190,7 @@ def display_diversity_all(iksolver_names: list, record_dir: str):
             **{name: df.l2.values * 1000 for name, df in iksolver_dfs.items()},
         }
     )
+    df_l2.rename(columns={'PAIK': 'Locality + NSF'}, inplace=True)
     
     df_mmd = pd.DataFrame(
         {
@@ -194,6 +198,8 @@ def display_diversity_all(iksolver_names: list, record_dir: str):
             **{name: df.mmd.values for name, df in iksolver_dfs.items()},
         }
     )
+    df_mmd.rename(columns={'PAIK': 'Locality + NSF'}, inplace=True)
+    
 
     # plot diversity with respect to base_stds
     fontsize = 24
@@ -218,6 +224,7 @@ def display_diversity_all(iksolver_names: list, record_dir: str):
     sub_ax[1].set_title("MMD Score", fontsize=title_fontsize)
     # sub_ax[1].figure.set_size_inches(ax_figsize)
     # sub_ax[1].legend(fontsize=fontsize)
+    iksolver_names = ["IKFlow", "NODEIK", "NSF", "Locality + NSF"]
     fig.legend(iksolver_names, loc="center right", bbox_to_anchor=(0.9, 0.7), fontsize=title_fontsize)
     
     plt.subplots_adjust(wspace=0.3)

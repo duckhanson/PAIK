@@ -10,6 +10,7 @@ import pandas as pd
 import torch
 from tabulate import tabulate
 from hnne import HNNE
+from finch import FINCH
 from sklearn.neighbors import NearestNeighbors
 from tqdm import trange
 
@@ -30,7 +31,10 @@ class Solver:
         self.param = solver_param
         
         try:
-            self.load_by_date(load_date)
+            if load_date == "best":
+                self.load_best_date()
+            else:
+                self.load_by_date(load_date)
         except FileNotFoundError as e:  
             print(f"[WARNING] {e}. Load training data instead.")
             self.__load_training_data()
@@ -48,6 +52,10 @@ class Solver:
     def param(self):
         return self.__solver_param
     
+    @property
+    def latent(self):
+        return self._latent
+    
     @param.setter
     def param(self, value: SolverConfig):
         self.__solver_param = value
@@ -57,6 +65,7 @@ class Solver:
         self.n, self.m, self.r = value.n, value.m, value.r
         self._solver, self._optimizer, self._scheduler = get_flow_model(value)  # type: ignore
         self._base_std = value.base_std
+        self._latent = torch.zeros((self.n,), device=self._device)
         # load inference data
         assert (
             self.n == self._robot.n_dofs
@@ -66,6 +75,12 @@ class Solver:
     def base_std(self, value: float):
         assert value >= 0, "base_std should be greater than or equal to 0."
         self._base_std = value
+        self.__change_solver_base()
+    
+    @latent.setter
+    def latent(self, value: np.ndarray):
+        assert len(value) == self.n, f"latent should have length {self.n}."
+        self._latent = torch.from_numpy(value.astype(np.float32)).to(self._device)
         self.__change_solver_base()
     
     # a dictionary in weight_dir to store the information of top3 dates, their l2, and their model by save_by_date, save the date if the current model is better, and remove the worst date
@@ -150,6 +165,15 @@ class Solver:
         self.P_knn = load_pickle(P_knn_path)
         
         print(f"[SUCCESS] load model, J, P, F, J_knn, P_knn from {load_dir}")
+        
+    def load_best_date(self):
+        top3_date_path = os.path.join(self.param.weight_dir, "top3_date.pth")
+        if not os.path.exists(top3_date_path):
+            raise FileNotFoundError(f"{top3_date_path} not found.")
+        top3_date = load_pickle(top3_date_path)
+        best_date = top3_date["date"][top3_date["l2"].index(min(top3_date["l2"]))]
+        self.load_by_date(best_date)
+        print(f"[SUCCESS] load best date {best_date} with l2 {min(top3_date['l2']):.5f} from {top3_date_path}.")
 
     # private methods
     def __compute_normalizing_elements(self):
@@ -190,11 +214,20 @@ class Solver:
         if F is None:
             print(f"[WARNING] F not found, generate and save in {data_path('F')}.")
             assert self.r > 0, "r should be greater than 0."
-            # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
-            hnne = HNNE(dim=self.r)
             # maximum number of data for hnne (11M), we use max_num_data_hnne to test
             num_data = min(self.__solver_param.max_num_data_hnne, len(J))
-            F = hnne.fit_transform(X=J[:num_data], dim=self.r, verbose=True)
+
+            if self.param.use_dimension_reduction:
+                print(f"[INFO] Use HNNE to cluster the posture features.")
+                # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
+                hnne = HNNE(dim=self.r)
+                F = hnne.fit_transform(X=J[:num_data], dim=self.r, verbose=True)
+            else:
+                print(f"[INFO] Use FINCH to cluster the posture features.")
+                cluster_labels_all_partitions, num_clusters, required_clusters = FINCH(J[:num_data])
+                closest_idx_to_num_clusters_20 = np.argmin(np.abs(np.array(num_clusters) - 20))
+                F = cluster_labels_all_partitions[:, closest_idx_to_num_clusters_20]
+                
             # query nearest neighbors for the rest of J
             if len(F) != len(J):
                 knn = NearestNeighbors(n_neighbors=1).fit(J[:num_data])
@@ -251,7 +284,7 @@ class Solver:
             transforms=self._solver.transforms,  # type: ignore
             base=Unconditional(
                 DiagNormal,
-                torch.zeros((self._robot.n_dofs,), device=self._device),
+                torch.zeros((self._robot.n_dofs,), device=self._device) + self._latent,
                 torch.ones((self._robot.n_dofs,),
                            device=self._device) * self._base_std,
                 buffer=True,
@@ -452,12 +485,12 @@ class Solver:
             return l2, ang
         return l2.mean(), ang.mean()
 
-    def select_reference_posture(self, P: np.ndarray, select_reference: str = 'knn'):
+    def select_reference_posture(self, P: np.ndarray, select_reference: str = 'knn', num_sols: int = 1):
         if select_reference == "knn":
             # type: ignore
             return self.F[
                 self.P_knn.kneighbors(
-                    np.atleast_2d(P), n_neighbors=1, return_distance=False
+                    np.atleast_2d(P), n_neighbors=num_sols, return_distance=False
                 ).flatten()  # type: ignore
             ]
         elif select_reference == "random":
@@ -468,7 +501,16 @@ class Solver:
             return self.F[np.random.randint(0, len(self.F), len(P))]
         else:
             raise NotImplementedError
-
+        
+    def generate_ik_solutions(self, P: np.ndarray, F: np.ndarray, num_sols: int, std: float, latent: np.ndarray):
+        assert len(P) == len(F), "P and F should have the same length."
+        if std != self.base_std:
+            self.base_std = std
+        if not np.array_equal(latent, np.zeros((self.n,))):
+            self.latent = latent
+        J_hat = self.solve_batch(P, F, num_sols)
+        return J_hat
+        
     def evaluate_ikp_iterative(
         self,
         num_poses: int,
@@ -496,7 +538,7 @@ class Solver:
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
         df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
-        # print(df.describe())
+        print(df.describe())
         
         print(
             tabulate(

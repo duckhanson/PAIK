@@ -72,7 +72,7 @@ class Config_Diversity(Config_File):
     num_poses: int = 2500
     num_sols: int = 1000
     base_stds: list = field(
-        default_factory=lambda: list(np.arange(0.1, 0.2, 0.1)))
+        default_factory=lambda: list(np.arange(0.1, 1.5, 0.1)))
 
     # nodeik
     pose_error_threshold: Tuple = (3e-2, 30)  # l2 (m), ang (deg)

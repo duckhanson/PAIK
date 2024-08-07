@@ -28,6 +28,8 @@ class SolverConfig:
 
     noise_esp: float = 2.5e-3
     noise_esp_decay: float = 0.97
+    
+    use_dimension_reduction: bool = True
 
     gamma: float = 8.6e-2
 
@@ -58,7 +60,7 @@ class SolverConfig:
 
     # hnne parameter
     weight_dir: str = f"{_workdir}/weights/{robot_name}"
-    max_num_data_hnne: int = 400_0000
+    max_num_data_hnne: int = 300_0000
 
     # experiment
     traj_dir: str = f"{data_dir}/trajectory/"

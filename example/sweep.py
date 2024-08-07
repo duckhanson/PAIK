@@ -7,14 +7,15 @@ from paik.train import Trainer
 
 WORK_DIR = "/home/luca/paik"
 # please change to your own project name
-WANDB_PROJECT_NAME = f"PANDA_PAIK {PANDA_PAIK.r}"
+WANDB_PROJECT_NAME = f"PANDA_PAIK FINCH"
 SOLVER_PARAM = PANDA_PAIK # [CHANGE THIS]
 WANDB_ENTITY = "luca_nthu"  # please change to your own entity name
-PATIENCE = 20
+PATIENCE = 10
 EXPERMENT_COUNT = 10
-NUM_EPOCHS = 150
+NUM_EPOCHS = 60
 USE_NSF_ONLY = False
 ENABLE_LOAD_MODEL = False
+USE_DIMENSION_REDUCTION = False
 
 
 def get_range(left_bound, right_bound, scale):
@@ -54,6 +55,7 @@ def main() -> None:
     solver_param.num_bins = wandb.config.num_bins
     solver_param.base_std = wandb.config.base_std
     solver_param.lr_beta = (wandb.config.lr_beta_l, wandb.config.lr_beta_h)
+    solver_param.use_dimension_reduction = USE_DIMENSION_REDUCTION  # type: ignore
     solver_param.enable_load_model = ENABLE_LOAD_MODEL  # type: ignore
     solver_param.use_nsf_only = USE_NSF_ONLY  # type: ignore
     solver_param.workdir = WORK_DIR

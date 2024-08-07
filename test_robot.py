@@ -1,7 +1,7 @@
 import enum
 import numpy as np
 import unittest
-from klampt_robot import PR2, BaxterArm
+from paik.klampt_robot import PR2, BaxterArm
 
 
 class TestPR2(unittest.TestCase):

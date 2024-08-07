@@ -210,16 +210,16 @@ class BaxterArm(Robot):
         super().__init__("baxter", [15, 16, 17, 18, 19, 21, 22])
 
 
-class Robonaut2WaistArm(Robot):
-    def __init__(self):
-        super().__init__("robonaut2", [4])
-        raise NotImplementedError("Robonaut2WaistArm is not implemented yet.")
+# class Robonaut2WaistArm(Robot):
+#     def __init__(self):
+#         super().__init__("robonaut2", [4])
+#         raise NotImplementedError("Robonaut2WaistArm is not implemented yet.")
 
 
-class Robonaut2Arm(Robot):
-    def __init__(self):
-        super().__init__("robonaut2", [4])
-        raise NotImplementedError("Robonaut2Arm is not implemented yet.")
+# class Robonaut2Arm(Robot):
+#     def __init__(self):
+#         super().__init__("robonaut2", [4])
+#         raise NotImplementedError("Robonaut2Arm is not implemented yet.")
 
 
 class PR2(Robot):

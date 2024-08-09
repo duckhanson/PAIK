@@ -225,7 +225,7 @@ class Solver:
         if J is None or P is None:
             print(f"[WARNING] J or P not found, generate and save in {data_path('J')}.")
             J, P = self._robot.sample_joint_angles_and_poses(
-                n=self.__solver_param.N, return_torch=False
+                n=self.__solver_param.N
             )
             save_numpy(file_path=data_path("J"), arr=J)
             save_numpy(file_path=data_path("P"), arr=P)

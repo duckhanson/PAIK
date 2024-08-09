@@ -243,7 +243,7 @@ def oscillate_latent(ik_solver: Solver, show_mug: bool = False, change_F_per_cnt
         robot, config.n_worlds, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=config.time_p_loop, title=title
     )
     
-def oscillate_locality(ik_solver: Solver, show_mug: bool = False, from_nn: bool = False):
+def oscillate_locality(ik_solver: Solver, show_mug: bool = False, from_nn: bool = False, use_dimension_reduction: bool = True):
     """Fixed end pose, oscillate through the locality space"""
     config = Config()
     title = "Fixed end pose with oscillation through the locality space"
@@ -310,7 +310,7 @@ def oscillate_locality(ik_solver: Solver, show_mug: bool = False, from_nn: bool 
         if from_nn:
             locality = locality_nn[_demo_state.counter % locality_nn.shape[0]]
             print(f"[INFO] locality={locality}, counter={_demo_state.counter}")
-        else:
+        elif use_dimension_reduction:
             locality = np.zeros((ik_solver.r))
             for i in range(ik_solver.r):
                 counter = config.time_dilation * _demo_state.counter
@@ -318,6 +318,9 @@ def oscillate_locality(ik_solver: Solver, show_mug: bool = False, from_nn: bool 
                 locality[i] = (
                     F_max * np.sin(counter / 25 + offset)
                 )
+        else:
+            locality = np.arange(F_max)
+            
         
         _demo_state.last_locality = locality
 

@@ -13,7 +13,7 @@ from zuko.flows import Flow, Unconditional
 from zuko.flows.spline import NSF
 from .settings import SolverConfig
 from jrl.robots import Panda, Fetch, FetchArm, Iiwa7
-from klampt_robot import AtlasArm, AtlasWaistArm, BaxterArm, PR2
+from .klampt_robot import AtlasArm, AtlasWaistArm, BaxterArm, PR2
 from pprint import pprint
 
 

@@ -10,7 +10,6 @@ import pandas as pd
 import torch
 from tabulate import tabulate
 from hnne import HNNE
-from finch import FINCH
 from sklearn.neighbors import NearestNeighbors
 from tqdm import trange
 
@@ -35,6 +34,11 @@ class Solver:
         )
 
         self.param = solver_param
+        
+        if solver_param.use_dimension_reduction:
+            print(f"[INFO] use_dimension_reduction is True, use HNNE.")
+        else:
+            print(f"[INFO] use_dimension_reduction is False, use clustering.")
 
         try:
             if load_date == "best":
@@ -233,20 +237,18 @@ class Solver:
             # maximum number of data for hnne (11M), we use max_num_data_hnne to test
             num_data = min(self.__solver_param.max_num_data_hnne, len(J))
 
-            if self.param.use_dimension_reduction:
-                print(f"[INFO] Use HNNE to cluster the posture features.")
-                # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
-                hnne = HNNE(dim=self.r)
-                F = hnne.fit_transform(X=J[:num_data], dim=self.r, verbose=True)
-            else:
-                print(f"[INFO] Use FINCH to cluster the posture features.")
-                cluster_labels_all_partitions, num_clusters, required_clusters = FINCH(
-                    J[:num_data]
-                )
+            # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
+            hnne = HNNE()
+            F = hnne.fit_transform(X=J[:num_data], dim=self.r, verbose=True)
+                
+            if not self.param.use_dimension_reduction:
+                print(f"[INFO] use_dimension_reduction is False, use clustering.")
+                partitions = hnne.hierarchy_parameters.partitions
+                num_clusters = hnne.hierarchy_parameters.partition_sizes
                 closest_idx_to_num_clusters_20 = np.argmin(
                     np.abs(np.array(num_clusters) - 20)
                 )
-                F = cluster_labels_all_partitions[:, closest_idx_to_num_clusters_20]
+                F = partitions[:, closest_idx_to_num_clusters_20].reshape(-1, 1)
 
             # query nearest neighbors for the rest of J
             if len(F) != len(J):
@@ -265,6 +267,9 @@ class Solver:
             save_numpy(file_path=data_path("F"), arr=F)
             print(f"[SUCCESS] F saved in {data_path('F')}.")
         print(f"[SUCCESS] F load from {data_path('F')}")
+        
+        df = pd.DataFrame(F)
+        print(df.describe())
 
         self.J, self.P, self.F = J, P, F
         # for normalization

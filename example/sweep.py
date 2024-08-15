@@ -2,13 +2,23 @@
 from datetime import datetime
 from tabulate import tabulate
 import wandb
-from paik.settings import PANDA_PAIK, FETCH_PAIK, FETCH_ARM_PAIK, IIWA7_PAIK
+from paik.settings import (
+    PANDA_NSF,
+    PANDA_PAIK,
+    FETCH_PAIK,
+    FETCH_ARM_PAIK,
+    IIWA7_PAIK,
+    ATLAS_ARM_PAIK,
+    ATLAS_WAIST_ARM_PAIK,
+    BAXTER_ARM_PAIK,
+    PR2_PAIK
+)
 from paik.train import Trainer
 
 WORK_DIR = "/home/luca/paik"
 # please change to your own project name
-WANDB_PROJECT_NAME = f"PANDA_PAIK FINCH"
-SOLVER_PARAM = PANDA_PAIK # [CHANGE THIS]
+WANDB_PROJECT_NAME = f"BAXTER_ARM_PAIK FINCH"
+SOLVER_PARAM = BAXTER_ARM_PAIK # [CHANGE THIS]
 WANDB_ENTITY = "luca_nthu"  # please change to your own entity name
 PATIENCE = 10
 EXPERMENT_COUNT = 10

@@ -158,7 +158,7 @@ ATLAS_WAIST_ARM_PAIK = SolverConfig(
     n=9,
     m=7,
     r=1,
-    max_num_data_hnne=300_0000,
+    max_num_data_hnne=200_0000,
     num_transforms=7,
 )
 

@@ -30,7 +30,28 @@ def display_ikp(l2: np.ndarray, ang: np.ndarray, inference_time: float):
             ],
         )
     )
+    
+def save_ikp(record_dir: str, name: str, l2: np.ndarray, ang: np.ndarray, inference_time: float):
+    """
+    Save the average l2, ang, and inference time to a pickle file.
 
+    Args:
+        record_dir (str): the path to the record directory, e.g. "{workdir}/record/{date}"
+        name (str): the name of the IK solver, e.g. "ikflow", "nodeik", "paik"
+        l2 (np.ndarray): mean of l2 distance between the generated IK solutions and the ground truth
+        ang (np.ndarray): mean of quaternion distance between the generated IK solutions and the ground truth
+        inference_time (float): average inference time
+    """
+    
+    df = pd.DataFrame(
+        {
+            "l2 (mm)": [l2 * 1e3],
+            "ang (deg)": [np.rad2deg(ang)],
+            "inference_time (ms)": [inference_time * 1e3],
+        }
+    )
+    df.to_pickle(f"{record_dir}/{name}_ikp.pkl")
+    print(f"Saved to {record_dir}/{name}_ikp.pkl")
 
 def compute_success_rate(
     distance_J_deg: np.ndarray,

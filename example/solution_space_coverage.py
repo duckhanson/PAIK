@@ -21,9 +21,7 @@ from common.evaluate import (
 
 
 def get_numerical_ik_sols(pose, num_seeds):
-    seeds, _ = solver._robot.sample_joint_angles_and_poses(
-        n=num_seeds, return_torch=False
-    )
+    seeds, _ = solver._robot.sample_joint_angles_and_poses(n=num_seeds)
 
     numerical_ik_sols = np.empty((num_seeds, solver.n))
     for i, seed in enumerate(seeds):
@@ -34,17 +32,14 @@ def get_numerical_ik_sols(pose, num_seeds):
 
 
 def klampt_numerical_ik_solver(config: Config_Diversity, solver: Solver):
-    _, P = solver._robot.sample_joint_angles_and_poses(
-        n=config.num_poses, return_torch=False
-    )
+    _, P = solver._robot.sample_joint_angles_and_poses(n=config.num_poses)
 
     # shape: (num_poses, num_sols, num_dofs or n)
     begin = time.time()
     J_ground_truth = np.asarray(
         [get_numerical_ik_sols(p, config.num_sols) for p in tqdm(P)]
     )
-    print(
-        f"Time to solve {config.num_poses} poses: {time.time() - begin:.2f}s")
+    print(f"Time to solve {config.num_poses} poses: {time.time() - begin:.2f}s")
 
     l2, ang = solver.evaluate_pose_error_J3d_P2d(
         J_ground_truth.transpose(1, 0, 2), P, return_all=True
@@ -153,15 +148,13 @@ def paik(config: Config_Diversity, solver: Solver):
 
 
 def nsf(config: Config_Diversity, solver: Solver):
-    nsf = Solver(solver_param=PANDA_NSF,
-                    load_date='0115-0234', work_dir=config.workdir)
+    nsf = Solver(solver_param=PANDA_NSF, load_date="0115-0234", work_dir=config.workdir)
     iterate_over_base_stds(config, "nsf", nsf, solver, nsf_solve)
 
 
 if __name__ == "__main__":
     config = Config_Diversity()
-    solver = Solver(solver_param=PANDA_PAIK,
-                    load_date='best', work_dir=config.workdir)
+    solver = Solver(solver_param=PANDA_PAIK, load_date="best", work_dir=config.workdir)
     config.date = "2024_03_04"
     # klampt_numerical_ik_solver(config, solver)
     paik(config, solver)

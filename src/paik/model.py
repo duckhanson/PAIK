@@ -13,6 +13,7 @@ from zuko.flows import Flow, Unconditional
 from zuko.flows.spline import NSF
 from .settings import SolverConfig
 from jrl.robots import Panda, Fetch, FetchArm, Iiwa7
+from .klampt_robot import AtlasArm, AtlasWaistArm, BaxterArm, PR2
 from pprint import pprint
 
 
@@ -72,7 +73,7 @@ def get_flow_model(config: SolverConfig) -> tuple[Flow, Optimizer, ReduceLROnPla
 
     return flow, optimizer, scheduler
 
-SUPPORTED_ROBOTS = [Panda, Fetch, FetchArm, Iiwa7]
+SUPPORTED_ROBOTS = ["panda", "fetch", "fetch_arm", "iiwa7", "atlas_arm", "atlas_waist_arm", "baxter_arm", "pr2"]
 
 def get_robot(robot_name: str, robot_dirs: Tuple[str, str, str, str]):
     """
@@ -82,6 +83,9 @@ def get_robot(robot_name: str, robot_dirs: Tuple[str, str, str, str]):
         robot_name (str): current only support "panda"
         robot_dirs (Tuple[str, str, str]): (data_dir, weight_dir, log_dir) defined in settings.py
     """
+    if robot_name not in SUPPORTED_ROBOTS:
+        raise NotImplementedError(f"Robot {robot_name} is not supported yet.")
+    
     # def create_robot_dirs(dir_paths) -> None:
     for dp in robot_dirs:
         if not os.path.exists(path=dp):
@@ -96,5 +100,13 @@ def get_robot(robot_name: str, robot_dirs: Tuple[str, str, str, str]):
         return FetchArm()
     elif robot_name == "iiwa7":
         return Iiwa7()
+    elif robot_name == "atlas_arm":
+        return AtlasArm()
+    elif robot_name == "atlas_waist_arm":
+        return AtlasWaistArm()
+    elif robot_name == "baxter_arm":
+        return BaxterArm()
+    elif robot_name == "pr2":
+        return PR2()
     else:
         raise NotImplementedError()

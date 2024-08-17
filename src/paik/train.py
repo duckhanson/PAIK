@@ -77,7 +77,7 @@ class Trainer(Solver):
                     (self.P, self.F, self.__noise_scale * noise_std)),
                 "C",
             )
-            C = self.remove_posture_feature(C) if self._use_nsf_only else C
+            C = self.__remove_partition_label(C) if self._use_nsf_only else C
 
             train_loader = DataLoader(
                 TensorDataset(
@@ -153,7 +153,6 @@ class Trainer(Solver):
 
         return loss.item()
 
-        
 
 class EarlyStopping:
     # https://github.com/Bjarten/early-stopping-pytorch/blob/master/pytorchtools.py

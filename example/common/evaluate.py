@@ -154,6 +154,10 @@ def mmd_evaluate_multiple_poses(
         float: a scalar of mmd score between the J_hat_ and J_ground_truth_ average over all poses
     """
 
+    if J_hat_.shape[0] == 1 and J_ground_truth_.shape[0] == 1:
+        J_hat_ = J_hat_.reshape(num_poses, -1, J_hat_.shape[-1])
+        J_ground_truth_ = J_ground_truth_.reshape(num_poses, -1, J_ground_truth_.shape[-1])
+    
     assert (
         len(J_hat_) == num_poses and J_hat_.shape == J_ground_truth_.shape
     ), f"J_hat_.shape: {J_hat_.shape}, J_ground_truth_.shape: {J_ground_truth_.shape}, num_poses: {num_poses}"
@@ -172,5 +176,5 @@ def mmd_evaluate_multiple_poses(
     )
     mmd_mean = torch.mean(
         mmd_all_poses[~torch.isnan(mmd_all_poses)], dim=0, keepdim=True
-    )
-    return mmd_mean.item()
+    ).item()
+    return round(mmd_mean, ndigits=2)

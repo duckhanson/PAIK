@@ -7,7 +7,6 @@ import numpy as np
 from klampt.model import ik
 from klampt.math import so3
 
-robot_dir_path = "/home/luca/Klampt-examples/data/robots"
 
 
 class Robot:
@@ -15,6 +14,8 @@ class Robot:
         assert name in ["pr2", "atlas", "baxter", "robonaut2"]
         self.name = name
         self._world = WorldModel()
+        robot_dir_path = "/home/luca/Klampt-examples/data/robots"
+        
         self._world.loadElement(
             f"{robot_dir_path}/{name}.rob"
         )  # pr2, atlas, baxter, robonaut2
@@ -228,7 +229,7 @@ class PR2(Robot):
         super().__init__("pr2", [51, 52, 53, 55, 56, 60, 61, 62])
 
 
-robot = BaxterArm()
+# robot = BaxterArm()
 
 # Q, P = robot.sample_joint_angles_and_poses(5)
 # print(repr(Q))

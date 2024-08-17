@@ -28,7 +28,7 @@ class SolverConfig:
 
     noise_esp: float = 2.5e-3
     noise_esp_decay: float = 0.97
-    
+
     use_dimension_reduction: bool = True
 
     gamma: float = 8.6e-2
@@ -37,7 +37,7 @@ class SolverConfig:
     num_epochs: int = 15
     shce_patience: int = 2
     use_nsf_only: bool = False
-    select_reference_posture_method: str = "knn"
+    get_reference_partition_label_method: str = "knn"
 
     # inference
     ckpt_name: str = "1118-0317"
@@ -65,7 +65,8 @@ class SolverConfig:
     # experiment
     traj_dir: str = f"{data_dir}/trajectory/"
 
-    dir_paths: Tuple[str, str, str, str] = (data_dir, weight_dir, traj_dir, train_dir)
+    dir_paths: Tuple[str, str, str, str] = (
+        data_dir, weight_dir, traj_dir, train_dir)
 
     @property
     def workdir(self):
@@ -78,7 +79,8 @@ class SolverConfig:
         self.train_dir = f"{self.data_dir}/train"
         self.weight_dir = f"{value}/weights/{self.robot_name}"
         self.traj_dir = f"{self.data_dir}/trajectory/"
-        self.dir_paths = (self.data_dir, self.weight_dir, self.traj_dir, self.train_dir)
+        self.dir_paths = (self.data_dir, self.weight_dir,
+                          self.traj_dir, self.train_dir)
 
 
 # DEFAULT_SOLVER_PARAM_M7_NORM = SolverConfig(

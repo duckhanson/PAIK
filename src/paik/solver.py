@@ -34,7 +34,7 @@ class Solver:
         )
 
         self.param = solver_param
-        
+
         if solver_param.use_dimension_reduction:
             print(f"[INFO] use_dimension_reduction is True, use HNNE.")
         else:
@@ -72,7 +72,8 @@ class Solver:
         self._use_nsf_only = value.use_nsf_only
         # Neural spline flow (NSF) with 3 sample features and 5 context features
         self.n, self.m, self.r = value.n, value.m, value.r
-        self._solver, self._optimizer, self._scheduler = get_flow_model(value)  # type: ignore
+        self._solver, self._optimizer, self._scheduler = get_flow_model(
+            value)  # type: ignore
         self._base_std = value.base_std
         self._latent = torch.zeros((self.n,), device=self._device)
         # load inference data
@@ -89,7 +90,8 @@ class Solver:
     @latent.setter
     def latent(self, value: np.ndarray):
         assert len(value) == self.n, f"latent should have length {self.n}."
-        self._latent = torch.from_numpy(value.astype(np.float32)).to(self._device)
+        self._latent = torch.from_numpy(
+            value.astype(np.float32)).to(self._device)
         self.__change_solver_base()
 
     # a dictionary in weight_dir to store the information of top3 dates, their l2, and their model by save_by_date, save the date if the current model is better, and remove the worst date
@@ -97,7 +99,8 @@ class Solver:
         top3_date_path = os.path.join(self.param.weight_dir, "top3_date.pth")
         if not os.path.exists(top3_date_path):
             save_pickle(
-                top3_date_path, {"date": ["", "", ""], "l2": [1000, 1000, 1000]}
+                top3_date_path, {"date": ["", "", ""],
+                                 "l2": [1000, 1000, 1000]}
             )
         top3_date = load_pickle(top3_date_path)
         save_idx = -1
@@ -125,12 +128,14 @@ class Solver:
             print(
                 f"[SUCCESS] save the date {date} with l2 {l2:.5f} in {top3_date_path}"
             )
-        print(f"[INFO] top3 dates: {top3_date['date']}, top3 l2: {top3_date['l2']}")
+        print(
+            f"[INFO] top3 dates: {top3_date['date']}, top3 l2: {top3_date['l2']}")
 
     # remove by date
     def remove_by_date(self, date: str):
         if isdir(os.path.join(self.param.weight_dir, date)):
-            shutil.rmtree(os.path.join(self.param.weight_dir, date), ignore_errors=True)
+            shutil.rmtree(os.path.join(
+                self.param.weight_dir, date), ignore_errors=True)
             print(f"[SUCCESS] remove {date} in {self.param.weight_dir}.")
         else:
             print(
@@ -163,7 +168,8 @@ class Solver:
 
     def load_by_date(self, date: str):
         if not isdir(os.path.join(self.param.weight_dir, date)):
-            raise FileNotFoundError(f"{date} not found in {self.param.weight_dir}.")
+            raise FileNotFoundError(
+                f"{date} not found in {self.param.weight_dir}.")
 
         load_dir = os.path.join(self.param.weight_dir, date)
         model_path = os.path.join(load_dir, "model.pth")
@@ -190,7 +196,8 @@ class Solver:
         if not os.path.exists(top3_date_path):
             raise FileNotFoundError(f"{top3_date_path} not found.")
         top3_date = load_pickle(top3_date_path)
-        best_date = top3_date["date"][top3_date["l2"].index(min(top3_date["l2"]))]
+        best_date = top3_date["date"][top3_date["l2"].index(
+            min(top3_date["l2"]))]
         self.load_by_date(best_date)
         print(
             f"[SUCCESS] load best date {best_date} with l2 {min(top3_date['l2']):.5f} from {top3_date_path}."
@@ -220,19 +227,23 @@ class Solver:
             lambda name: f"{self.__solver_param.train_dir}/{name}-{self.__solver_param.N}-{self.n}-{self.m}-{self.r}.npy"
         )
 
-        J, P, F = [load_numpy(file_path=data_path(name)) for name in ["J", "P", "F"]]
+        J, P, F = [load_numpy(file_path=data_path(name))
+                   for name in ["J", "P", "F"]]
 
         if J is None or P is None:
-            print(f"[WARNING] J or P not found, generate and save in {data_path('J')}.")
+            print(
+                f"[WARNING] J or P not found, generate and save in {data_path('J')}.")
             J, P = self._robot.sample_joint_angles_and_poses(
                 n=self.__solver_param.N
             )
             save_numpy(file_path=data_path("J"), arr=J)
             save_numpy(file_path=data_path("P"), arr=P)
-            print(f"[SUCCESS] J and P saved in {data_path('J')} and {data_path('P')}.")
+            print(
+                f"[SUCCESS] J and P saved in {data_path('J')} and {data_path('P')}.")
 
         if F is None:
-            print(f"[WARNING] F not found, generate and save in {data_path('F')}.")
+            print(
+                f"[WARNING] F not found, generate and save in {data_path('F')}.")
             assert self.r > 0, "r should be greater than 0."
             # maximum number of data for hnne (11M), we use max_num_data_hnne to test
             num_data = min(self.__solver_param.max_num_data_hnne, len(J))
@@ -240,7 +251,7 @@ class Solver:
             # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
             hnne = HNNE()
             F = hnne.fit_transform(X=J[:num_data], dim=self.r, verbose=True)
-                
+
             if not self.param.use_dimension_reduction:
                 print(f"[INFO] use_dimension_reduction is False, use clustering.")
                 partitions = hnne.hierarchy_parameters.partitions
@@ -248,7 +259,8 @@ class Solver:
                 closest_idx_to_num_clusters_20 = np.argmin(
                     np.abs(np.array(num_clusters) - 20)
                 )
-                F = partitions[:, closest_idx_to_num_clusters_20].reshape(-1, 1)
+                F = partitions[:,
+                               closest_idx_to_num_clusters_20].reshape(-1, 1)
 
             # query nearest neighbors for the rest of J
             if len(F) != len(J):
@@ -267,7 +279,7 @@ class Solver:
             save_numpy(file_path=data_path("F"), arr=F)
             print(f"[SUCCESS] F saved in {data_path('F')}.")
         print(f"[SUCCESS] F load from {data_path('F')}")
-        
+
         df = pd.DataFrame(F)
         print(df.describe())
 
@@ -279,7 +291,8 @@ class Solver:
         try:
             self.P_knn = load_pickle(path_P_knn)
         except:
-            print(f"[WARNING] P_knn not found, generate and save in {path_P_knn}.")
+            print(
+                f"[WARNING] P_knn not found, generate and save in {path_P_knn}.")
             self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(P)
             save_pickle(
                 path_P_knn,
@@ -291,7 +304,8 @@ class Solver:
         try:
             self.J_knn = load_pickle(path_J_knn)
         except:
-            print(f"[WARNING] J_knn not found, generate and save in {path_J_knn}.")
+            print(
+                f"[WARNING] J_knn not found, generate and save in {path_J_knn}.")
             self.J_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(J)
             save_pickle(
                 path_J_knn,
@@ -309,8 +323,10 @@ class Solver:
             transforms=self._solver.transforms,  # type: ignore
             base=Unconditional(
                 DiagNormal,
-                torch.zeros((self._robot.n_dofs,), device=self._device) + self._latent,
-                torch.ones((self._robot.n_dofs,), device=self._device) * self._base_std,
+                torch.zeros((self._robot.n_dofs,),
+                            device=self._device) + self._latent,
+                torch.ones((self._robot.n_dofs,),
+                           device=self._device) * self._base_std,
                 buffer=True,
             ),  # type: ignore
         )
@@ -347,7 +363,7 @@ class Solver:
             + self.__normalization_elements[name]["mean"]
         )
 
-    def remove_posture_feature(self, C: np.ndarray):
+    def __remove_partition_label(self, C: np.ndarray):
         """
         Remove posture feature from C
 
@@ -358,10 +374,8 @@ class Solver:
             np.ndarray: conditions without posture feature
         """
         assert self._use_nsf_only and isinstance(C, np.ndarray)
-        print("before remove posture feature", C.shape)
         # delete the last 2 of the last dimension of C, which is posture feature
         C = np.delete(C, -2, -1)
-        print("after remove posture feature", C.shape)
         return C
 
     def solve(self, P: np.ndarray, F: np.ndarray, num_sols: int) -> np.ndarray:
@@ -379,7 +393,7 @@ class Solver:
         C = self.normalize_input_data(
             np.column_stack((P, F, np.zeros((len(F), 1)))), "C"
         )
-        C = self.remove_posture_feature(C) if self._use_nsf_only else C
+        C = self.__remove_partition_label(C) if self._use_nsf_only else C
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
         with torch.inference_mode():
             J = self._solver(C).sample((num_sols,))
@@ -401,7 +415,8 @@ class Solver:
         assert C.ndim == 2
         complementary = batch_size - len(C) % batch_size
         complementary = 0 if complementary == batch_size else complementary
-        C = np.concatenate((C, C[:complementary]), axis=0) if complementary > 0 else C
+        C = np.concatenate((C, C[:complementary]),
+                           axis=0) if complementary > 0 else C
         return C, complementary
 
     def remove_complementary_J(self, J: np.ndarray, complementary: int) -> np.ndarray:
@@ -448,14 +463,15 @@ class Solver:
         C = self.normalize_input_data(C, "C")
         # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
         C = np.tile(C, (num_sols, 1))
-        C = self.remove_posture_feature(C) if self._use_nsf_only else C
+        C = self.__remove_partition_label(C) if self._use_nsf_only else C
         C, complementary = self.make_divisible_C(C, batch_size)
         # shape: ((num_sols * num_poses + complementary) // batch_size, batch_size, C.shape[-1])
         C = torch.from_numpy(
             C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])
         ).to(self._device)
 
-        J = torch.empty((len(C), batch_size, self._robot.n_dofs), device=self._device)
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
+                        device=self._device)
         iterator = trange(len(C)) if verbose else range(len(C))
         with torch.inference_mode():
             for i in iterator:
@@ -489,7 +505,8 @@ class Solver:
             tuple[Any, Any]: l2 and ang, default shape (1), posewise evaluation with shape (num_poses,), or all evaluation with shape (num_sols * num_poses)
         """
         num_poses, num_sols = len(P), len(J)
-        assert len(J.shape) == 3 and len(P.shape) == 2 and J.shape[1] == num_poses
+        assert len(J.shape) == 3 and len(
+            P.shape) == 2 and J.shape[1] == num_poses
 
         # P: (num_poses, m), P_expand: (num_sols * num_poses, m)
         P_expand = np.tile(P, (num_sols, 1))
@@ -506,9 +523,12 @@ class Solver:
             return l2, ang
         return l2.mean(), ang.mean()
 
-    def select_reference_posture(
+    def get_reference_partition_label(
         self, P: np.ndarray, select_reference: str = "knn", num_sols: int = 1
     ):
+        if self._use_nsf_only:
+            return np.zeros((len(P), num_sols)).flatten()
+        
         if select_reference == "knn":
             # type: ignore
             return self.F[
@@ -556,10 +576,11 @@ class Solver:
         _, P = self._robot.sample_joint_angles_and_poses(n=num_poses)
         time_begin = time()
         # Data Preprocessing
-        F = self.select_reference_posture(P, select_reference)
+        F = self.get_reference_partition_label(P, select_reference)
 
         # Begin inference
-        J_hat = self.solve_batch(P, F, num_sols, batch_size=batch_size, verbose=verbose)
+        J_hat = self.solve_batch(
+            P, F, num_sols, batch_size=batch_size, verbose=verbose)
 
         l2, ang = self.evaluate_pose_error_J3d_P2d(J_hat, P, return_all=True)
         avg_inference_time = round((time() - time_begin) / num_poses, 3)

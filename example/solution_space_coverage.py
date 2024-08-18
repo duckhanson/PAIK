@@ -43,7 +43,7 @@ def paik_batch(solver: Solver, P, num_sols, std=0.001):
     P_num_sols = np.expand_dims(P, axis=1).repeat(num_sols, axis=1)
     solver.base_std = std
     
-    # shape: (num_poses * num_sols, n)
+    # shape: (num_poses * num_sols, 1)
     F = solver.get_reference_partition_label(P=P_num_sols[:, 0], num_sols=num_sols)
 
     # shape: (num_poses * num_sols, n)
@@ -55,11 +55,20 @@ def paik_batch(solver: Solver, P, num_sols, std=0.001):
     # return shape: (1, num_poses*num_sols, n)
     return J_hat
 
-def nsf_batch(solver, P, num_sols, std=0.001):
-    # P.shape = (num_poses, m)
-    # return shape: (1, num_poses*num_sols, n)
-    assert solver.param.use_nsf_only == True, "Solver is not NSF"
-    return paik_batch(solver, P, num_sols, std)
+def nsf_batch(solver: Solver, P, num_sols, std=0.001):
+    # shape: (num_poses, num_sols, m)
+    P_num_sols = np.expand_dims(P, axis=1).repeat(num_sols, axis=1)
+    solver.base_std = std
+    
+    # shape: (num_poses * num_sols, n)
+    P_num_sols = P_num_sols.reshape(-1, P.shape[-1])
+    
+    # shape: (num_poses * num_sols)
+    F = np.zeros((P_num_sols.shape[0], 1))
+    
+    # shape: (1, num_poses * num_sols, n)
+    J_hat = solver.solve_batch(P_num_sols, F, 1)
+    return J_hat
 
 def random_ikp(solver: Solver, P: np.ndarray, num_sols: int, solve_fn_batch: Any, std: float=None, verbose: bool=False):
     """
@@ -123,9 +132,19 @@ def iterate_over_num_sols_array(solver, P: np.ndarray, num_sols_array: np.ndarra
     ang_array = np.empty((len(num_sols_array)))
     ang_std_array = np.empty((len(num_sols_array)))
     
-    for i, num_sols in enumerate(num_sols_array):
-        J_hat, l2_array[i], l2_std_array[i], ang_array[i], ang_std_array[i] = random_ikp(solver, P, num_sols, solve_fn_batch, std, verbose)
-        J_hat_array.append(J_hat)
+    if solve_fn_batch.__name__ == "numerical_inverse_kinematics_batch":
+        # copy the first solution to the rest of the num_sols
+        num_sols_max = np.max(num_sols_array)
+        J_hat, l2, l2_std, ang, ang_std = random_ikp(solver, P, num_sols_max, solve_fn_batch)
+        J_hat_array = [J_hat[:, num_sols] for num_sols in num_sols_array]
+        l2_array = np.full((len(num_sols_array)), l2)
+        l2_std_array = np.full((len(num_sols_array)), l2_std)
+        ang_array = np.full((len(num_sols_array)), ang)
+        ang_std_array = np.full((len(num_sols_array)), ang_std)
+    else:
+        for i, num_sols in enumerate(num_sols_array):
+            J_hat, l2_array[i], l2_std_array[i], ang_array[i], ang_std_array[i] = random_ikp(solver, P, num_sols, solve_fn_batch, std, verbose)
+            J_hat_array.append(J_hat)
     return J_hat_array, l2_array, l2_std_array, ang_array, ang_std_array
 
 def iterate_over_num_poses_array(solver, num_poses_array: np.ndarray, num_sols: int, solve_fn_batch: Any, std: float=None, verbose: bool=False):

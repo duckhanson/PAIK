@@ -526,16 +526,18 @@ class Solver:
     def get_reference_partition_label(
         self, P: np.ndarray, select_reference: str = "knn", num_sols: int = 1
     ):
-        if self._use_nsf_only:
+        if select_reference == "zero":
             return np.zeros((len(P), num_sols)).flatten()
-        
-        if select_reference == "knn":
+        elif select_reference == "knn":
             # type: ignore
-            return self.F[
+            n_neighbors = min(num_sols, 10)
+            F =  self.F[
                 self.P_knn.kneighbors(
-                    np.atleast_2d(P), n_neighbors=num_sols, return_distance=False
-                ).flatten()  # type: ignore
-            ]
+                    np.atleast_2d(P), n_neighbors=n_neighbors, return_distance=False
+                )
+            ].reshape(-1, n_neighbors)
+            # expand F to match the number of solutions by random sampling for each pose
+            return np.asarray([np.random.choice(f, num_sols, replace=True) for f in np.atleast_2d(F)]).flatten()
         elif select_reference == "random":
             min_F, max_F = np.min(self.F), np.max(self.F)
             return np.random.rand(len(P), self.r) * (max_F - min_F) + min_F

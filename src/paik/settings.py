@@ -103,6 +103,7 @@ PANDA_NSF = SolverConfig(
     num_transforms=8,
     subnet_num_layers=3,
     use_nsf_only=True,
+    get_reference_partition_label_method="zero",
     ckpt_name="0115-0234",
 )
 

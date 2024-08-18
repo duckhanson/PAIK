@@ -225,8 +225,8 @@ class BaxterArm(Robot):
 
 class PR2(Robot):
     def __init__(self):
-        # arm from 51 to 61, palm 62
-        super().__init__("pr2", [51, 52, 53, 55, 56, 60, 61, 62])
+        # arm from 51 to 61, palm 63
+        super().__init__("pr2", [51, 52, 53, 55, 56, 60, 61, 63])
 
 
 # robot = BaxterArm()

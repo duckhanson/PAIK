@@ -97,7 +97,7 @@ class Solver:
     # a dictionary in weight_dir to store the information of top3 dates, their l2, and their model by save_by_date, save the date if the current model is better, and remove the worst date
     def save_if_top3(self, date: str, l2: float):
         top3_date_path = self.__top3_date_path()
-            
+
         if not os.path.exists(top3_date_path):
             save_pickle(
                 top3_date_path, {"date": ["", "", ""],
@@ -191,7 +191,7 @@ class Solver:
         self.P_knn = load_pickle(P_knn_path)
 
         print(f"[SUCCESS] load model, J, P, F, J_knn, P_knn from {load_dir}")
-        
+
     def __top3_date_path(self):
         if self._use_nsf_only:
             return os.path.join(self.param.weight_dir, "top3_date_nsf.pth")
@@ -206,7 +206,7 @@ class Solver:
                 f"{top3_date_path} not found. Please save the model first."
             )
         top3_date = load_pickle(top3_date_path)
-        
+
         best_date = top3_date["date"][top3_date["l2"].index(
             min(top3_date["l2"]))]
         self.load_by_date(best_date)
@@ -223,7 +223,7 @@ class Solver:
             "C": {
                 # extra column for tuning std of noise for training data
                 "mean": np.concatenate((C.mean(axis=0), np.zeros((1)))),
-                "std": np.concatenate((C.std(axis=0), np.ones((1)))),
+                "std": np.concatenate((C.std(axis=0), np.ones((1)))) + 1e-6,
             },
         }
 
@@ -251,6 +251,9 @@ class Solver:
             save_numpy(file_path=data_path("P"), arr=P)
             print(
                 f"[SUCCESS] J and P saved in {data_path('J')} and {data_path('P')}.")
+
+        if self._use_nsf_only:
+            F = np.zeros((len(J), 1))
 
         if F is None:
             print(
@@ -289,15 +292,13 @@ class Solver:
 
             save_numpy(file_path=data_path("F"), arr=F)
             print(f"[SUCCESS] F saved in {data_path('F')}.")
-        print(f"[SUCCESS] F load from {data_path('F')}")
 
         df = pd.DataFrame(F)
         print(df.describe())
 
-        if not self.param.use_dimension_reduction:        
+        if not self.param.use_dimension_reduction:
             # check if numbers of F are integers
             assert np.allclose(F, F.astype(int)), "F should be integers."
-            
 
         self.J, self.P, self.F = J, P, F
         # for normalization
@@ -379,7 +380,7 @@ class Solver:
             + self.__normalization_elements[name]["mean"]
         )
 
-    def __remove_partition_label(self, C: np.ndarray):
+    def _remove_partition_label(self, C: np.ndarray):
         """
         Remove posture feature from C
 
@@ -409,7 +410,7 @@ class Solver:
         C = self.normalize_input_data(
             np.column_stack((P, F, np.zeros((len(F), 1)))), "C"
         )
-        C = self.__remove_partition_label(C) if self._use_nsf_only else C
+        C = self._remove_partition_label(C) if self._use_nsf_only else C
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
         with torch.inference_mode():
             J = self._solver(C).sample((num_sols,))
@@ -479,7 +480,7 @@ class Solver:
         C = self.normalize_input_data(C, "C")
         # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
         C = np.tile(C, (num_sols, 1))
-        C = self.__remove_partition_label(C) if self._use_nsf_only else C
+        C = self._remove_partition_label(C) if self._use_nsf_only else C
         C, complementary = self.make_divisible_C(C, batch_size)
         # shape: ((num_sols * num_poses + complementary) // batch_size, batch_size, C.shape[-1])
         C = torch.from_numpy(
@@ -547,7 +548,7 @@ class Solver:
         elif select_reference == "knn":
             # type: ignore
             n_neighbors = min(num_sols, 10)
-            F =  self.F[
+            F = self.F[
                 self.P_knn.kneighbors(
                     np.atleast_2d(P), n_neighbors=n_neighbors, return_distance=False
                 )

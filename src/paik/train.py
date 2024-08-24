@@ -77,7 +77,7 @@ class Trainer(Solver):
                     (self.P, self.F, self.__noise_scale * noise_std)),
                 "C",
             )
-            C = self.__remove_partition_label(C) if self._use_nsf_only else C
+            C = self._remove_partition_label(C) if self._use_nsf_only else C
 
             train_loader = DataLoader(
                 TensorDataset(

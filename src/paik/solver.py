@@ -72,14 +72,7 @@ class Solver:
         else:
             print(f"[INFO] use_dimension_reduction is False, use clustering.")
 
-        try:
-            if load_date == "best":
-                self.load_best_date()
-            else:
-                self.load_by_date(load_date)
-        except FileNotFoundError as e:
-            print(f"[WARNING] {e}. Load training data instead.")
-            self._load_training_data()
+        
 
     @property
     def base_std(self):
@@ -726,6 +719,15 @@ class PAIK(Solver):
     ) -> None:
         super().__init__(solver_param, load_date, work_dir)
         
+        try:
+            if load_date == "best":
+                self.load_best_date()
+            else:
+                self.load_by_date(load_date)
+        except FileNotFoundError as e:
+            print(f"[WARNING] {e}. Load training data instead.")
+            self._load_training_data()
+        
 class NSF(Solver):
     def __init__(
         self,
@@ -734,6 +736,15 @@ class NSF(Solver):
         work_dir: str = os.path.abspath(os.getcwd()),
     ) -> None:
         super().__init__(solver_param, load_date, work_dir)
+        
+        try:
+            if load_date == "best":
+                self.load_best_date()
+            else:
+                self.load_by_date(load_date)
+        except FileNotFoundError as e:
+            print(f"[WARNING] {e}. Load training data instead.")
+            self._load_training_data()
         
     def _load_training_data(self):
         """

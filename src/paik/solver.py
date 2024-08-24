@@ -96,7 +96,8 @@ class Solver:
 
     # a dictionary in weight_dir to store the information of top3 dates, their l2, and their model by save_by_date, save the date if the current model is better, and remove the worst date
     def save_if_top3(self, date: str, l2: float):
-        top3_date_path = os.path.join(self.param.weight_dir, "top3_date.pth")
+        top3_date_path = self.__top3_date_path()
+            
         if not os.path.exists(top3_date_path):
             save_pickle(
                 top3_date_path, {"date": ["", "", ""],
@@ -190,12 +191,22 @@ class Solver:
         self.P_knn = load_pickle(P_knn_path)
 
         print(f"[SUCCESS] load model, J, P, F, J_knn, P_knn from {load_dir}")
+        
+    def __top3_date_path(self):
+        if self._use_nsf_only:
+            return os.path.join(self.param.weight_dir, "top3_date_nsf.pth")
+        else:
+            return os.path.join(self.param.weight_dir, "top3_date_paik.pth")
 
     def load_best_date(self):
-        top3_date_path = os.path.join(self.param.weight_dir, "top3_date.pth")
+        top3_date_path = self.__top3_date_path()
+
         if not os.path.exists(top3_date_path):
-            raise FileNotFoundError(f"{top3_date_path} not found.")
+            raise FileNotFoundError(
+                f"{top3_date_path} not found. Please save the model first."
+            )
         top3_date = load_pickle(top3_date_path)
+        
         best_date = top3_date["date"][top3_date["l2"].index(
             min(top3_date["l2"]))]
         self.load_by_date(best_date)
@@ -282,6 +293,11 @@ class Solver:
 
         df = pd.DataFrame(F)
         print(df.describe())
+
+        if not self.param.use_dimension_reduction:        
+            # check if numbers of F are integers
+            assert np.allclose(F, F.astype(int)), "F should be integers."
+            
 
         self.J, self.P, self.F = J, P, F
         # for normalization

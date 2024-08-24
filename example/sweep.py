@@ -3,27 +3,31 @@ from datetime import datetime
 from tabulate import tabulate
 import wandb
 from paik.settings import (
-    PANDA_NSF,
     PANDA_PAIK,
     FETCH_PAIK,
     FETCH_ARM_PAIK,
-    IIWA7_PAIK,
     ATLAS_ARM_PAIK,
     ATLAS_WAIST_ARM_PAIK,
     BAXTER_ARM_PAIK,
-    PR2_PAIK
+
+    PANDA_NSF,
+    FETCH_NSF,
+    FETCH_ARM_NSF,
+    ATLAS_ARM_NSF,
+    ATLAS_WAIST_ARM_NSF,
+    BAXTER_ARM_NSF,
 )
 from paik.train import Trainer
 
 WORK_DIR = "/home/luca/paik"
 # please change to your own project name
-WANDB_PROJECT_NAME = f"BAXTER_ARM_PAIK FINCH"
-SOLVER_PARAM = BAXTER_ARM_PAIK # [CHANGE THIS]
+WANDB_PROJECT_NAME = f"FETCH_NSF FINCH"
+SOLVER_PARAM = FETCH_NSF # [CHANGE THIS]
 WANDB_ENTITY = "luca_nthu"  # please change to your own entity name
 PATIENCE = 10
 EXPERMENT_COUNT = 10
 NUM_EPOCHS = 60
-USE_NSF_ONLY = False
+# USE_NSF_ONLY = False
 ENABLE_LOAD_MODEL = False
 USE_DIMENSION_REDUCTION = False
 
@@ -38,7 +42,7 @@ sweep_config = {
     "metric": {"name": "position_errors", "goal": "minimize"},
     "parameters": {
         "num_transforms": {"values": get_range(8, 9, 1)},
-        "lr": {"values": get_range(70, 90, 1e-5)}, # 40 - 80
+        "lr": {"values": get_range(50, 80, 1e-5)}, # 40 - 80
         "lr_weight_decay": {"values": get_range(16, 20, 1e-3)},
         "gamma": {"values": get_range(85, 87, 1e-3)},
         "noise_esp": {"values": get_range(31, 33, 1e-4)},
@@ -67,8 +71,10 @@ def main() -> None:
     solver_param.lr_beta = (wandb.config.lr_beta_l, wandb.config.lr_beta_h)
     solver_param.use_dimension_reduction = USE_DIMENSION_REDUCTION  # type: ignore
     solver_param.enable_load_model = ENABLE_LOAD_MODEL  # type: ignore
-    solver_param.use_nsf_only = USE_NSF_ONLY  # type: ignore
     solver_param.workdir = WORK_DIR
+    
+    # train nsf model, check use_nsf_only is True
+    assert solver_param.use_nsf_only, "use_nsf_only must be True"
 
     trainer = Trainer(solver_param=solver_param)
 

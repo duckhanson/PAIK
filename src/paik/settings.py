@@ -125,6 +125,18 @@ FETCH_PAIK = SolverConfig(
     ckpt_name="0621-0313",  # "0620-1327", "0620-0225"
 )
 
+FETCH_NSF = SolverConfig(
+    robot_name="fetch",
+    n=8,
+    m=7,
+    r=1,
+    num_bins=6,
+    max_num_data_hnne=300_0000,
+    num_transforms=7,
+    use_nsf_only=True,
+    get_reference_partition_label_method="zero",
+)
+
 FETCH_ARM_PAIK = SolverConfig(
     robot_name="fetch_arm",
     n=7,
@@ -134,6 +146,18 @@ FETCH_ARM_PAIK = SolverConfig(
     max_num_data_hnne=300_0000,
     num_transforms=7,
     ckpt_name="0622-0958",  # "0622-0958", "0621-2325"
+)
+
+FETCH_ARM_NSF = SolverConfig(
+    robot_name="fetch_arm",
+    n=7,
+    m=7,
+    r=1,
+    num_bins=6,
+    max_num_data_hnne=300_0000,
+    num_transforms=7,
+    use_nsf_only=True,
+    get_reference_partition_label_method="zero",
 )
 
 IIWA7_PAIK = SolverConfig(
@@ -156,6 +180,17 @@ ATLAS_ARM_PAIK = SolverConfig(
     num_transforms=7,
 )
 
+ATLAS_ARM_NSF = SolverConfig(
+    robot_name="atlas_arm",
+    n=6,
+    m=7,
+    r=1,
+    max_num_data_hnne=300_0000,
+    num_transforms=7,
+    use_nsf_only=True,
+    get_reference_partition_label_method="zero",
+)
+
 ATLAS_WAIST_ARM_PAIK = SolverConfig(
     robot_name="atlas_waist_arm",
     n=9,
@@ -165,6 +200,17 @@ ATLAS_WAIST_ARM_PAIK = SolverConfig(
     num_transforms=7,
 )
 
+ATLAS_WAIST_ARM_NSF = SolverConfig(
+    robot_name="atlas_waist_arm",
+    n=9,
+    m=7,
+    r=1,
+    max_num_data_hnne=200_0000,
+    num_transforms=7,
+    use_nsf_only=True,
+    get_reference_partition_label_method="zero",
+)
+
 BAXTER_ARM_PAIK = SolverConfig(
     robot_name="baxter_arm",
     n=7,
@@ -172,6 +218,17 @@ BAXTER_ARM_PAIK = SolverConfig(
     r=1,
     max_num_data_hnne=300_0000,
     num_transforms=7,
+)
+
+BAXTER_ARM_NSF = SolverConfig(
+    robot_name="baxter_arm",
+    n=7,
+    m=7,
+    r=1,
+    max_num_data_hnne=300_0000,
+    num_transforms=7,
+    use_nsf_only=True,
+    get_reference_partition_label_method="zero",
 )
 
 PR2_PAIK = SolverConfig(

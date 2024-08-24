@@ -7,11 +7,7 @@ import torch
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from paik.solver import Solver
-from paik.settings import (
-    PANDA_NSF,
-    PANDA_PAIK,
-)
+from paik.solver import get_solver
 
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
@@ -35,9 +31,9 @@ if __name__ == "__main__":
     config.num_sols = 50
     std = 0.01
     
-    nsf_solver = Solver(solver_param=PANDA_NSF, load_date="0115-0234", work_dir=config.workdir)
-    paik_solver = Solver(solver_param=PANDA_PAIK, load_date="best", work_dir=config.workdir)
-    
+    nsf_solver = get_solver(arch_name="nsf", robot_name="panda", load=True, work_dir=config.workdir)
+    paik_solver = get_solver(arch_name="paik", robot_name="panda", load=True, work_dir=config.workdir)
+
     _, P = nsf_solver.robot.sample_joint_angles_and_poses(config.num_poses)
     
     # Experiment shows the first execute of random_ikp is slow, so we execute a dummy one.

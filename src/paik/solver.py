@@ -13,12 +13,34 @@ from hnne import HNNE
 from sklearn.neighbors import NearestNeighbors
 from tqdm import trange
 
-from .settings import SolverConfig, PANDA_PAIK
+from .settings import get_config, SolverConfig, PANDA_PAIK
 from .model import get_flow_model, get_robot
 from .file import load_numpy, save_numpy, save_pickle, load_pickle
 from .evaluate import evaluate_pose_error_P2d_P2d
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
+
+def get_solver(arch_name: str, robot_name: str, load: bool = False, work_dir: str = os.path.abspath(os.getcwd())) -> Solver:
+    """
+    Get the solver with the given architecture and robot.
+
+    Args:
+        arch_name (str): architecture name
+        robot_name (str): robot name
+        load (bool, optional): load the solver or not. Defaults to False.
+
+    Returns:
+        Solver: solver instance
+    """
+    solver_param = get_config(arch_name, robot_name)
+
+    solver = Solver(
+        solver_param=solver_param, # type: ignore
+        load_date="best" if load else "",
+        work_dir=work_dir,
+    )
+    
+    return solver
 
 
 class Solver:
@@ -37,6 +59,7 @@ class Solver:
 
         if solver_param.use_dimension_reduction:
             print(f"[INFO] use_dimension_reduction is True, use HNNE.")
+            raise NotImplementedError("Not support HNNE.")
         else:
             print(f"[INFO] use_dimension_reduction is False, use clustering.")
 

@@ -29,7 +29,7 @@ class SolverConfig:
     noise_esp: float = 2.5e-3
     noise_esp_decay: float = 0.97
 
-    use_dimension_reduction: bool = True
+    use_dimension_reduction: bool = False
 
     gamma: float = 8.6e-2
 
@@ -239,6 +239,46 @@ PR2_PAIK = SolverConfig(
     max_num_data_hnne=300_0000,
     num_transforms=7,
 )
+
+def get_config(arch_name: str, robot_name: str):
+    support_archs = ["paik", "nsf"]
+    support_robots = ["panda", "fetch", "fetch_arm",
+                     "atlas_arm", "atlas_waist_arm", "baxter_arm"]
+    assert arch_name in support_archs, f"arch_name should be one of {support_archs}."
+    assert robot_name in support_robots, f"robot_name should be one of {support_robots}."
+    
+    if robot_name == "panda":
+        if arch_name == "nsf":
+            return PANDA_NSF
+        elif arch_name == "paik":
+            return PANDA_PAIK
+    elif robot_name == "fetch":
+        if arch_name == "nsf":
+            return FETCH_NSF
+        elif arch_name == "paik":
+            return FETCH_PAIK
+    elif robot_name == "fetch_arm":
+        if arch_name == "nsf":
+            return FETCH_ARM_NSF
+        elif arch_name == "paik":
+            return FETCH_ARM_PAIK
+    elif robot_name == "atlas_arm":
+        if arch_name == "nsf":
+            return ATLAS_ARM_NSF
+        elif arch_name == "paik":
+            return ATLAS_ARM_PAIK
+    elif robot_name == "atlas_waist_arm":
+        if arch_name == "nsf":
+            return ATLAS_WAIST_ARM_NSF
+        elif arch_name == "paik":
+            return ATLAS_WAIST_ARM_PAIK
+    elif robot_name == "baxter_arm":
+        if arch_name == "nsf":
+            return BAXTER_ARM_NSF
+        elif arch_name == "paik":
+            return BAXTER_ARM_PAIK
+    else:
+        raise ValueError(f"robot_name: {robot_name}, arch_name: {arch_name}")
 
 
 if __name__ == "__main__":

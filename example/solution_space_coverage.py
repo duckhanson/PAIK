@@ -4,11 +4,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from paik.solver import Solver
-from paik.settings import (
-    PANDA_NSF,
-    PANDA_PAIK,
-)
+from paik.solver import get_solver
 
 from common.config import Config_Diversity
 from common.file import save_diversity, load_poses_and_numerical_ik_sols
@@ -338,8 +334,8 @@ if __name__ == "__main__":
     config.num_poses = 500
     config.num_sols = 200
 
-    nsf_solver = Solver(solver_param=PANDA_NSF, load_date="0115-0234", work_dir=config.workdir)
-    paik_solver = Solver(solver_param=PANDA_PAIK, load_date="best", work_dir=config.workdir)
+    nsf_solver = get_solver(arch_name="nsf", robot_name="panda", load=True, work_dir=config.workdir)
+    paik_solver = get_solver(arch_name="paik", robot_name="panda", load=True, work_dir=config.workdir)
 
     plot_iterate_over_num_sols_array(config, nsf_solver, paik_solver)    
     plot_iterate_over_stds(config, nsf_solver, paik_solver)

@@ -2,34 +2,21 @@
 from datetime import datetime
 from tabulate import tabulate
 import wandb
-from paik.settings import (
-    PANDA_PAIK,
-    FETCH_PAIK,
-    FETCH_ARM_PAIK,
-    ATLAS_ARM_PAIK,
-    ATLAS_WAIST_ARM_PAIK,
-    BAXTER_ARM_PAIK,
-
-    PANDA_NSF,
-    FETCH_NSF,
-    FETCH_ARM_NSF,
-    ATLAS_ARM_NSF,
-    ATLAS_WAIST_ARM_NSF,
-    BAXTER_ARM_NSF,
-)
+from paik.settings import get_config
 from paik.train import Trainer
 
 WORK_DIR = "/home/luca/paik"
 # please change to your own project name
-WANDB_PROJECT_NAME = f"FETCH_NSF FINCH"
-SOLVER_PARAM = FETCH_NSF # [CHANGE THIS]
+SOVLER_ARCH = "nsf"
+ROBOT_NAME = "fetch"
+
+WANDB_PROJECT_NAME = f"{ROBOT_NAME} {SOVLER_ARCH} FINCH"
+SOLVER_PARAM = get_config(SOVLER_ARCH, ROBOT_NAME)
 WANDB_ENTITY = "luca_nthu"  # please change to your own entity name
 PATIENCE = 10
 EXPERMENT_COUNT = 10
 NUM_EPOCHS = 60
-# USE_NSF_ONLY = False
 ENABLE_LOAD_MODEL = False
-USE_DIMENSION_REDUCTION = False
 
 
 def get_range(left_bound, right_bound, scale):
@@ -69,7 +56,6 @@ def main() -> None:
     solver_param.num_bins = wandb.config.num_bins
     solver_param.base_std = wandb.config.base_std
     solver_param.lr_beta = (wandb.config.lr_beta_l, wandb.config.lr_beta_h)
-    solver_param.use_dimension_reduction = USE_DIMENSION_REDUCTION  # type: ignore
     solver_param.enable_load_model = ENABLE_LOAD_MODEL  # type: ignore
     solver_param.workdir = WORK_DIR
     

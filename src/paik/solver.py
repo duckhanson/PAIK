@@ -34,11 +34,20 @@ def get_solver(arch_name: str, robot_name: str, load: bool = False, work_dir: st
     """
     solver_param = get_config(arch_name, robot_name)
 
-    solver = Solver(
-        solver_param=solver_param, # type: ignore
-        load_date="best" if load else "",
-        work_dir=work_dir,
-    )
+    if arch_name == "paik":
+        solver = PAIK(
+            solver_param=solver_param, # type: ignore
+            load_date="best" if load else "",
+            work_dir=work_dir,
+        )
+    elif arch_name == "nsf":
+        solver = NSF(
+            solver_param=solver_param, # type: ignore
+            load_date="best" if load else "",
+            work_dir=work_dir,
+        )
+    else:
+        raise NotImplementedError(f"Architecture {arch_name} not supported.")
     
     return solver
 
@@ -101,8 +110,8 @@ class Solver:
         self._latent = torch.zeros((self.n,), device=self._device)
         # load inference data
         assert (
-            self.n == self._robot.n_dofs
-        ), f"n should be {self._robot.n_dofs} as the robot"
+            self.n == self.robot.n_dofs
+        ), f"n should be {self.robot.n_dofs} as the robot"
 
     @base_std.setter
     def base_std(self, value: float):
@@ -262,7 +271,7 @@ class Solver:
         if J is None or P is None:
             print(
                 f"[WARNING] J or P not found, generate and save in {self._load_JPF_path('J')}.")
-            J, P = self._robot.sample_joint_angles_and_poses(
+            J, P = self.robot.sample_joint_angles_and_poses(
                 n=self.param.N
             )
             save_numpy(file_path=self._load_JPF_path("J"), arr=J)
@@ -385,16 +394,16 @@ class Solver:
             transforms=self._solver.transforms,  # type: ignore
             base=Unconditional(
                 DiagNormal,
-                torch.zeros((self._robot.n_dofs,),
+                torch.zeros((self.robot.n_dofs,),
                             device=self._device) + self._latent,
-                torch.ones((self._robot.n_dofs,),
+                torch.ones((self.robot.n_dofs,),
                            device=self._device) * self._base_std,
                 buffer=True,
             ),  # type: ignore
         )
 
     # public methods
-    def normalize_input_data(self, data: np.ndarray, name: str) -> np.ndarray:
+    def normalize_input_data(self, data: np.ndarray, name: str, return_torch: bool = False):
         """
         Normalize input data. J_norm = (J - J_mean) / J_std, C_norm = (C - C_mean) / C_std
 
@@ -405,9 +414,13 @@ class Solver:
         Returns:
             np.ndarray: normalized data
         """
-        return (
-            data - self._normalization_elements[name]["mean"]
-        ) / self._normalization_elements[name]["std"]
+        norm = (data - self._normalization_elements[name]["mean"]) / self._normalization_elements[name]["std"]
+        if return_torch:
+            return torch.from_numpy(
+                norm.astype(np.float32)
+            ).to(self._device)
+        
+        return norm
 
     def denormalize_output_data(self, data: np.ndarray, name: str) -> np.ndarray:
         """
@@ -494,6 +507,45 @@ class Solver:
         """
         assert J.ndim == 2
         return J[:-complementary] if complementary > 0 else J
+    
+    def _get_batch_C(self, P: np.ndarray, F: np.ndarray, num_sols: int, batch_size: int):
+        # shape: (num_poses, C.shape[-1] = m + r + 1)
+        C = np.column_stack((P, F, np.zeros((len(F), 1))))
+        C = self.normalize_input_data(C, "C")
+        # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
+        C = np.tile(C, (num_sols, 1))
+        C, complementary = self.make_divisible_C(C, batch_size)
+        C = torch.from_numpy(
+            C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])
+        ).to(self._device)  
+        return C, complementary
+    
+    def _solve_C_batch(self, C: np.ndarray, num_sols: int, complementary: int, verbose: bool=False) -> np.ndarray:
+        """
+        Solve inverse kinematics problem in batch.
+
+        Args:
+            C (np.ndarray): conditions with shape (num_poses, m + x + 1), x = 1 for paik, x = 0 for nsf
+
+        Returns:
+            np.ndarray: J with shape (num_poses, num_dofs)
+        """
+        batch_size = C.shape[1]
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
+                        device=self._device)
+        
+        iterator = trange(len(C)) if verbose else range(len(C))
+        with torch.inference_mode():
+            for i in iterator:
+                J[i] = self._solver(C[i]).sample()
+
+        J = J.detach().cpu().numpy()
+        J = self.remove_complementary_J(
+            J.reshape(-1, self._robot.n_dofs), complementary
+        )
+        return self.denormalize_output_data(
+            J.reshape(num_sols, -1, self._robot.n_dofs), "J"
+        )
 
     def solve_batch(
         self,
@@ -520,32 +572,10 @@ class Solver:
         if len(P) * num_sols < batch_size:
             return self.solve(P, F, num_sols)
 
-        # shape: (num_poses, C.shape[-1] = m + r + 1)
-        C = np.column_stack((P, F, np.zeros((len(F), 1))))
-        C = self.normalize_input_data(C, "C")
-        # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
-        C = np.tile(C, (num_sols, 1))
-        C = self._remove_partition_label(C) if self._use_nsf_only else C
-        C, complementary = self.make_divisible_C(C, batch_size)
-        # shape: ((num_sols * num_poses + complementary) // batch_size, batch_size, C.shape[-1])
-        C = torch.from_numpy(
-            C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])
-        ).to(self._device)
-
-        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
-                        device=self._device)
-        iterator = trange(len(C)) if verbose else range(len(C))
-        with torch.inference_mode():
-            for i in iterator:
-                J[i] = self._solver(C[i]).sample()
-
-        J = J.detach().cpu().numpy()
-        J = self.remove_complementary_J(
-            J.reshape(-1, self._robot.n_dofs), complementary
-        )
-        return self.denormalize_output_data(
-            J.reshape(num_sols, -1, self._robot.n_dofs), "J"
-        )
+        C, complementary = self._get_batch_C(P, F, num_sols, batch_size)
+        J = self._solve_C_batch(C, num_sols, complementary, verbose)
+        
+        return J
 
     def evaluate_pose_error_J3d_P2d(
         self,
@@ -568,12 +598,12 @@ class Solver:
         """
         num_poses, num_sols = len(P), len(J)
         assert len(J.shape) == 3 and len(
-            P.shape) == 2 and J.shape[1] == num_poses
+            P.shape) == 2 and J.shape[1] == num_poses, f"J: {J.shape}, P: {P.shape}"
 
         # P: (num_poses, m), P_expand: (num_sols * num_poses, m)
         P_expand = np.tile(P, (num_sols, 1))
 
-        P_hat = self._robot.forward_kinematics(J.reshape(-1, self.n))
+        P_hat = self.robot.forward_kinematics(J.reshape(-1, self.n))
         l2, ang = evaluate_pose_error_P2d_P2d(P_hat, P_expand)  # type: ignore
 
         if return_posewise_evalution:
@@ -637,7 +667,7 @@ class Solver:
     ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
         self.base_std = std
         # Randomly sample poses from test set
-        _, P = self._robot.sample_joint_angles_and_poses(n=num_poses)
+        _, P = self.robot.sample_joint_angles_and_poses(n=num_poses)
         time_begin = time()
         # Data Preprocessing
         F = self.get_reference_partition_label(P, select_reference)
@@ -718,68 +748,106 @@ class NSF(Solver):
         self._load_knn()
         
         
-#     def solve(self, P: np.ndarray, F: np.ndarray, num_sols: int) -> np.ndarray:
-#         """
-#         Solve inverse kinematics problem.
+    def solve(self, P: np.ndarray, num_sols: int):
+        C = self.normalize_input_data(np.column_stack((P, np.zeros((len(P), 1)))), "C", return_torch=True)
+        with torch.inference_mode():
+            J = self._solver(C).sample((num_sols,))
+        return self.denormalize_output_data(J.detach().cpu().numpy(), "J")
+    
+    def _get_batch_C(self, P: np.ndarray, num_sols: int, batch_size: int):
+        # shape: (num_poses, C.shape[-1] = m + r + 1)
+        C = np.column_stack((P, np.zeros((len(P), 1))))
+        C = self.normalize_input_data(C, "C")
+        # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
+        C = np.tile(C, (num_sols, 1))
+        C, complementary = self.make_divisible_C(C, batch_size)
+        C = torch.from_numpy(
+            C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])
+        ).to(self._device)  
+        return C, complementary
 
-#         Args:
-#             P (np.ndarray): poses as least 2D array
-#             F (np.ndarray): posture features as least 2D array
-#             num_sols (int): number of solutions
+    def solve_batch(
+        self,
+        P: np.ndarray,
+        num_sols: int,
+        batch_size: int = 4000,
+        verbose: bool = True,
+    ) -> np.ndarray:
+        """
+        Solve inverse kinematics problem in batch.
 
-#         Returns:
-#             np.ndarray: J with shape (num_sols, num_poses, num_dofs)
-#         """
-#         C = self.normalize_input_data(
-#             np.column_stack((P, F, np.zeros((len(F), 1))), "C"
-#         )  # type: ignore
-#         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
-#         with torch.inference_mode():
-#             J = self._solver(C).sample((num_sols,))
-#         return self.denormalize_output_data(J.detach().cpu().numpy(), "J")
+        Args:
+            P (np.ndarray): poses with shape (num_poses, m)
+            num_sols (int): number of solutions
+            batch_size (int, optional): batch size. Defaults to 4000.
+            verbose (bool, optional): use trange or not. Defaults to True.
 
-#     def solve_batch(
-#         self,
-#         P: np.ndarray,
-#         F: np.ndarray,
-#         num_sols: int,
-#         batch_size: int = 4000,
-#         verbose: bool = True,
-#     ) -> np.ndarray:
-#         """
-#         Solve inverse kinematics problem in batch.
+        Returns:
+            np.ndarray: J with shape (num_sols, num_poses, num_dofs)
+        """
 
-#         Args:
-#             P (np.ndarray): poses with shape (num_poses, m)
-#             F (np.ndarray): F with shape (num_poses, r)
-#             num_sols (int): number of solutions
-#             batch_size (int, optional): batch size. Defaults to 4000.
-#             verbose (bool, optional): use trange or not. Defaults to True.
+        if len(P) * num_sols < batch_size:
+            return self.solve(P, num_sols)
 
-#         Returns:
-#             np.ndarray: J with shape (num_sols, num_poses, num_dofs)
-#         """
+        C, complementary = self._get_batch_C(P, num_sols, batch_size)
+        J = self._solve_C_batch(C, num_sols, complementary, verbose)
+        return J
+    
+    def evaluate_ikp_iterative(
+        self,
+        num_poses: int,
+        num_sols: int,
+        batch_size: int = 5000,
+        std: float = 0.25,
+        success_threshold: Tuple[float, float] = (1e-4, 1e-4),
+        select_reference: str = "knn",
+        verbose: bool = True,
+    ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
+        self.base_std = std
+        # Randomly sample poses from test set
+        _, P = self.robot.sample_joint_angles_and_poses(n=num_poses)
+        time_begin = time()
 
-#         if len(P) * num_sols < batch_size:
-#             return self.solve(P, F, num_sols)
+        # Begin inference
+        J_hat = self.solve_batch(P, num_sols, batch_size=batch_size, verbose=verbose)
 
-#         # shape: (num_poses, C.shape[-1] = m + r + 1)
-#         C = np.column_stack((P, F, np.zeros((len(F), 1)))
-#                             )  # type: ignore
-#         C = self.normalize_input_data(C, "C")
-#         # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
-#         C = np.tile(C, (num_sols, 1))
-#         C = torch.from_numpy(
-#             C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])
-#         ).to(self._device)  
-#         J = torch.empty((len(C), batch_size, self._robot.n_dofs),
-#                         device=self._device)
-#         iterator = trange(len(C)) if verbose else range(len(C))
-#         with torch.inference_mode():
-#             for i in iterator:
-#                 J[i] = self._solver(C[i]).sample()
+        l2, ang = self.evaluate_pose_error_J3d_P2d(J_hat, P, return_all=True)
+        avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
-#         J = J.detach().cpu().numpy()
-#         return self.denormalize_output_data(J, "J")
-        
+        df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
+        print(df.describe())
+
+        print(
+            tabulate(
+                [
+                    [
+                        np.round(l2.mean() * 1e3, decimals=2),
+                        np.round(np.rad2deg(ang.mean()), decimals=2),
+                        np.round(avg_inference_time * 1e3, decimals=0),
+                    ]
+                ],
+                headers=[
+                    "l2 (mm)",
+                    "ang (deg)",
+                    "inference_time (ms)",
+                ],
+            )
+        )
+
+        return tuple(
+            [
+                l2.mean(),
+                ang.mean(),
+                avg_inference_time,
+                round(
+                    len(
+                        df.query(
+                            f"l2 < {success_threshold[0]} & ang < {success_threshold[1]}"
+                        )
+                    )
+                    / (num_poses * num_sols),
+                    3,
+                ),
+            ]
+        )
         

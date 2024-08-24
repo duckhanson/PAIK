@@ -70,7 +70,7 @@ class Solver:
                 self.load_by_date(load_date)
         except FileNotFoundError as e:
             print(f"[WARNING] {e}. Load training data instead.")
-            self.__load_training_data()
+            self._load_training_data()
 
     @property
     def base_std(self):
@@ -108,18 +108,18 @@ class Solver:
     def base_std(self, value: float):
         assert value >= 0, "base_std should be greater than or equal to 0."
         self._base_std = value
-        self.__change_solver_base()
+        self._change_solver_base()
 
     @latent.setter
     def latent(self, value: np.ndarray):
         assert len(value) == self.n, f"latent should have length {self.n}."
         self._latent = torch.from_numpy(
             value.astype(np.float32)).to(self._device)
-        self.__change_solver_base()
+        self._change_solver_base()
 
     # a dictionary in weight_dir to store the information of top3 dates, their l2, and their model by save_by_date, save the date if the current model is better, and remove the worst date
     def save_if_top3(self, date: str, l2: float):
-        top3_date_path = self.__top3_date_path()
+        top3_date_path = self._top3_date_path()
 
         if not os.path.exists(top3_date_path):
             save_pickle(
@@ -208,21 +208,25 @@ class Solver:
         self._solver.load_state_dict(torch.load(model_path)["solver"])
         self.J = np.load(J_path)
         self.P = np.load(P_path)
-        self.F = np.load(F_path)
-        self.__compute_normalizing_elements()
+        if self._use_nsf_only:
+            self.C = self.P
+        else:
+            self.F = np.load(F_path)
+            self.C = np.column_stack((self.P, self.F))
+        self._compute_normalizing_elements()
         self.J_knn = load_pickle(J_knn_path)
         self.P_knn = load_pickle(P_knn_path)
 
-        print(f"[SUCCESS] load model, J, P, F, J_knn, P_knn from {load_dir}")
+        print(f"[SUCCESS] load from {load_dir}")
 
-    def __top3_date_path(self):
+    def _top3_date_path(self):
         if self._use_nsf_only:
             return os.path.join(self.param.weight_dir, "top3_date_nsf.pth")
         else:
             return os.path.join(self.param.weight_dir, "top3_date_paik.pth")
 
     def load_best_date(self):
-        top3_date_path = self.__top3_date_path()
+        top3_date_path = self._top3_date_path()
 
         if not os.path.exists(top3_date_path):
             raise FileNotFoundError(
@@ -238,52 +242,58 @@ class Solver:
         )
 
     # private methods
-    def __compute_normalizing_elements(self):
-        C = np.column_stack((self.P, self.F))
-
-        self.__normalization_elements = {
+    def _compute_normalizing_elements(self):
+        self._normalization_elements = {
             "J": {"mean": self.J.mean(axis=0), "std": self.J.std(axis=0)},
             "C": {
                 # extra column for tuning std of noise for training data
-                "mean": np.concatenate((C.mean(axis=0), np.zeros((1)))),
-                "std": np.concatenate((C.std(axis=0), np.ones((1)))) + 1e-6,
+                "mean": np.concatenate((self.C.mean(axis=0), np.zeros((1)))),
+                "std": np.concatenate((self.C.std(axis=0), np.ones((1)))) + 1e-6,
             },
         }
-
-    def __load_training_data(self):
+        
+    def _load_J_P(self):
         """
-        Load training data from the given path, if not found, generate and save it.
+        Load J and P from the given path, if not found, generate and save it.
         """
-        assert isdir(
-            self.__solver_param.train_dir
-        ), f"{self.__solver_param.train_dir} not found, please change workdir to the project root!"
-        data_path = (
-            lambda name: f"{self.__solver_param.train_dir}/{name}-{self.__solver_param.N}-{self.n}-{self.m}-{self.r}.npy"
-        )
-
-        J, P, F = [load_numpy(file_path=data_path(name))
-                   for name in ["J", "P", "F"]]
+        J, P = [load_numpy(file_path=self._load_JPF_path(name))
+                   for name in ["J", "P"]]
 
         if J is None or P is None:
             print(
-                f"[WARNING] J or P not found, generate and save in {data_path('J')}.")
+                f"[WARNING] J or P not found, generate and save in {self._load_JPF_path('J')}.")
             J, P = self._robot.sample_joint_angles_and_poses(
-                n=self.__solver_param.N
+                n=self.param.N
             )
-            save_numpy(file_path=data_path("J"), arr=J)
-            save_numpy(file_path=data_path("P"), arr=P)
+            save_numpy(file_path=self._load_JPF_path("J"), arr=J)
+            save_numpy(file_path=self._load_JPF_path("P"), arr=P)
             print(
-                f"[SUCCESS] J and P saved in {data_path('J')} and {data_path('P')}.")
+                f"[SUCCESS] J and P saved in {self._load_JPF_path('J')} and {self._load_JPF_path('P')}.")
 
-        if self._use_nsf_only:
-            F = np.zeros((len(J), 1))
+        self.J, self.P = J, P
+        
+    def _load_JPF_path(self, name: str):
+        """
+        JPF path for saving and loading J, P, F.
+        """
+        assert isdir(
+            self.param.train_dir
+        ), f"{self.param.train_dir} not found, please change workdir to the project root!"
+        return f"{self.param.train_dir}/{name}-{self.param.N}-{self.n}-{self.m}-{self.r}.npy"
+        
+        
+    def _load_F(self):
+        """
+        Load F from the given path, if not found, generate and save it.
+        """
+        F = load_numpy(file_path=self._load_JPF_path("F"))
 
         if F is None:
             print(
-                f"[WARNING] F not found, generate and save in {data_path('F')}.")
+                f"[WARNING] F not found, generate and save in {self._load_JPF_path('F')}.")
             assert self.r > 0, "r should be greater than 0."
             # maximum number of data for hnne (11M), we use max_num_data_hnne to test
-            num_data = min(self.__solver_param.max_num_data_hnne, len(J))
+            num_data = min(self.param.max_num_data_hnne, len(J))
 
             # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
             hnne = HNNE()
@@ -311,51 +321,63 @@ class Solver:
                             ).flatten()  # type: ignore
                         ],
                     )
-                )  # type: ignore
+                )
 
-            save_numpy(file_path=data_path("F"), arr=F)
-            print(f"[SUCCESS] F saved in {data_path('F')}.")
+            save_numpy(file_path=self._load_JPF_path("F"), arr=F)
+            print(f"[SUCCESS] F saved in {self._load_JPF_path('F')}.")
 
-        df = pd.DataFrame(F)
-        print(df.describe())
-
+        self.F = F
+        
         if not self.param.use_dimension_reduction:
             # check if numbers of F are integers
-            assert np.allclose(F, F.astype(int)), "F should be integers."
+            assert np.allclose(self.F, self.F.astype(int)), "F should be integers."
+        
 
-        self.J, self.P, self.F = J, P, F
+    def _load_training_data(self):
+        """
+        Load training data from the given path, if not found, generate and save it.
+        """
+        self._load_J_P()
+        self._load_F()
+
+        self.C = np.column_stack((self.P, self.F))
+        
         # for normalization
-        self.__compute_normalizing_elements()
+        self._compute_normalizing_elements()
+        self._load_knn()
 
-        path_P_knn = f"{self.__solver_param.weight_dir}/P_knn-{self.__solver_param.N}-{self.n}-{self.m}-{self.r}.pth"
+    def _load_knn(self):
+        """
+        Load knn models from the given path, if not found, generate and save it.
+        """
+        
+        path_P_knn = f"{self.param.weight_dir}/P_knn-{self.param.N}-{self.n}-{self.m}-{self.r}.pth"
         try:
             self.P_knn = load_pickle(path_P_knn)
         except:
             print(
                 f"[WARNING] P_knn not found, generate and save in {path_P_knn}.")
-            self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(P)
+            self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.P)
             save_pickle(
                 path_P_knn,
                 self.P_knn,
             )
         print(f"[SUCCESS] P_knn load from {path_P_knn}.")
 
-        path_J_knn = f"{self.__solver_param.weight_dir}/J_knn-{self.__solver_param.N}-{self.n}-{self.m}-{self.r}.pth"
+        path_J_knn = f"{self.param.weight_dir}/J_knn-{self.param.N}-{self.n}-{self.m}-{self.r}.pth"
         try:
             self.J_knn = load_pickle(path_J_knn)
         except:
             print(
                 f"[WARNING] J_knn not found, generate and save in {path_J_knn}.")
-            self.J_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(J)
+            self.J_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.J)
             save_pickle(
                 path_J_knn,
                 self.J_knn,
             )
         print(f"[SUCCESS] J_knn load from {path_J_knn}.")
 
-        return J, P, F
-
-    def __change_solver_base(self):
+    def _change_solver_base(self):
         """
         Change the base distribution of the solver to the new base distribution.
         """
@@ -384,8 +406,8 @@ class Solver:
             np.ndarray: normalized data
         """
         return (
-            data - self.__normalization_elements[name]["mean"]
-        ) / self.__normalization_elements[name]["std"]
+            data - self._normalization_elements[name]["mean"]
+        ) / self._normalization_elements[name]["std"]
 
     def denormalize_output_data(self, data: np.ndarray, name: str) -> np.ndarray:
         """
@@ -399,8 +421,8 @@ class Solver:
             np.ndarray: denormalized data
         """
         return (
-            data * self.__normalization_elements[name]["std"]
-            + self.__normalization_elements[name]["mean"]
+            data * self._normalization_elements[name]["std"]
+            + self._normalization_elements[name]["mean"]
         )
 
     def _remove_partition_label(self, C: np.ndarray):
@@ -663,3 +685,101 @@ class Solver:
                 ),
             ]
         )
+
+
+class PAIK(Solver):
+    def __init__(
+        self,
+        solver_param: SolverConfig = PANDA_PAIK,
+        load_date: str = "",
+        work_dir: str = os.path.abspath(os.getcwd()),
+    ) -> None:
+        super().__init__(solver_param, load_date, work_dir)
+        
+class NSF(Solver):
+    def __init__(
+        self,
+        solver_param: SolverConfig = PANDA_PAIK,
+        load_date: str = "",
+        work_dir: str = os.path.abspath(os.getcwd()),
+    ) -> None:
+        super().__init__(solver_param, load_date, work_dir)
+        
+    def _load_training_data(self):
+        """
+        Load training data from the given path, if not found, generate and save it.
+        """
+        self._load_J_P()
+
+        self.C = self.P
+        
+        # for normalization
+        self._compute_normalizing_elements()
+        self._load_knn()
+        
+        
+#     def solve(self, P: np.ndarray, F: np.ndarray, num_sols: int) -> np.ndarray:
+#         """
+#         Solve inverse kinematics problem.
+
+#         Args:
+#             P (np.ndarray): poses as least 2D array
+#             F (np.ndarray): posture features as least 2D array
+#             num_sols (int): number of solutions
+
+#         Returns:
+#             np.ndarray: J with shape (num_sols, num_poses, num_dofs)
+#         """
+#         C = self.normalize_input_data(
+#             np.column_stack((P, F, np.zeros((len(F), 1))), "C"
+#         )  # type: ignore
+#         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
+#         with torch.inference_mode():
+#             J = self._solver(C).sample((num_sols,))
+#         return self.denormalize_output_data(J.detach().cpu().numpy(), "J")
+
+#     def solve_batch(
+#         self,
+#         P: np.ndarray,
+#         F: np.ndarray,
+#         num_sols: int,
+#         batch_size: int = 4000,
+#         verbose: bool = True,
+#     ) -> np.ndarray:
+#         """
+#         Solve inverse kinematics problem in batch.
+
+#         Args:
+#             P (np.ndarray): poses with shape (num_poses, m)
+#             F (np.ndarray): F with shape (num_poses, r)
+#             num_sols (int): number of solutions
+#             batch_size (int, optional): batch size. Defaults to 4000.
+#             verbose (bool, optional): use trange or not. Defaults to True.
+
+#         Returns:
+#             np.ndarray: J with shape (num_sols, num_poses, num_dofs)
+#         """
+
+#         if len(P) * num_sols < batch_size:
+#             return self.solve(P, F, num_sols)
+
+#         # shape: (num_poses, C.shape[-1] = m + r + 1)
+#         C = np.column_stack((P, F, np.zeros((len(F), 1)))
+#                             )  # type: ignore
+#         C = self.normalize_input_data(C, "C")
+#         # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
+#         C = np.tile(C, (num_sols, 1))
+#         C = torch.from_numpy(
+#             C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])
+#         ).to(self._device)  
+#         J = torch.empty((len(C), batch_size, self._robot.n_dofs),
+#                         device=self._device)
+#         iterator = trange(len(C)) if verbose else range(len(C))
+#         with torch.inference_mode():
+#             for i in iterator:
+#                 J[i] = self._solver(C[i]).sample()
+
+#         J = J.detach().cpu().numpy()
+#         return self.denormalize_output_data(J, "J")
+        
+        

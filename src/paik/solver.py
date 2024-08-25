@@ -1,6 +1,6 @@
 # Import required packages
 from __future__ import annotations
-from typing import Any, Tuple
+from typing import Any, Optional, Tuple
 import os
 import shutil
 from os.path import isdir
@@ -458,21 +458,6 @@ class Solver:
             + self._normalization_elements[name]["mean"]
         )
 
-    def _remove_partition_label(self, C: np.ndarray):
-        """
-        Remove posture feature from C
-
-        Args:
-            C (np.ndarray): conditions
-
-        Returns:
-            np.ndarray: conditions without posture feature
-        """
-        assert self._use_nsf_only and isinstance(C, np.ndarray)
-        # delete the last 2 of the last dimension of C, which is posture feature
-        C = np.delete(C, -2, -1)
-        return C
-
     def solve(self, P: np.ndarray, F: np.ndarray, num_sols: int) -> np.ndarray:
         """
         Solve inverse kinematics problem.
@@ -488,7 +473,6 @@ class Solver:
         C = self.normalize_input_data(
             np.column_stack((P, F, np.zeros((len(F), 1)))), "C"
         )
-        C = self._remove_partition_label(C) if self._use_nsf_only else C
         C = torch.from_numpy(C.astype(np.float32)).to(self._device)
         with torch.inference_mode():
             J = self._solver(C).sample((num_sols,))
@@ -638,9 +622,7 @@ class Solver:
     def get_reference_partition_label(
         self, P: np.ndarray, select_reference: str = "knn", num_sols: int = 1
     ):
-        if select_reference == "zero":
-            return np.zeros((len(P), num_sols)).flatten()
-        elif select_reference == "knn":
+        if select_reference == "knn":
             # type: ignore
             n_neighbors = min(num_sols, 10)
             F = self.F[
@@ -657,22 +639,27 @@ class Solver:
             # randomly pick one posture from train set
             return self.F[np.random.randint(0, len(self.F), len(P))]
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f"select_reference {select_reference} not supported.")
 
     def generate_ik_solutions(
         self,
         P: np.ndarray,
-        F: np.ndarray,
         num_sols: int,
-        std: float,
-        latent: np.ndarray,
+        F: Optional[np.ndarray] = None,
+        std: Optional[float] = None,
+        latent: Optional[np.ndarray] = None,
+        select_reference: str = "knn",
+        batch_size: int = 4000,
+        verbose: bool = True,
     ):
+        if F is None:
+            F = self.get_reference_partition_label(P, select_reference)
         assert len(P) == len(F), "P and F should have the same length."
-        if std != self.base_std:
+        if std is not None and std != self.base_std:
             self.base_std = std
-        if not np.array_equal(latent, np.zeros((self.n,))):
+        if latent is not None:
             self.latent = latent
-        J_hat = self.solve_batch(P, F, num_sols)
+        J_hat = self.solve_batch(P, F, num_sols, batch_size, verbose)
         return J_hat
 
     def evaluate_ikp_iterative(
@@ -689,12 +676,8 @@ class Solver:
         # Randomly sample poses from test set
         _, P = self.robot.sample_joint_angles_and_poses(n=num_poses)
         time_begin = time()
-        # Data Preprocessing
-        F = self.get_reference_partition_label(P, select_reference)
 
-        # Begin inference
-        J_hat = self.solve_batch(
-            P, F, num_sols, batch_size=batch_size, verbose=verbose)
+        J_hat = self.generate_ik_solutions(P=P, num_sols=num_sols, batch_size=batch_size, verbose=verbose)
 
         l2, ang = self.evaluate_pose_error_J3d_P2d(J_hat, P, return_all=True)
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
@@ -831,61 +814,20 @@ class NSF(Solver):
         J = self._solve_C_batch(C, num_sols, complementary, verbose)
         return J
     
-    def evaluate_ikp_iterative(
+    def generate_ik_solutions(
         self,
-        num_poses: int,
+        P: np.ndarray,
         num_sols: int,
-        batch_size: int = 5000,
-        std: float = 0.25,
-        success_threshold: Tuple[float, float] = (1e-4, 1e-4),
-        select_reference: str = "knn",
+        std: Optional[float] = None,
+        latent: Optional[np.ndarray] = None,
+        batch_size: int = 4000,
         verbose: bool = True,
-    ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
-        self.base_std = std
-        # Randomly sample poses from test set
-        _, P = self.robot.sample_joint_angles_and_poses(n=num_poses)
-        time_begin = time()
-
-        # Begin inference
+    ):
+        if std is not None and std != self.base_std:
+            self.base_std = std
+        if latent is not None:
+            self.latent = latent
         J_hat = self.solve_batch(P, num_sols, batch_size=batch_size, verbose=verbose)
-
-        l2, ang = self.evaluate_pose_error_J3d_P2d(J_hat, P, return_all=True)
-        avg_inference_time = round((time() - time_begin) / num_poses, 3)
-
-        df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
-        print(df.describe())
-
-        print(
-            tabulate(
-                [
-                    [
-                        np.round(l2.mean() * 1e3, decimals=2),
-                        np.round(np.rad2deg(ang.mean()), decimals=2),
-                        np.round(avg_inference_time * 1e3, decimals=0),
-                    ]
-                ],
-                headers=[
-                    "l2 (mm)",
-                    "ang (deg)",
-                    "inference_time (ms)",
-                ],
-            )
-        )
-
-        return tuple(
-            [
-                l2.mean(),
-                ang.mean(),
-                avg_inference_time,
-                round(
-                    len(
-                        df.query(
-                            f"l2 < {success_threshold[0]} & ang < {success_threshold[1]}"
-                        )
-                    )
-                    / (num_poses * num_sols),
-                    3,
-                ),
-            ]
-        )
+        return J_hat
+    
         

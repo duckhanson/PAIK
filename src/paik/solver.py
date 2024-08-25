@@ -584,17 +584,7 @@ class Solver:
             return l2, ang
         return l2.mean(), ang.mean()
 
-    def generate_ik_solutions(
-        self,
-        P: np.ndarray,
-        num_sols: int,
-        F: Optional[np.ndarray] = None,
-        std: Optional[float] = None,
-        latent: Optional[np.ndarray] = None,
-        select_reference: str = "knn",
-        batch_size: int = 4000,
-        verbose: bool = True,
-    ):
+    def generate_ik_solutions(self, *args, **kwargs):
         raise NotImplementedError("generate_ik_solutions not implemented.")
 
     def random_ikp(

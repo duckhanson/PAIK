@@ -32,7 +32,7 @@ sweep_config = {
         "num_bins": {"value": 10},
         "lr_beta_l": {"value": 93*1e-2},
         "lr_beta_h": {"value": 94*1e-2},
-        "lr": {"values": get_range(50, 80, 1e-5)}, # 40 - 80
+        "lr": {"values": get_range(50, 80, 1e-5)},  # 40 - 80
         "lr_weight_decay": {"values": get_range(16, 20, 1e-3)},
         "noise_esp": {"value": 31*1e-4},
         "noise_esp_decay": {"value": 98*1e-2},
@@ -58,13 +58,13 @@ def main() -> None:
     solver_param.base_std = wandb.config.base_std
     solver_param.lr_beta = (wandb.config.lr_beta_l, wandb.config.lr_beta_h)
     solver_param.workdir = WORK_DIR
-    
+
     # train nsf model, check use_nsf_only is True
     assert solver_param.use_nsf_only, "use_nsf_only must be True"
 
     trainer = Trainer(solver_param=solver_param)
 
-    trainer.solver.evaluate_ikp_iterative(num_poses=100, num_sols=1000, verbose=False)
+    trainer.solver.random_ikp(num_poses=100, num_sols=1000, verbose=False)
 
     trainer.mini_train(
         num_epochs=NUM_EPOCHS,

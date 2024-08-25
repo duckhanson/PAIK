@@ -40,17 +40,19 @@ class Trainer:
         self.__noise_esp = self.param.noise_esp
         self.__noise_esp_decay = self.param.noise_esp_decay  # 0.8 - 0.9
         self.__noise_scale = 1 / self.__noise_esp
-        
+
     def get_train_loader(self, batch_size: int):
         """Get the training data loader."""
-        
+
         # add noise
         if self.__noise_esp < 1e-9:
             noise_std = np.zeros((len(self.solver.P), 1))
         else:
-            noise_std = self.__noise_esp * np.random.rand(len(self.solver.P), 1)
+            noise_std = self.__noise_esp * \
+                np.random.rand(len(self.solver.P), 1)
         J = self.solver.normalize_input_data(
-            self.solver.J + noise_std * np.random.randn(*self.solver.J.shape), "J"
+            self.solver.J + noise_std *
+            np.random.randn(*self.solver.J.shape), "J"
         )
         if isinstance(self.solver, NSF):
             C = self.solver.normalize_input_data(
@@ -87,7 +89,7 @@ class Trainer:
         seed=42,
     ) -> None:
         """Train the model for a few epochs."""
-        
+
         init_seeds(seed=seed)
         early_stopping = EarlyStopping(
             patience=patience,
@@ -98,7 +100,8 @@ class Trainer:
         assert self.solver._device == "cuda", "device should be cuda"
 
         def update_noise_esp(num_epochs):
-            self.__noise_esp = self.param.noise_esp * (self.__noise_esp_decay**num_epochs)
+            self.__noise_esp = self.param.noise_esp * \
+                (self.__noise_esp_decay**num_epochs)
 
         self._solver.train()
 
@@ -120,7 +123,7 @@ class Trainer:
 
             update_noise_esp(ep)
 
-            avg_pos_errs, avg_ori_errs, _, _ = self.solver.evaluate_ikp_iterative(  # type: ignore
+            avg_pos_errs, avg_ori_errs, _= self.solver.random_ikp(  # type: ignore
                 num_poses=num_eval_poses, num_sols=num_eval_sols, verbose=False
             )  # type: ignore
             self.solver.base_std = self.param.base_std  # type: ignore
@@ -128,7 +131,8 @@ class Trainer:
             self.solver._scheduler.step(avg_pos_errs)  # type: ignore
 
             log_info = {
-                "lr": self.solver._optimizer.param_groups[0]["lr"],  # type: ignore
+                # type: ignore
+                "lr": self.solver._optimizer.param_groups[0]["lr"],
                 "position_errors": avg_pos_errs,
                 "orientation_errors": avg_ori_errs,
                 "train_loss": batch_loss.mean(),
@@ -137,7 +141,8 @@ class Trainer:
 
             wandb.log(log_info)
 
-            early_stopping(avg_pos_errs, self.solver, begin_time)  # type: ignore
+            early_stopping(avg_pos_errs, self.solver,
+                           begin_time)  # type: ignore
 
             if early_stopping.early_stop:
                 print("Early stopping")

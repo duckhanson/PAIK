@@ -20,6 +20,7 @@ from .evaluate import evaluate_pose_error_P2d_P2d
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 
+
 def get_solver(arch_name: str, robot_name: str, load: bool = False, work_dir: str = os.path.abspath(os.getcwd())) -> Solver:
     """
     Get the solver with the given architecture and robot.
@@ -36,20 +37,21 @@ def get_solver(arch_name: str, robot_name: str, load: bool = False, work_dir: st
 
     if arch_name == "paik":
         solver = PAIK(
-            solver_param=solver_param, # type: ignore
+            solver_param=solver_param,  # type: ignore
             load_date="best" if load else "",
             work_dir=work_dir,
         )
     elif arch_name == "nsf":
         solver = NSF(
-            solver_param=solver_param, # type: ignore
+            solver_param=solver_param,  # type: ignore
             load_date="best" if load else "",
             work_dir=work_dir,
         )
     else:
         raise NotImplementedError(f"Architecture {arch_name} not supported.")
-    
+
     return solver
+
 
 def get_solver_from_config(solver_param: SolverConfig, load: bool = False) -> Solver:
     """
@@ -64,20 +66,22 @@ def get_solver_from_config(solver_param: SolverConfig, load: bool = False) -> So
     """
     if solver_param.model_architecture == "paik":
         solver = PAIK(
-            solver_param=solver_param, # type: ignore
+            solver_param=solver_param,  # type: ignore
             load_date="best" if load else "",
             work_dir=solver_param.workdir,
         )
     elif solver_param.model_architecture == "nsf":
         solver = NSF(
-            solver_param=solver_param, # type: ignore
+            solver_param=solver_param,  # type: ignore
             load_date="best" if load else "",
             work_dir=solver_param.workdir,
         )
     else:
-        raise NotImplementedError(f"Architecture {solver_param.model_architecture} not supported.")
-    
+        raise NotImplementedError(
+            f"Architecture {solver_param.model_architecture} not supported.")
+
     return solver
+
 
 class Solver:
     def __init__(
@@ -98,7 +102,6 @@ class Solver:
             raise NotImplementedError("Not support HNNE.")
         else:
             print(f"[INFO] use_dimension_reduction is False, use clustering.")
-        
 
     @property
     def base_std(self):
@@ -172,11 +175,11 @@ class Solver:
                 top3_date["date"][save_idx] != ""
                 and top3_date["date"][save_idx] != date
             ):
-                self.remove_by_date(top3_date["date"][save_idx])
+                self._remove_by_date(top3_date["date"][save_idx])
             top3_date["date"][save_idx] = date
             top3_date["l2"][save_idx] = l2
             save_pickle(top3_date_path, top3_date)
-            self.save_by_date(date)
+            self._save_by_date(date)
             print(
                 f"[SUCCESS] save the date {date} with l2 {l2:.5f} in {top3_date_path}"
             )
@@ -184,7 +187,7 @@ class Solver:
             f"[INFO] top3 dates: {top3_date['date']}, top3 l2: {top3_date['l2']}")
 
     # remove by date
-    def remove_by_date(self, date: str):
+    def _remove_by_date(self, date: str):
         if isdir(os.path.join(self.param.weight_dir, date)):
             shutil.rmtree(os.path.join(
                 self.param.weight_dir, date), ignore_errors=True)
@@ -195,7 +198,7 @@ class Solver:
             )
 
     # save model, J, P, F, J_knn, P_knn in the directory of date in the weight_dir
-    def save_by_date(self, date: str):
+    def _save_by_date(self, date: str):
         save_dir = os.path.join(self.param.weight_dir, date)
         os.makedirs(save_dir, exist_ok=True)
         torch.save(
@@ -219,7 +222,7 @@ class Solver:
             print(f"[INFO] J, P, F, J_knn, P_knn already exist in {save_dir}.")
         print(f"[SUCCESS] save model, J, P, F, J_knn, P_knn in {save_dir}")
 
-    def load_by_date(self, date: str):
+    def _load_by_date(self, date: str):
         if not isdir(os.path.join(self.param.weight_dir, date)):
             raise FileNotFoundError(
                 f"{date} not found in {self.param.weight_dir}.")
@@ -254,7 +257,7 @@ class Solver:
         else:
             return os.path.join(self.param.weight_dir, "top3_date_paik.pth")
 
-    def load_best_date(self):
+    def _load_best_date(self):
         top3_date_path = self._top3_date_path()
 
         if not os.path.exists(top3_date_path):
@@ -265,7 +268,7 @@ class Solver:
 
         best_date = top3_date["date"][top3_date["l2"].index(
             min(top3_date["l2"]))]
-        self.load_by_date(best_date)
+        self._load_by_date(best_date)
         print(
             f"[SUCCESS] load best date {best_date} with l2 {min(top3_date['l2']):.5f} from {top3_date_path}."
         )
@@ -280,13 +283,13 @@ class Solver:
                 "std": np.concatenate((self.C.std(axis=0), np.ones((1)))) + 1e-6,
             },
         }
-        
+
     def _load_J_P(self):
         """
         Load J and P from the given path, if not found, generate and save it.
         """
         J, P = [load_numpy(file_path=self._load_JPF_path(name))
-                   for name in ["J", "P"]]
+                for name in ["J", "P"]]
 
         if J is None or P is None:
             print(
@@ -300,7 +303,7 @@ class Solver:
                 f"[SUCCESS] J and P saved in {self._load_JPF_path('J')} and {self._load_JPF_path('P')}.")
 
         self.J, self.P = J, P
-        
+
     def _load_JPF_path(self, name: str):
         """
         JPF path for saving and loading J, P, F.
@@ -309,7 +312,7 @@ class Solver:
             self.param.train_dir
         ), f"{self.param.train_dir} not found, please change workdir to the project root!"
         return f"{self.param.train_dir}/{name}-{self.param.N}-{self.n}-{self.m}-{self.r}.npy"
-        
+
     def _load_F(self):
         """
         Load F from the given path, if not found, generate and save it.
@@ -355,11 +358,12 @@ class Solver:
             print(f"[SUCCESS] F saved in {self._load_JPF_path('F')}.")
 
         self.F = F
-        
+
         if not self.param.use_dimension_reduction:
             # check if numbers of F are integers
-            assert np.allclose(self.F, self.F.astype(int)), "F should be integers."
-        
+            assert np.allclose(self.F, self.F.astype(int)
+                               ), "F should be integers."
+
     def _load_training_data(self):
         """
         Load training data from the given path, if not found, generate and save it.
@@ -368,7 +372,7 @@ class Solver:
         self._load_F()
 
         self.C = np.column_stack((self.P, self.F))
-        
+
         self._compute_normalizing_elements()
         self._load_knn()
 
@@ -376,7 +380,7 @@ class Solver:
         """
         Load knn models from the given path, if not found, generate and save it.
         """
-        
+
         path_P_knn = f"{self.param.weight_dir}/P_knn-{self.param.N}-{self.n}-{self.m}-{self.r}.pth"
         try:
             self.P_knn = load_pickle(path_P_knn)
@@ -431,12 +435,13 @@ class Solver:
         Returns:
             np.ndarray: normalized data
         """
-        norm = (data - self._normalization_elements[name]["mean"]) / self._normalization_elements[name]["std"]
+        norm = (data - self._normalization_elements[name]
+                ["mean"]) / self._normalization_elements[name]["std"]
         if return_torch:
             return torch.from_numpy(
                 norm.astype(np.float32)
             ).to(self._device)
-        
+
         return norm
 
     def denormalize_output_data(self, data: np.ndarray, name: str) -> np.ndarray:
@@ -456,12 +461,13 @@ class Solver:
         )
 
     def _solve_conditions(self, conditions: np.ndarray, num_sols: int):
-        conditions_torch = self.normalize_input_data(conditions, "C", return_torch=True)
+        conditions_torch = self.normalize_input_data(
+            conditions, "C", return_torch=True)
         with torch.inference_mode():
             J = self._solver(conditions_torch).sample((num_sols,))
         return self.denormalize_output_data(J.detach().cpu().numpy(), "J")
 
-    def make_divisible_C(
+    def _get_divisible_conditions(
         self, C: np.ndarray, batch_size: int
     ) -> tuple[np.ndarray, int]:
         """
@@ -481,7 +487,7 @@ class Solver:
                            axis=0) if complementary > 0 else C
         return C, complementary
 
-    def remove_complementary_J(self, J: np.ndarray, complementary: int) -> np.ndarray:
+    def _remove_complementary_ik_solutions(self, J: np.ndarray, complementary: int) -> np.ndarray:
         """
         Remove the complementary conditions from J.
 
@@ -494,26 +500,26 @@ class Solver:
         """
         assert J.ndim == 2
         return J[:-complementary] if complementary > 0 else J
-    
+
     def _get_conditions(self, P: np.ndarray, F: Optional[np.ndarray] = None):
         if F is None:
             return np.column_stack((P, np.zeros((len(P), 1))))
         else:
             return np.column_stack((P, F, np.zeros((len(F), 1))))
-    
+
     def _get_conditions_batch(self, P: np.ndarray, num_sols: int, batch_size: int, F: Optional[np.ndarray] = None):
         # shape: (num_poses, C.shape[-1] = m + r + 1)
         C = self._get_conditions(P, F)
         C = self.normalize_input_data(C, "C")
         # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
         C = np.tile(C, (num_sols, 1))
-        C, complementary = self.make_divisible_C(C, batch_size)
+        C, complementary = self._get_divisible_conditions(C, batch_size)
         C = torch.from_numpy(
             C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])
-        ).to(self._device)  
+        ).to(self._device)
         return C, complementary
-    
-    def _solve_conditions_batch(self, C: np.ndarray, num_sols: int, complementary: int, verbose: bool=False) -> np.ndarray:
+
+    def _solve_conditions_batch(self, C: np.ndarray, num_sols: int, complementary: int, verbose: bool = False) -> np.ndarray:
         """
         Solve inverse kinematics problem in batch.
 
@@ -526,20 +532,19 @@ class Solver:
         batch_size = C.shape[1]
         J = torch.empty((len(C), batch_size, self._robot.n_dofs),
                         device=self._device)
-        
+
         iterator = trange(len(C)) if verbose else range(len(C))
         with torch.inference_mode():
             for i in iterator:
                 J[i] = self._solver(C[i]).sample()
 
         J = J.detach().cpu().numpy()
-        J = self.remove_complementary_J(
+        J = self._remove_complementary_ik_solutions(
             J.reshape(-1, self._robot.n_dofs), complementary
         )
         return self.denormalize_output_data(
             J.reshape(num_sols, -1, self._robot.n_dofs), "J"
         )
-
 
     def evaluate_pose_error_J3d_P2d(
         self,
@@ -579,7 +584,6 @@ class Solver:
             return l2, ang
         return l2.mean(), ang.mean()
 
-
     def generate_ik_solutions(
         self,
         P: np.ndarray,
@@ -593,13 +597,13 @@ class Solver:
     ):
         raise NotImplementedError("generate_ik_solutions not implemented.")
 
-    def evaluate_ikp_iterative(
+    def random_ikp(
         self,
         num_poses: int,
         num_sols: int,
         batch_size: int = 5000,
         std: float = 0.25,
-        success_threshold: Tuple[float, float] = (1e-4, 1e-4),
+        # success_threshold: Tuple[float, float] = (1e-4, 1e-4),
         select_reference: str = "knn",
         verbose: bool = True,
     ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
@@ -608,7 +612,8 @@ class Solver:
         _, P = self.robot.sample_joint_angles_and_poses(n=num_poses)
         time_begin = time()
 
-        J_hat = self.generate_ik_solutions(P=P, num_sols=num_sols, batch_size=batch_size, verbose=verbose)
+        J_hat = self.generate_ik_solutions(
+            P=P, num_sols=num_sols, batch_size=batch_size, verbose=verbose)
 
         l2, ang = self.evaluate_pose_error_J3d_P2d(J_hat, P, return_all=True)
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
@@ -638,15 +643,15 @@ class Solver:
                 l2.mean(),
                 ang.mean(),
                 avg_inference_time,
-                round(
-                    len(
-                        df.query(
-                            f"l2 < {success_threshold[0]} & ang < {success_threshold[1]}"
-                        )
-                    )
-                    / (num_poses * num_sols),
-                    3,
-                ),
+                # round(
+                #     len(
+                #         df.query(
+                #             f"l2 < {success_threshold[0]} & ang < {success_threshold[1]}"
+                #         )
+                #     )
+                #     / (num_poses * num_sols),
+                #     3,
+                # ),
             ]
         )
 
@@ -659,17 +664,16 @@ class PAIK(Solver):
         work_dir: str = os.path.abspath(os.getcwd()),
     ) -> None:
         super().__init__(solver_param, load_date, work_dir)
-        
+
         try:
             if load_date == "best":
-                self.load_best_date()
+                self._load_best_date()
             else:
-                self.load_by_date(load_date)
+                self._load_by_date(load_date)
         except FileNotFoundError as e:
             print(f"[WARNING] {e}. Load training data instead.")
             self._load_training_data()
-    
-    
+
     def get_reference_partition_label(
         self, P: np.ndarray, select_reference: str = "knn", num_sols: int = 1
     ):
@@ -690,12 +694,13 @@ class PAIK(Solver):
             # randomly pick one posture from train set
             return self.F[np.random.randint(0, len(self.F), len(P))]
         else:
-            raise NotImplementedError(f"select_reference {select_reference} not supported.")
+            raise NotImplementedError(
+                f"select_reference {select_reference} not supported.")
 
     def generate_ik_solutions(
         self,
         P: np.ndarray,
-        num_sols: int=1,
+        num_sols: int = 1,
         F: Optional[np.ndarray] = None,
         std: Optional[float] = None,
         latent: Optional[np.ndarray] = None,
@@ -710,14 +715,16 @@ class PAIK(Solver):
             self.base_std = std
         if latent is not None:
             self.latent = latent
-        
+
         if len(P) * num_sols < batch_size:
             conditions = self._get_conditions(P, F)
             return self._solve_conditions(conditions, num_sols)
 
-        C, complementary = self._get_conditions_batch(P=P, num_sols=num_sols, batch_size=batch_size, F=F)
+        C, complementary = self._get_conditions_batch(
+            P=P, num_sols=num_sols, batch_size=batch_size, F=F)
         return self._solve_conditions_batch(C, num_sols, complementary, verbose)
-        
+
+
 class NSF(Solver):
     def __init__(
         self,
@@ -726,16 +733,16 @@ class NSF(Solver):
         work_dir: str = os.path.abspath(os.getcwd()),
     ) -> None:
         super().__init__(solver_param, load_date, work_dir)
-        
+
         try:
             if load_date == "best":
-                self.load_best_date()
+                self._load_best_date()
             else:
-                self.load_by_date(load_date)
+                self._load_by_date(load_date)
         except FileNotFoundError as e:
             print(f"[WARNING] {e}. Load training data instead.")
             self._load_training_data()
-        
+
     def _load_training_data(self):
         """
         Load training data from the given path, if not found, generate and save it.
@@ -743,10 +750,10 @@ class NSF(Solver):
         self._load_J_P()
 
         self.C = self.P
-        
+
         self._compute_normalizing_elements()
         self._load_knn()
-    
+
     def generate_ik_solutions(
         self,
         P: np.ndarray,
@@ -760,12 +767,11 @@ class NSF(Solver):
             self.base_std = std
         if latent is not None:
             self.latent = latent
-            
+
         if len(P) * num_sols < batch_size:
             C = self._get_conditions(P)
             return self._solve_conditions(C, num_sols)
 
-        C, complementary = self._get_conditions_batch(P=P, num_sols=num_sols, batch_size=batch_size)
+        C, complementary = self._get_conditions_batch(
+            P=P, num_sols=num_sols, batch_size=batch_size)
         return self._solve_conditions_batch(C, num_sols, complementary, verbose)
-    
-        

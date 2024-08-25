@@ -37,7 +37,7 @@ if __name__ == "__main__":
     _, P = nsf_solver.robot.sample_joint_angles_and_poses(config.num_poses)
     
     # Experiment shows the first execute of random_ikp is slow, so we execute a dummy one.
-    _ = random_ikp(paik_solver, P, config.num_sols, paik_batch, std=std, verbose=False)
+    random_ikp(paik_solver, P, config.num_sols, paik_batch, std=std, verbose=False)
     
     J_nsf, l2_nsf, l2_std_nsf, ang_nsf, ang_std_nsf = random_ikp(nsf_solver, P, config.num_sols, nsf_batch, std=std, verbose=True)
     J_paik, l2_paik, l2_std_paik, ang_paik, ang_std_paik = random_ikp(paik_solver, P, config.num_sols, paik_batch, std=std, verbose=True)

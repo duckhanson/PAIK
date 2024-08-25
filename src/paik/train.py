@@ -42,6 +42,8 @@ class Trainer:
         self.__noise_scale = 1 / self.__noise_esp
         
     def get_train_loader(self, batch_size: int):
+        """Get the training data loader."""
+        
         # add noise
         if self.__noise_esp < 1e-9:
             noise_std = np.zeros((len(self.solver.P), 1))
@@ -84,6 +86,8 @@ class Trainer:
         num_eval_sols=100,
         seed=42,
     ) -> None:
+        """Train the model for a few epochs."""
+        
         init_seeds(seed=seed)
         early_stopping = EarlyStopping(
             patience=patience,
@@ -142,18 +146,7 @@ class Trainer:
         print("Finished Training")
 
     def train_step(self, batch):
-        """
-        _summary_
-
-        Args:
-            model (_type_): _description_
-            batch (_type_): _description_
-            optimizer (_type_): _description_
-            scheduler (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
+        """Train step for a single batch."""
         x, y = batch
         loss = -self._solver(y).log_prob(x)  # -log p(x | y)
         loss = loss.mean()

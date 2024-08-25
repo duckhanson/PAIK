@@ -64,12 +64,7 @@ def main() -> None:
 
     trainer = Trainer(solver_param=solver_param)
 
-    (
-        avg_l2_errs,
-        avg_ang_errs,
-        avg_inference_time,  # type: ignore
-        _,
-    ) = trainer.solver.evaluate_ikp_iterative(num_poses=100, num_sols=1000, verbose=False)
+    trainer.solver.evaluate_ikp_iterative(num_poses=100, num_sols=1000, verbose=False)
 
     trainer.mini_train(
         num_epochs=NUM_EPOCHS,

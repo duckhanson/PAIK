@@ -4,7 +4,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from paik.solver import get_solver
+from paik.solver import Solver, NSF, PAIK, get_solver
 
 from common.config import Config_Diversity
 from common.file import save_diversity, load_poses_and_numerical_ik_sols
@@ -31,7 +31,7 @@ def numerical_inverse_kinematics_batch(solver, P, num_sols) -> np.ndarray[Any, A
         [numerical_inverse_kinematics_single(solver, p, num_sols) for p in tqdm(P)]
     ).reshape(1, -1, solver.n)
     
-def paik_batch(solver: Solver, P, num_sols, std=0.001):
+def paik_batch(solver: PAIK, P, num_sols, std=0.001):
     # P.shape = (num_poses, m)
     # return shape: (1, num_poses*num_sols, n)
     
@@ -46,12 +46,11 @@ def paik_batch(solver: Solver, P, num_sols, std=0.001):
     P_num_sols = P_num_sols.reshape(-1, P.shape[-1])
     
     # shape: (1, num_poses * num_sols, n)
-    J_hat = solver.solve_batch(P_num_sols, F, 1)
+    J_hat = solver.generate_ik_solutions(P=P_num_sols, F=F)
     
-    # return shape: (1, num_poses*num_sols, n)
     return J_hat
 
-def nsf_batch(solver: Solver, P, num_sols, std=0.001):
+def nsf_batch(solver: NSF, P, num_sols, std=0.001):
     # shape: (num_poses, num_sols, m)
     P_num_sols = np.expand_dims(P, axis=1).repeat(num_sols, axis=1)
     solver.base_std = std
@@ -59,11 +58,9 @@ def nsf_batch(solver: Solver, P, num_sols, std=0.001):
     # shape: (num_poses * num_sols, n)
     P_num_sols = P_num_sols.reshape(-1, P.shape[-1])
     
-    # shape: (num_poses * num_sols)
-    F = np.zeros((P_num_sols.shape[0], 1))
-    
     # shape: (1, num_poses * num_sols, n)
-    J_hat = solver.solve_batch(P_num_sols, F, 1)
+    J_hat = solver.generate_ik_solutions(P=P_num_sols, num_sols=1)
+    
     return J_hat
 
 def random_ikp(solver: Solver, P: np.ndarray, num_sols: int, solve_fn_batch: Any, std: float=None, verbose: bool=False):
@@ -331,15 +328,15 @@ def plot_iterate_over_stds(config: Config_Diversity, nsf_solver: Solver, paik_so
 
 if __name__ == "__main__":
     config = Config_Diversity()
-    config.num_poses = 500
+    config.num_poses = 100 # 500
     config.num_sols = 200
 
     nsf_solver = get_solver(arch_name="nsf", robot_name="panda", load=True, work_dir=config.workdir)
     paik_solver = get_solver(arch_name="paik", robot_name="panda", load=True, work_dir=config.workdir)
 
-    plot_iterate_over_num_sols_array(config, nsf_solver, paik_solver)    
+    # plot_iterate_over_num_sols_array(config, nsf_solver, paik_solver)    
     plot_iterate_over_stds(config, nsf_solver, paik_solver)
-    plot_iterate_over_num_poses_array(config, nsf_solver, paik_solver)
+    # plot_iterate_over_num_poses_array(config, nsf_solver, paik_solver)
     
     # load df from csv
     # path = f"{config.record_dir}/diversity_over_stds.csv"

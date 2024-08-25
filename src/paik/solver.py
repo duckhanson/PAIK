@@ -540,36 +540,6 @@ class Solver:
             J.reshape(num_sols, -1, self._robot.n_dofs), "J"
         )
 
-    # def solve_batch(
-    #     self,
-    #     P: np.ndarray,
-    #     num_sols: int,
-    #     F: Optional[np.ndarray] = None,
-    #     batch_size: int = 4000,
-    #     verbose: bool = True,
-    # ) -> np.ndarray:
-    #     """
-    #     Solve inverse kinematics problem in batch.
-
-    #     Args:
-    #         P (np.ndarray): poses with shape (num_poses, m)
-    #         F (np.ndarray): F with shape (num_poses, r)
-    #         num_sols (int): number of solutions
-    #         batch_size (int, optional): batch size. Defaults to 4000.
-    #         verbose (bool, optional): use trange or not. Defaults to True.
-
-    #     Returns:
-    #         np.ndarray: J with shape (num_sols, num_poses, num_dofs)
-    #     """
-
-    #     if len(P) * num_sols < batch_size:
-    #         conditions = self._get_conditions(P, F)
-    #         return self._solve_conditions(conditions, num_sols)
-
-    #     C, complementary = self._get_conditions_batch(P=P, num_sols=num_sols, batch_size=batch_size, F=F)
-    #     J = self._solve_conditions_batch(C, num_sols, complementary, verbose)
-        
-    #     return J
 
     def evaluate_pose_error_J3d_P2d(
         self,
@@ -725,7 +695,7 @@ class PAIK(Solver):
     def generate_ik_solutions(
         self,
         P: np.ndarray,
-        num_sols: int,
+        num_sols: int=1,
         F: Optional[np.ndarray] = None,
         std: Optional[float] = None,
         latent: Optional[np.ndarray] = None,

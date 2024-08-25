@@ -71,7 +71,6 @@ class Solver:
             raise NotImplementedError("Not support HNNE.")
         else:
             print(f"[INFO] use_dimension_reduction is False, use clustering.")
-
         
 
     @property

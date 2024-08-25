@@ -310,7 +310,6 @@ class Solver:
         ), f"{self.param.train_dir} not found, please change workdir to the project root!"
         return f"{self.param.train_dir}/{name}-{self.param.N}-{self.n}-{self.m}-{self.r}.npy"
         
-        
     def _load_F(self):
         """
         Load F from the given path, if not found, generate and save it.
@@ -361,7 +360,6 @@ class Solver:
             # check if numbers of F are integers
             assert np.allclose(self.F, self.F.astype(int)), "F should be integers."
         
-
     def _load_training_data(self):
         """
         Load training data from the given path, if not found, generate and save it.
@@ -371,7 +369,6 @@ class Solver:
 
         self.C = np.column_stack((self.P, self.F))
         
-        # for normalization
         self._compute_normalizing_elements()
         self._load_knn()
 
@@ -458,24 +455,10 @@ class Solver:
             + self._normalization_elements[name]["mean"]
         )
 
-    def solve(self, P: np.ndarray, F: np.ndarray, num_sols: int) -> np.ndarray:
-        """
-        Solve inverse kinematics problem.
-
-        Args:
-            P (np.ndarray): poses as least 2D array
-            F (np.ndarray): posture features as least 2D array
-            num_sols (int): number of solutions
-
-        Returns:
-            np.ndarray: J with shape (num_sols, num_poses, num_dofs)
-        """
-        C = self.normalize_input_data(
-            np.column_stack((P, F, np.zeros((len(F), 1)))), "C"
-        )
-        C = torch.from_numpy(C.astype(np.float32)).to(self._device)
+    def _solve_conditions(self, conditions: np.ndarray, num_sols: int):
+        conditions_torch = self.normalize_input_data(conditions, "C", return_torch=True)
         with torch.inference_mode():
-            J = self._solver(C).sample((num_sols,))
+            J = self._solver(conditions_torch).sample((num_sols,))
         return self.denormalize_output_data(J.detach().cpu().numpy(), "J")
 
     def make_divisible_C(
@@ -512,9 +495,15 @@ class Solver:
         assert J.ndim == 2
         return J[:-complementary] if complementary > 0 else J
     
-    def _get_batch_C(self, P: np.ndarray, F: np.ndarray, num_sols: int, batch_size: int):
+    def _get_conditions(self, P: np.ndarray, F: Optional[np.ndarray] = None):
+        if F is None:
+            return np.column_stack((P, np.zeros((len(P), 1))))
+        else:
+            return np.column_stack((P, F, np.zeros((len(F), 1))))
+    
+    def _get_conditions_batch(self, P: np.ndarray, num_sols: int, batch_size: int, F: Optional[np.ndarray] = None):
         # shape: (num_poses, C.shape[-1] = m + r + 1)
-        C = np.column_stack((P, F, np.zeros((len(F), 1))))
+        C = self._get_conditions(P, F)
         C = self.normalize_input_data(C, "C")
         # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
         C = np.tile(C, (num_sols, 1))
@@ -524,7 +513,7 @@ class Solver:
         ).to(self._device)  
         return C, complementary
     
-    def _solve_C_batch(self, C: np.ndarray, num_sols: int, complementary: int, verbose: bool=False) -> np.ndarray:
+    def _solve_conditions_batch(self, C: np.ndarray, num_sols: int, complementary: int, verbose: bool=False) -> np.ndarray:
         """
         Solve inverse kinematics problem in batch.
 
@@ -551,35 +540,36 @@ class Solver:
             J.reshape(num_sols, -1, self._robot.n_dofs), "J"
         )
 
-    def solve_batch(
-        self,
-        P: np.ndarray,
-        F: np.ndarray,
-        num_sols: int,
-        batch_size: int = 4000,
-        verbose: bool = True,
-    ) -> np.ndarray:
-        """
-        Solve inverse kinematics problem in batch.
+    # def solve_batch(
+    #     self,
+    #     P: np.ndarray,
+    #     num_sols: int,
+    #     F: Optional[np.ndarray] = None,
+    #     batch_size: int = 4000,
+    #     verbose: bool = True,
+    # ) -> np.ndarray:
+    #     """
+    #     Solve inverse kinematics problem in batch.
 
-        Args:
-            P (np.ndarray): poses with shape (num_poses, m)
-            F (np.ndarray): F with shape (num_poses, r)
-            num_sols (int): number of solutions
-            batch_size (int, optional): batch size. Defaults to 4000.
-            verbose (bool, optional): use trange or not. Defaults to True.
+    #     Args:
+    #         P (np.ndarray): poses with shape (num_poses, m)
+    #         F (np.ndarray): F with shape (num_poses, r)
+    #         num_sols (int): number of solutions
+    #         batch_size (int, optional): batch size. Defaults to 4000.
+    #         verbose (bool, optional): use trange or not. Defaults to True.
 
-        Returns:
-            np.ndarray: J with shape (num_sols, num_poses, num_dofs)
-        """
+    #     Returns:
+    #         np.ndarray: J with shape (num_sols, num_poses, num_dofs)
+    #     """
 
-        if len(P) * num_sols < batch_size:
-            return self.solve(P, F, num_sols)
+    #     if len(P) * num_sols < batch_size:
+    #         conditions = self._get_conditions(P, F)
+    #         return self._solve_conditions(conditions, num_sols)
 
-        C, complementary = self._get_batch_C(P, F, num_sols, batch_size)
-        J = self._solve_C_batch(C, num_sols, complementary, verbose)
+    #     C, complementary = self._get_conditions_batch(P=P, num_sols=num_sols, batch_size=batch_size, F=F)
+    #     J = self._solve_conditions_batch(C, num_sols, complementary, verbose)
         
-        return J
+    #     return J
 
     def evaluate_pose_error_J3d_P2d(
         self,
@@ -619,27 +609,6 @@ class Solver:
             return l2, ang
         return l2.mean(), ang.mean()
 
-    def get_reference_partition_label(
-        self, P: np.ndarray, select_reference: str = "knn", num_sols: int = 1
-    ):
-        if select_reference == "knn":
-            # type: ignore
-            n_neighbors = min(num_sols, 10)
-            F = self.F[
-                self.P_knn.kneighbors(
-                    np.atleast_2d(P), n_neighbors=n_neighbors, return_distance=False
-                )
-            ].reshape(-1, n_neighbors)
-            # expand F to match the number of solutions by random sampling for each pose
-            return np.asarray([np.random.choice(f, num_sols, replace=True) for f in np.atleast_2d(F)]).flatten()
-        elif select_reference == "random":
-            min_F, max_F = np.min(self.F), np.max(self.F)
-            return np.random.rand(len(P), self.r) * (max_F - min_F) + min_F
-        elif select_reference == "pick":
-            # randomly pick one posture from train set
-            return self.F[np.random.randint(0, len(self.F), len(P))]
-        else:
-            raise NotImplementedError(f"select_reference {select_reference} not supported.")
 
     def generate_ik_solutions(
         self,
@@ -652,15 +621,7 @@ class Solver:
         batch_size: int = 4000,
         verbose: bool = True,
     ):
-        if F is None:
-            F = self.get_reference_partition_label(P, select_reference)
-        assert len(P) == len(F), "P and F should have the same length."
-        if std is not None and std != self.base_std:
-            self.base_std = std
-        if latent is not None:
-            self.latent = latent
-        J_hat = self.solve_batch(P, F, num_sols, batch_size, verbose)
-        return J_hat
+        raise NotImplementedError("generate_ik_solutions not implemented.")
 
     def evaluate_ikp_iterative(
         self,
@@ -737,6 +698,55 @@ class PAIK(Solver):
         except FileNotFoundError as e:
             print(f"[WARNING] {e}. Load training data instead.")
             self._load_training_data()
+    
+    
+    def get_reference_partition_label(
+        self, P: np.ndarray, select_reference: str = "knn", num_sols: int = 1
+    ):
+        if select_reference == "knn":
+            # type: ignore
+            n_neighbors = min(num_sols, 10)
+            F = self.F[
+                self.P_knn.kneighbors(
+                    np.atleast_2d(P), n_neighbors=n_neighbors, return_distance=False
+                )
+            ].reshape(-1, n_neighbors)
+            # expand F to match the number of solutions by random sampling for each pose
+            return np.asarray([np.random.choice(f, num_sols, replace=True) for f in np.atleast_2d(F)]).flatten()
+        elif select_reference == "random":
+            min_F, max_F = np.min(self.F), np.max(self.F)
+            return np.random.rand(len(P), self.r) * (max_F - min_F) + min_F
+        elif select_reference == "pick":
+            # randomly pick one posture from train set
+            return self.F[np.random.randint(0, len(self.F), len(P))]
+        else:
+            raise NotImplementedError(f"select_reference {select_reference} not supported.")
+
+    def generate_ik_solutions(
+        self,
+        P: np.ndarray,
+        num_sols: int,
+        F: Optional[np.ndarray] = None,
+        std: Optional[float] = None,
+        latent: Optional[np.ndarray] = None,
+        select_reference: str = "knn",
+        batch_size: int = 4000,
+        verbose: bool = True,
+    ):
+        if F is None:
+            F = self.get_reference_partition_label(P, select_reference)
+        assert len(P) == len(F), "P and F should have the same length."
+        if std is not None and std != self.base_std:
+            self.base_std = std
+        if latent is not None:
+            self.latent = latent
+        
+        if len(P) * num_sols < batch_size:
+            conditions = self._get_conditions(P, F)
+            return self._solve_conditions(conditions, num_sols)
+
+        C, complementary = self._get_conditions_batch(P=P, num_sols=num_sols, batch_size=batch_size, F=F)
+        return self._solve_conditions_batch(C, num_sols, complementary, verbose)
         
 class NSF(Solver):
     def __init__(
@@ -764,55 +774,8 @@ class NSF(Solver):
 
         self.C = self.P
         
-        # for normalization
         self._compute_normalizing_elements()
         self._load_knn()
-        
-        
-    def solve(self, P: np.ndarray, num_sols: int):
-        C = self.normalize_input_data(np.column_stack((P, np.zeros((len(P), 1)))), "C", return_torch=True)
-        with torch.inference_mode():
-            J = self._solver(C).sample((num_sols,))
-        return self.denormalize_output_data(J.detach().cpu().numpy(), "J")
-    
-    def _get_batch_C(self, P: np.ndarray, num_sols: int, batch_size: int):
-        # shape: (num_poses, C.shape[-1] = m + r + 1)
-        C = np.column_stack((P, np.zeros((len(P), 1))))
-        C = self.normalize_input_data(C, "C")
-        # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
-        C = np.tile(C, (num_sols, 1))
-        C, complementary = self.make_divisible_C(C, batch_size)
-        C = torch.from_numpy(
-            C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])
-        ).to(self._device)  
-        return C, complementary
-
-    def solve_batch(
-        self,
-        P: np.ndarray,
-        num_sols: int,
-        batch_size: int = 4000,
-        verbose: bool = True,
-    ) -> np.ndarray:
-        """
-        Solve inverse kinematics problem in batch.
-
-        Args:
-            P (np.ndarray): poses with shape (num_poses, m)
-            num_sols (int): number of solutions
-            batch_size (int, optional): batch size. Defaults to 4000.
-            verbose (bool, optional): use trange or not. Defaults to True.
-
-        Returns:
-            np.ndarray: J with shape (num_sols, num_poses, num_dofs)
-        """
-
-        if len(P) * num_sols < batch_size:
-            return self.solve(P, num_sols)
-
-        C, complementary = self._get_batch_C(P, num_sols, batch_size)
-        J = self._solve_C_batch(C, num_sols, complementary, verbose)
-        return J
     
     def generate_ik_solutions(
         self,
@@ -827,7 +790,12 @@ class NSF(Solver):
             self.base_std = std
         if latent is not None:
             self.latent = latent
-        J_hat = self.solve_batch(P, num_sols, batch_size=batch_size, verbose=verbose)
-        return J_hat
+            
+        if len(P) * num_sols < batch_size:
+            C = self._get_conditions(P)
+            return self._solve_conditions(C, num_sols)
+
+        C, complementary = self._get_conditions_batch(P=P, num_sols=num_sols, batch_size=batch_size)
+        return self._solve_conditions_batch(C, num_sols, complementary, verbose)
     
         

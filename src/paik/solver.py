@@ -51,6 +51,33 @@ def get_solver(arch_name: str, robot_name: str, load: bool = False, work_dir: st
     
     return solver
 
+def get_solver_from_config(solver_param: SolverConfig, load: bool = False) -> Solver:
+    """
+    Get the solver with the given solver config.
+
+    Args:
+        solver_param (SolverConfig): solver config
+        load (bool, optional): load the solver or not. Defaults to False.
+
+    Returns:
+        Solver: solver instance
+    """
+    if solver_param.model_architecture == "paik":
+        solver = PAIK(
+            solver_param=solver_param, # type: ignore
+            load_date="best" if load else "",
+            work_dir=solver_param.workdir,
+        )
+    elif solver_param.model_architecture == "nsf":
+        solver = NSF(
+            solver_param=solver_param, # type: ignore
+            load_date="best" if load else "",
+            work_dir=solver_param.workdir,
+        )
+    else:
+        raise NotImplementedError(f"Architecture {solver_param.model_architecture} not supported.")
+    
+    return solver
 
 class Solver:
     def __init__(
@@ -182,7 +209,8 @@ class Solver:
         if not os.path.exists(os.path.join(save_dir, "J.npy")):
             save_numpy(os.path.join(save_dir, "J.npy"), self.J)
             save_numpy(os.path.join(save_dir, "P.npy"), self.P)
-            save_numpy(os.path.join(save_dir, "F.npy"), self.F)
+            if not self._use_nsf_only:
+                save_numpy(os.path.join(save_dir, "F.npy"), self.F)
 
             save_pickle(os.path.join(save_dir, "param.pth"), self.param)
             save_pickle(os.path.join(save_dir, "J_knn.pth"), self.J_knn)

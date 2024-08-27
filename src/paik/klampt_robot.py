@@ -11,7 +11,7 @@ from klampt.math import so3
 
 class Robot:
     def __init__(self, name, active_joint_idx):
-        assert name in ["pr2", "atlas", "baxter", "robonaut2"]
+        assert name in ["atlas", "baxter", "robonaut2"]
         self.name = name
         self._world = WorldModel()
         robot_dir_path = "/home/luca/Klampt-examples/data/robots"
@@ -221,22 +221,3 @@ class BaxterArm(Robot):
 #     def __init__(self):
 #         super().__init__("robonaut2", [4])
 #         raise NotImplementedError("Robonaut2Arm is not implemented yet.")
-
-
-class PR2(Robot):
-    def __init__(self):
-        # arm from 51 to 61, palm 63
-        super().__init__("pr2", [51, 52, 53, 55, 56, 60, 61, 63])
-
-
-# robot = BaxterArm()
-
-# Q, P = robot.sample_joint_angles_and_poses(5)
-# print(repr(Q))
-# print(repr(P))
-# qik = robot.inverse_kinematics_klampt(P[0])
-# print(qik)
-# pik = robot.forward_kinematics(np.array([qik]))
-# # print Pik, p0
-# print(f"Pik: {pik}, p0: {P[0]}")
-# assert np.allclose(Q, qik, atol=1e-5), f"Q: {Q}, Qik: {Qik}"

@@ -1,18 +1,18 @@
 import numpy as np
 
 
-def geometric_distance_between_quaternions(
+def geodesic_distance_between_quaternions(
     q1: np.ndarray, q2: np.ndarray
 ) -> np.ndarray:
     """
-    Compute the geometric distance between two sets of quaternions. Reference from jrl.conversions.
+    Compute the geodesic distance between two sets of quaternions. Reference from jrl.conversions.
 
     Args:
         q1 (np.ndarray): quaternions, shape: (num_quaternions, m - 3)
         q2 (np.ndarray): quaternions, shape: (num_quaternions, m - 3)
 
     Returns:
-        np.ndarray: geometric distance, shape: (num_poses,)
+        np.ndarray: geodesic distance, shape: (num_poses,)
     """
     acos_clamp_epsilon = 1e-7
     ang = np.abs(
@@ -46,7 +46,8 @@ def evaluate_pose_error_P2d_P2d(
     Returns:
         Tuple[np.ndarray, np.ndarray]: positional (l2, meters) and angular (ang, rads) errors
     """
-    assert len(P1.shape) == 2 and len(P2.shape) == 2 and P1.shape[0] == P2.shape[0]
+    assert len(P1.shape) == 2 and len(
+        P2.shape) == 2 and P1.shape[0] == P2.shape[0]
     l2 = np.linalg.norm(P1[:, :3] - P2[:, :3], axis=1)
-    ang = geometric_distance_between_quaternions(P1[:, 3:], P2[:, 3:])
+    ang = geodesic_distance_between_quaternions(P1[:, 3:], P2[:, 3:])
     return l2, ang

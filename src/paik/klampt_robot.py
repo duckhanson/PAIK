@@ -20,8 +20,8 @@ class Robot:
             f"{robot_dir_path}/{name}.rob"
         )  # pr2, atlas, baxter, robonaut2
         self._robot = self._world.robot(0)
-        self._ik_solver = IKSolver(self._robot)
-        self._all_joint_limits = np.array(self._ik_solver.getJointLimits()).T
+        _ik_solver = IKSolver(self._robot)
+        self._all_joint_limits = np.array(_ik_solver.getJointLimits()).T
         self._active_joint_idx = active_joint_idx
         self.set_active_dofs(active_joint_idx)
         self.n_dofs = len(active_joint_idx)
@@ -30,7 +30,6 @@ class Robot:
         )  # end effector link
 
     def set_active_dofs(self, active_dofs):
-        self._ik_solver.setActiveDofs(active_dofs)
         self.active_joint_names = [self._robot.link(ji).getName() for ji in active_dofs]
 
         self.active_joint_min = self._all_joint_limits[active_dofs, 0]

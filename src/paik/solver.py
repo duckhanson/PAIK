@@ -609,24 +609,26 @@ class Solver:
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
         df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
-        print(df.describe())
+        
+        if verbose:
+            print(df.describe())
 
-        print(
-            tabulate(
-                [
+            print(
+                tabulate(
                     [
-                        np.round(l2.mean() * 1e3, decimals=2),
-                        np.round(np.rad2deg(ang.mean()), decimals=2),
-                        np.round(avg_inference_time * 1e3, decimals=0),
-                    ]
-                ],
-                headers=[
-                    "l2 (mm)",
-                    "ang (deg)",
-                    "inference_time (ms)",
-                ],
+                        [
+                            np.round(l2.mean() * 1e3, decimals=2),
+                            np.round(np.rad2deg(ang.mean()), decimals=2),
+                            np.round(avg_inference_time * 1e3, decimals=0),
+                        ]
+                    ],
+                    headers=[
+                        "l2 (mm)",
+                        "ang (deg)",
+                        "inference_time (ms)",
+                    ],
+                )
             )
-        )
 
         return tuple(
             [

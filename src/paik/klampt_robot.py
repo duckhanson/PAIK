@@ -167,27 +167,29 @@ class Robot:
         return Q, P
 
     def inverse_kinematics_klampt(
-        self, p: np.ndarray, num_trails: int = 50, max_iterations: int = 150
+        self, pose: np.ndarray, seed=None, num_trails: int = 50, max_iterations: int = 150
     ) -> Optional[np.ndarray]:
         """Inverse kinematics using the klampt library"""
-        assert p.ndim == 1 and p.shape[0] == 7, f"p.shape: {p.shape}"
-        t = p[:3]
-        R = so3.from_quaternion(p[3:])  # type: ignore
-        obj = ik.objective(self._klampt_ee_link, t=t.tolist(), R=R)
+        assert pose.ndim == 1 and pose.shape[0] == 7, f"p.shape: {pose.shape}"
+        t = pose[:3]
+        R = so3.from_quaternion(pose[3:])  # type: ignore
+        
+        obj = ik.objective(self._klampt_ee_link, t=pose[0:3].tolist(), R=R)
 
         for _ in range(num_trails):
-            self._ik_solver.add(obj)
-            self._ik_solver.setActiveDofs(self._active_joint_idx)
-            self._ik_solver.setMaxIters(max_iterations)
-            self._ik_solver.sampleInitial()
+            solver = IKSolver(self._robot)
+            solver.add(obj)
+            solver.setActiveDofs(self._active_joint_idx)
+            solver.setMaxIters(max_iterations)
+            solver.sampleInitial()
 
-            res = self._ik_solver.solve()
+            res = solver.solve()
 
             if res:
                 q = self._Q_from_Qvec(np.asarray([self._robot.getConfig()]))[0]
                 return q
 
-        print(f"[INFO] Failed to find a solution for p: {p}")
+        # print(f"[INFO] Failed to find a solution for pose: {pose}")
         return None
 
     def __repr__(self):

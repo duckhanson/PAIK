@@ -13,24 +13,8 @@ from common.evaluate import (
     make_batches,
     batches_back_to_array,
 )
+from ikp import numerical_inverse_kinematics_single, numerical_inverse_kinematics_batch, paik_batch, nsf_batch
 
-
-def numerical_inverse_kinematics_single(solver, pose, num_sols):
-    seeds, _ = solver.robot.sample_joint_angles_and_poses(n=num_sols)
-
-    ik_sols = np.empty((num_sols, solver.n))
-    for i, seed in enumerate(seeds):
-        ik_sols[i] = solver.robot.inverse_kinematics_klampt(
-            pose=pose, seed=seed
-        ) # type: ignore
-    return ik_sols
-
-def numerical_inverse_kinematics_batch(solver, P, num_sols) -> np.ndarray[Any, Any]:
-    # return shape: (1, num_poses*num_sols, n)
-    return np.asarray(
-        [numerical_inverse_kinematics_single(solver, p, num_sols) for p in tqdm(P)]
-    ).reshape(1, -1, solver.n)
-    
 def paik_batch(solver: PAIK, P, num_sols, std=0.001):
     # P.shape = (num_poses, m)
     # return shape: (1, num_poses*num_sols, n)
@@ -328,11 +312,12 @@ def plot_iterate_over_stds(config: Config_Diversity, nsf_solver: Solver, paik_so
 
 if __name__ == "__main__":
     config = Config_Diversity()
-    config.num_poses = 100 # 500
+    config.num_poses = 500 
     config.num_sols = 200
-
-    nsf_solver = get_solver(arch_name="nsf", robot_name="panda", load=True, work_dir=config.workdir)
-    paik_solver = get_solver(arch_name="paik", robot_name="panda", load=True, work_dir=config.workdir)
+    
+    robot_name = "fetch_arm"
+    nsf_solver = get_solver(arch_name="nsf", robot_name=robot_name, load=True, work_dir=config.workdir)
+    paik_solver = get_solver(arch_name="paik", robot_name=robot_name, load=True, work_dir=config.workdir)
 
     # plot_iterate_over_num_sols_array(config, nsf_solver, paik_solver)    
     plot_iterate_over_stds(config, nsf_solver, paik_solver)

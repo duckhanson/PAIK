@@ -97,11 +97,11 @@ class Solver:
 
         self.param = solver_param
 
-        if solver_param.use_dimension_reduction:
-            print(f"[INFO] use_dimension_reduction is True, use HNNE.")
-            raise NotImplementedError("Not support HNNE.")
-        else:
-            print(f"[INFO] use_dimension_reduction is False, use clustering.")
+        # if solver_param.use_dimension_reduction:
+        #     print(f"[INFO] use_dimension_reduction is True, use HNNE.")
+        #     raise NotImplementedError("Not support HNNE.")
+        # else:
+        #     print(f"[INFO] use_dimension_reduction is False, use clustering.")
 
     @property
     def base_std(self):
@@ -331,7 +331,7 @@ class Solver:
             F = hnne.fit_transform(X=J[:num_data], dim=self.r, verbose=True)
 
             if not self.param.use_dimension_reduction:
-                print(f"[INFO] use_dimension_reduction is False, use clustering.")
+                # print(f"[INFO] use_dimension_reduction is False, use clustering.")
                 partitions = hnne.hierarchy_parameters.partitions
                 num_clusters = hnne.hierarchy_parameters.partition_sizes
                 closest_idx_to_num_clusters_20 = np.argmin(
@@ -749,7 +749,7 @@ class NSF(Solver):
     def generate_ik_solutions(
         self,
         P: np.ndarray,
-        num_sols: int,
+        num_sols: int=1,
         std: Optional[float] = None,
         latent: Optional[np.ndarray] = None,
         batch_size: int = 4000,

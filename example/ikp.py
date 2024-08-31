@@ -83,9 +83,7 @@ def random_ikp(solver: Solver, P: np.ndarray, num_sols: int, solve_fn_batch: Any
     l2_mm = l2 * 1000
     ang_deg = np.rad2deg(ang)
     solve_time_ms = (time() - begin)/num_poses *1000
-    print(f"Time to solve {num_sols} solutions (avg over {num_poses} poses): {solve_time_ms:.1f}ms") if verbose else None
     df = pd.DataFrame({"l2 (mm)": l2_mm, "ang (deg)": ang_deg})
-    print(df.describe()) if verbose else None
     return J_hat.reshape(num_poses, num_sols, -1), l2_mm[~np.isnan(l2_mm)].mean(), ang_deg[~np.isnan(ang_deg)].mean(), solve_time_ms
 
 def mmd(J1, J2):
@@ -124,23 +122,26 @@ def random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std: flo
     paik_solver = get_solver(arch_name="paik", robot_name=robot_name, load=True)
     
     _, P = nsf_solver.robot.sample_joint_angles_and_poses(n=num_poses)
-    num_results = random_ikp(nsf_solver, P, num_sols, numerical_inverse_kinematics_batch, verbose=False)
+    num_results = random_ikp(nsf_solver, P, num_sols, numerical_inverse_kinematics_batch, verbose=verbose)
 
-    nsf_results = random_ikp(nsf_solver, P, num_sols, solver_batch, std=std, verbose=False)
-    paik_results = random_ikp(paik_solver, P, num_sols, solver_batch, std=std, verbose=False)
+    # dummy run to load the model
+    random_ikp(nsf_solver, P, num_sols, solver_batch, std=std, verbose=False)
+    nsf_results = random_ikp(nsf_solver, P, num_sols, solver_batch, std=std, verbose=verbose)
+    paik_results = random_ikp(paik_solver, P, num_sols, solver_batch, std=std, verbose=verbose)
     
     nsf_mmd = mmd(num_results[0], nsf_results[0])
     paik_mmd = mmd(num_results[0], paik_results[0])
     
-    print_out_format = "l2: {:1.2f} mm, ang: {:1.2f} deg, time: {:1.1f} ms"
 
-    print("="*70)
-    print(f"Robot: {robot_name} computes {num_sols} solutions and average over {num_poses} poses")
-    # print the results of the random IKP with l2_mm, ang_deg, and solve_time_ms
-    print(f"NUM:  {print_out_format.format(*num_results[1:])}")
-    print(f"NSF:  {print_out_format.format(*nsf_results[1:])}", f", MMD: {nsf_mmd}")
-    print(f"PAIK: {print_out_format.format(*paik_results[1:])}", f", MMD: {paik_mmd}")
-    print("="*70)
+    if verbose:
+        print_out_format = "l2: {:1.2f} mm, ang: {:1.2f} deg, time: {:1.1f} ms"
+        print("="*70)
+        print(f"Robot: {robot_name} computes {num_sols} solutions and average over {num_poses} poses")
+        # print the results of the random IKP with l2_mm, ang_deg, and solve_time_ms
+        print(f"NUM:  {print_out_format.format(*num_results[1:])}")
+        print(f"NSF:  {print_out_format.format(*nsf_results[1:])}", f", MMD: {nsf_mmd}")
+        print(f"PAIK: {print_out_format.format(*paik_results[1:])}", f", MMD: {paik_mmd}")
+        print("="*70)
     
     # use a dataframe to save the results without J_hat
     # each row is a robot, a solver, and the results of l2_mm, ang_deg, and solve_time_ms, and MMD
@@ -159,7 +160,7 @@ def random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std: flo
     print(f"Results are saved to {df_file_path}")
 
 if __name__ == "__main__":
-    robot_names = ["atlas_arm"] # ["panda", "fetch", "fetch_arm", "atlas_arm", "atlas_waist_arm", "baxter_arm"]
+    robot_names = ["atlas_waist_arm"] # ["panda", "fetch", "fetch_arm", "atlas_arm", "atlas_waist_arm", "baxter_arm"]
     config = Config_IKP()
 
     for robot_name in robot_names:

@@ -105,46 +105,63 @@ def mmd(J1, J2):
     mmd_score = mmd_evaluate_multiple_poses(J1, J2, num_poses)
     return mmd_score
 
+def random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std: float, record_dir: str, verbose: bool=False):
+    """
+    Generate random IK solutions for a given robot and poses
+
+    Args:
+        robot_name (str): the name of the robot
+        num_poses (int): the number of poses to generate
+        num_sols (int): the number of solutions per pose to generate
+        std (float): the standard deviation for the solver
+        record_dir (str): the directory to save the results
+        verbose (bool, optional): print the statistics of the generated solutions. Defaults to False.
+        
+    Returns:
+        None
+    """
+    nsf_solver = get_solver(arch_name="nsf", robot_name=robot_name, load=True)
+    paik_solver = get_solver(arch_name="paik", robot_name=robot_name, load=True)
+    
+    _, P = nsf_solver.robot.sample_joint_angles_and_poses(n=num_poses)
+    num_results = random_ikp(nsf_solver, P, num_sols, numerical_inverse_kinematics_batch, verbose=False)
+
+    nsf_results = random_ikp(nsf_solver, P, num_sols, solver_batch, std=std, verbose=False)
+    paik_results = random_ikp(paik_solver, P, num_sols, solver_batch, std=std, verbose=False)
+    
+    nsf_mmd = mmd(num_results[0], nsf_results[0])
+    paik_mmd = mmd(num_results[0], paik_results[0])
+    
+    print_out_format = "l2: {:1.2f} mm, ang: {:1.2f} deg, time: {:1.1f} ms"
+
+    print(f"Robot: {robot_name} computes {num_sols} solutions and average over {num_poses} poses")
+    # print the results of the random IKP with l2_mm, ang_deg, and solve_time_ms
+    print(f"NUM:  {print_out_format.format(*num_results[1:])}")
+    print(f"NSF:  {print_out_format.format(*nsf_results[1:])}", f", MMD: {nsf_mmd}")
+    print(f"PAIK: {print_out_format.format(*paik_results[1:])}", f", MMD: {paik_mmd}")
+    
+    # use a dataframe to save the results without J_hat
+    # each row is a robot, a solver, and the results of l2_mm, ang_deg, and solve_time_ms, and MMD
+    df = pd.DataFrame({
+        "robot": [robot_name, robot_name, robot_name],
+        "solver": ["NUM", "NSF", "PAIK"],
+        "l2_mm": [num_results[1], nsf_results[1], paik_results[1]],
+        "ang_deg": [num_results[2], nsf_results[2], paik_results[2]],
+        "solve_time_ms": [num_results[3], nsf_results[3], paik_results[3]],
+        "MMD": [0, nsf_mmd, paik_mmd]
+    })
+    
+    # save the results to a csv file
+    df_file_path = f"{record_dir}/ikp_{robot_name}_{num_poses}_{num_sols}_{std}.csv"
+    df.to_csv(df_file_path, index=False)
+    print(f"Results are saved to {df_file_path}")
+
 if __name__ == "__main__":
-    robot_names = ["panda"] # ["panda", "fetch", "fetch_arm", "iiwa7", "atlas_arm", "atlas_waist_arm", "baxter_arm"]
+    robot_names = ["atlas_arm"] # ["panda", "fetch", "fetch_arm", "atlas_arm", "atlas_waist_arm", "baxter_arm"]
     config = Config_IKP()
 
     for robot_name in robot_names:
-        nsf_solver = get_solver(arch_name="nsf", robot_name=robot_name, load=True)
-        paik_solver = get_solver(arch_name="paik", robot_name=robot_name, load=True)
-        
-        _, P = nsf_solver.robot.sample_joint_angles_and_poses(n=config.num_poses)
-        num_results = random_ikp(nsf_solver, P, config.num_sols, numerical_inverse_kinematics_batch, verbose=False)
-
-        nsf_results = random_ikp(nsf_solver, P, config.num_sols, solver_batch, std=config.std, verbose=False)
-        paik_results = random_ikp(paik_solver, P, config.num_sols, solver_batch, std=config.std, verbose=False)
-        
-        nsf_mmd = mmd(num_results[0], nsf_results[0])
-        paik_mmd = mmd(num_results[0], paik_results[0])
-        
-        print_out_format = "l2: {:1.2f} mm, ang: {:1.2f} deg, time: {:1.1f} ms"
-
-        print(f"Robot: {robot_name} computes {config.num_sols} solutions and average over {config.num_poses} poses")
-        # print the results of the random IKP with l2_mm, ang_deg, and solve_time_ms
-        print(f"NUM:  {print_out_format.format(*num_results[1:])}")
-        print(f"NSF:  {print_out_format.format(*nsf_results[1:])}", f", MMD: {nsf_mmd}")
-        print(f"PAIK: {print_out_format.format(*paik_results[1:])}", f", MMD: {paik_mmd}")
-        
-        # use a dataframe to save the results without J_hat
-        # each row is a robot, a solver, and the results of l2_mm, ang_deg, and solve_time_ms, and MMD
-        df = pd.DataFrame({
-            "robot": [robot_name, robot_name, robot_name],
-            "solver": ["NUM", "NSF", "PAIK"],
-            "l2_mm": [num_results[1], nsf_results[1], paik_results[1]],
-            "ang_deg": [num_results[2], nsf_results[2], paik_results[2]],
-            "solve_time_ms": [num_results[3], nsf_results[3], paik_results[3]],
-            "MMD": [0, nsf_mmd, paik_mmd]
-        })
-                          
-        # save the results to a csv file
-        df_file_path = f"{config.record_dir}/ikp_{robot_name}_{config.num_poses}_{config.num_sols}_{config.std}.csv"
-        df.to_csv(df_file_path, index=False)
-        print(f"Results are saved to {df_file_path}")
+        random_ikp_with_mmd(robot_name, config.num_poses, config.num_sols, config.std, config.record_dir, verbose=True)
         
     
     

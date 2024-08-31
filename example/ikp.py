@@ -134,11 +134,13 @@ def random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std: flo
     
     print_out_format = "l2: {:1.2f} mm, ang: {:1.2f} deg, time: {:1.1f} ms"
 
+    print("="*70)
     print(f"Robot: {robot_name} computes {num_sols} solutions and average over {num_poses} poses")
     # print the results of the random IKP with l2_mm, ang_deg, and solve_time_ms
     print(f"NUM:  {print_out_format.format(*num_results[1:])}")
     print(f"NSF:  {print_out_format.format(*nsf_results[1:])}", f", MMD: {nsf_mmd}")
     print(f"PAIK: {print_out_format.format(*paik_results[1:])}", f", MMD: {paik_mmd}")
+    print("="*70)
     
     # use a dataframe to save the results without J_hat
     # each row is a robot, a solver, and the results of l2_mm, ang_deg, and solve_time_ms, and MMD

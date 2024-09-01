@@ -28,21 +28,19 @@ def iterate_over_num_sols_array(solver, P: np.ndarray, num_sols_array: np.ndarra
         np.ndarray, np.ndarray, np.ndarray: the generated IK solutions with shape (num_poses, num_sols, num_dofs or n).
         np.ndarray, np.ndarray: the mean of l2 error (m) and the mean of angular error (rad) for each num_sols
     """
-    num_poses = P.shape[0]
-    J_hat_array = []
-    l2_array = np.empty((len(num_sols_array)))
-    ang_array = np.empty((len(num_sols_array)))
-    time_array = np.empty((len(num_sols_array)))
-    
     if solve_fn_batch.__name__ == "numerical_inverse_kinematics_batch":
         # copy the first solution to the rest of the num_sols
         num_sols_max = np.max(num_sols_array)
         J_hat, l2, ang, time_ = random_ikp(solver, P, num_sols_max, solve_fn_batch, verbose)
-        J_hat_array = [J_hat[:, num_sols] for num_sols in num_sols_array]
+        J_hat_array = [J_hat[:num_sols] for num_sols in num_sols_array]
         l2_array = np.full((len(num_sols_array)), l2)
         ang_array = np.full((len(num_sols_array)), ang)
         time_array = np.full((len(num_sols_array)), time_)
     else:
+        J_hat_array = []
+        l2_array = np.empty((len(num_sols_array)))
+        ang_array = np.empty((len(num_sols_array)))
+        time_array = np.empty((len(num_sols_array)))
         for i, num_sols in enumerate(num_sols_array):
             J_hat, l2_array[i], ang_array[i], time_array[i] = random_ikp(solver, P, num_sols, solve_fn_batch, std, verbose)
             J_hat_array.append(J_hat)
@@ -64,12 +62,13 @@ def iterate_over_num_poses_array(solver, num_poses_array: np.ndarray, num_sols: 
         np.ndarray, np.ndarray, np.ndarray: the generated IK solutions with shape (num_poses, num_sols, num_dofs or n).
         np.ndarray, np.ndarray: the mean of l2 error (m) and the mean of angular error (rad) for each num_poses
     """
+    num_poses_max = np.max(num_poses_array)
+    _, P = solver.robot.sample_joint_angles_and_poses(n=num_poses_max)
+    
     if solve_fn_batch.__name__ == "numerical_inverse_kinematics_batch":
-        num_poses_max = np.max(num_poses_array)
-        _, P = solver.robot.sample_joint_angles_and_poses(n=num_poses_max)
         J_hat, l2, ang, time_ = random_ikp(solver, P, num_sols, solve_fn_batch)
         
-        J_hat_array = [J_hat[:num_poses] for num_poses in num_poses_array]
+        J_hat_array = [J_hat[:, :num_poses] for num_poses in num_poses_array]
         l2_array = np.full((len(num_poses_array)), l2)
         ang_array = np.full((len(num_poses_array)), ang)
         time_array = np.full((len(num_poses_array)), time_)
@@ -80,8 +79,7 @@ def iterate_over_num_poses_array(solver, num_poses_array: np.ndarray, num_sols: 
         time_array = np.empty((len(num_poses_array)))
         
         for i, num_poses in enumerate(num_poses_array):
-            _, P = solver.robot.sample_joint_angles_and_poses(n=num_poses)
-            J_hat, l2_array[i], ang_array[i], time_array[i] = random_ikp(solver, P, num_sols, solve_fn_batch, std, verbose)
+            J_hat, l2_array[i], ang_array[i], time_array[i] = random_ikp(solver, P[:num_poses], num_sols, solve_fn_batch, std, verbose)
             J_hat_array.append(J_hat)
     return J_hat_array, l2_array, ang_array, time_array
 
@@ -102,10 +100,6 @@ def iterate_over_stds_array(solver, P: np.ndarray, std_array: np.ndarray, num_so
         np.ndarray, np.ndarray: the mean of l2 error (m) and the mean of angular error (rad) for each std
     """
     num_poses = P.shape[0]
-    J_hat_array = np.empty((len(std_array), num_poses, num_sols, solver.n))
-    l2_array = np.empty((len(std_array)))
-    ang_array = np.empty((len(std_array)))
-    time_array = np.empty((len(std_array)))
     
     if solve_fn_batch.__name__ == "numerical_inverse_kinematics_batch":
         # copy the first solution to the rest of the stds
@@ -118,6 +112,10 @@ def iterate_over_stds_array(solver, P: np.ndarray, std_array: np.ndarray, num_so
         ang_array = np.full((len(std_array)), ang)
         time_array = np.full((len(std_array)), time_)
     else:
+        J_hat_array = np.empty((len(std_array), num_sols, num_poses, solver.n))
+        l2_array = np.empty((len(std_array)))
+        ang_array = np.empty((len(std_array)))
+        time_array = np.empty((len(std_array)))
         for i, std in enumerate(std_array):
             J_hat_array[i], l2_array[i],ang_array[i], time_array[i] = random_ikp(solver, P, num_sols, solve_fn_batch, std, verbose)
     
@@ -126,7 +124,7 @@ def iterate_over_stds_array(solver, P: np.ndarray, std_array: np.ndarray, num_so
 def mmd_arr(J_arr1, J_arr2):
     arr_size = len(J_arr1)
     # the last second dimension is the number of poses
-    mmd_arr_ = np.array([mmd_evaluate_multiple_poses(J_arr1[i], J_arr2[i], J_arr1.shape[-2]) for i in range(arr_size)])
+    mmd_arr_ = np.array([mmd_evaluate_multiple_poses(J_arr1[i], J_arr2[i], J_arr1[i].shape[-2]) for i in range(arr_size)])
     return mmd_arr_
 
 def plot_dataframe_mmd_l2_ang(df: pd.DataFrame, record_dir: str, x_axis: str, plot_std: bool=False):
@@ -189,8 +187,8 @@ def plot_iterate_over_num_sols_array(config: Config_Diversity, nsf_solver: Solve
     _, P = nsf_solver.robot.sample_joint_angles_and_poses(n=config.num_poses)
     
     num_results = iterate_over_num_sols_array(nsf_solver, P, num_sols_array, numerical_inverse_kinematics_batch, verbose=verbose)
-    nsf_results = iterate_over_num_sols_array(nsf_solver, P, num_sols_array, solver_batch, verbose=verbose)
-    paiK_results = iterate_over_num_sols_array(paik_solver, P, num_sols_array, solver_batch, verbose=verbose)
+    nsf_results = iterate_over_num_sols_array(nsf_solver, P, num_sols_array, solver_batch, std=config.std, verbose=verbose)
+    paiK_results = iterate_over_num_sols_array(paik_solver, P, num_sols_array, solver_batch, std=config.std, verbose=verbose)
     
     # compute the mmd_arr scores for the NSF solutions, and PAIK solutions
     mmd_nsf = mmd_arr(nsf_results[0], num_results[0])
@@ -215,12 +213,12 @@ def plot_iterate_over_num_sols_array(config: Config_Diversity, nsf_solver: Solve
     
     plot_dataframe_mmd_l2_ang(df, config.record_dir, "num_sols")
 
-def plot_iterate_over_num_poses_array(config: Config_Diversity, nsf_solver: Solver, paik_solver: Solver):
+def plot_iterate_over_num_poses_array(config: Config_Diversity, nsf_solver: Solver, paik_solver: Solver, verbose: bool=False):
     num_poses_array = np.array([50, 100, 200, 500, 1000, 2000])
     
-    num_results = iterate_over_num_poses_array(nsf_solver, num_poses_array, config.num_sols, numerical_inverse_kinematics_batch, verbose=False)
-    nsf_results = iterate_over_num_poses_array(nsf_solver, num_poses_array, config.num_sols, solver_batch, verbose=False)
-    paik_results = iterate_over_num_poses_array(paik_solver, num_poses_array, config.num_sols, solver_batch, verbose=False)
+    num_results = iterate_over_num_poses_array(nsf_solver, num_poses_array, config.num_sols, numerical_inverse_kinematics_batch, verbose=verbose)
+    nsf_results = iterate_over_num_poses_array(nsf_solver, num_poses_array, config.num_sols, solver_batch, std=config.std, verbose=verbose)
+    paik_results = iterate_over_num_poses_array(paik_solver, num_poses_array, config.num_sols, solver_batch, std=config.std, verbose=verbose)
     
     # compute the mmd_arr scores for the NSF solutions, and PAIK solutions
     mmd_nsf = mmd_arr(nsf_results[0], num_results[0])
@@ -245,14 +243,14 @@ def plot_iterate_over_num_poses_array(config: Config_Diversity, nsf_solver: Solv
     
     plot_dataframe_mmd_l2_ang(df, config.record_dir, "num_poses")
 
-def plot_iterate_over_stds(config: Config_Diversity, nsf_solver: Solver, paik_solver: Solver):
+def plot_iterate_over_stds(config: Config_Diversity, nsf_solver: Solver, paik_solver: Solver, verbose: bool=False):
     stds = np.array([0.001, 0.05, 0.1, 0.3, 0.5, 0.75, 1.0, 1.6]) 
 
     _, P = nsf_solver.robot.sample_joint_angles_and_poses(n=config.num_poses)
     
-    num_results = iterate_over_stds_array(nsf_solver, P, stds, config.num_sols, numerical_inverse_kinematics_batch, verbose=False)
-    nsf_results = iterate_over_stds_array(nsf_solver, P, stds, config.num_sols, solver_batch, verbose=False)
-    paik_results = iterate_over_stds_array(paik_solver, P, stds, config.num_sols, solver_batch, verbose=False)
+    num_results = iterate_over_stds_array(nsf_solver, P, stds, config.num_sols, numerical_inverse_kinematics_batch, verbose=verbose)
+    nsf_results = iterate_over_stds_array(nsf_solver, P, stds, config.num_sols, solver_batch, verbose=verbose)
+    paik_results = iterate_over_stds_array(paik_solver, P, stds, config.num_sols, solver_batch, verbose=verbose)
     
     # compute the mmd_arr scores for the NSF solutions, and PAIK solutions
     mmd_nsf = mmd_arr(nsf_results[0], num_results[0])
@@ -279,16 +277,14 @@ def plot_iterate_over_stds(config: Config_Diversity, nsf_solver: Solver, paik_so
 
 if __name__ == "__main__":
     config = Config_Diversity()
-    config.num_poses = 500 
-    config.num_sols = 200
     
     robot_name = "panda"
     nsf_solver = get_solver(arch_name="nsf", robot_name=robot_name, load=True, work_dir=config.workdir)
     paik_solver = get_solver(arch_name="paik", robot_name=robot_name, load=True, work_dir=config.workdir)
 
-    plot_iterate_over_num_sols_array(config, nsf_solver, paik_solver, verbose=True)    
-    # plot_iterate_over_stds(config, nsf_solver, paik_solver)
-    # plot_iterate_over_num_poses_array(config, nsf_solver, paik_solver)
+    plot_iterate_over_num_sols_array(config, nsf_solver, paik_solver, verbose=False)    
+    plot_iterate_over_stds(config, nsf_solver, paik_solver, verbose=False)
+    plot_iterate_over_num_poses_array(config, nsf_solver, paik_solver, verbose=False)
     
     # load df from csv
     # path = f"{config.record_dir}/diversity_over_stds.csv"

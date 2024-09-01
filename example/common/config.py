@@ -67,10 +67,8 @@ class Config_IKP(Config_File):
 
 
 @dataclass()
-class Config_Diversity(Config_File):
+class Config_Diversity(Config_IKP):
     # commons
-    num_poses: int = 2500
-    num_sols: int = 1000
     base_stds: list = field(
         default_factory=lambda: list(np.arange(0.1, 1.5, 0.1)))
 

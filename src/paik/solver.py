@@ -234,7 +234,11 @@ class Solver:
         P_knn_path = os.path.join(load_dir, "P_knn.pth")
 
         self.param = load_pickle(param_path)
-        self._solver.load_state_dict(torch.load(model_path)["solver"])
+        try:
+            self._solver.load_state_dict(torch.load(model_path)["solver"])
+        except RuntimeError as e:
+            print(f"[Warning] {e}. Please check the model path {model_path}.")
+
         self.J = np.load(J_path)
         self.P = np.load(P_path)
         if self._use_nsf_only:

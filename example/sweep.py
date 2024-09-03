@@ -7,8 +7,8 @@ from paik.train import Trainer
 
 WORK_DIR = "/home/luca/paik"
 # please change to your own project name
-SOVLER_ARCH = "nsf"
-ROBOT_NAME = "fetch"
+SOVLER_ARCH = "paik"
+ROBOT_NAME = "panda"
 
 WANDB_PROJECT_NAME = f"{ROBOT_NAME} {SOVLER_ARCH} FINCH"
 SOLVER_PARAM = get_config(SOVLER_ARCH, ROBOT_NAME)
@@ -16,8 +16,6 @@ WANDB_ENTITY = "luca_nthu"  # please change to your own entity name
 PATIENCE = 10
 EXPERMENT_COUNT = 10
 NUM_EPOCHS = 60
-ENABLE_LOAD_MODEL = False
-
 
 def get_range(left_bound, right_bound, scale):
     return [i * scale for i in range(left_bound, right_bound)]
@@ -60,7 +58,7 @@ def main() -> None:
     solver_param.workdir = WORK_DIR
 
     # train nsf model, check use_nsf_only is True
-    assert solver_param.use_nsf_only, "use_nsf_only must be True"
+    # assert solver_param.use_nsf_only, "use_nsf_only must be True"
 
     trainer = Trainer(solver_param=solver_param)
 
@@ -71,8 +69,8 @@ def main() -> None:
         batch_size=solver_param.batch_size,
         begin_time=begin_time,
         patience=PATIENCE,
-        num_eval_poses=1000,
-        num_eval_sols=100,
+        num_eval_poses=500,
+        num_eval_sols=200,
     )
 
 

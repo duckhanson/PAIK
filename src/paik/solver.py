@@ -158,26 +158,26 @@ class Solver:
             print(f"[INFO] create {best_date_path} with first_init.")
             
         df = pd.read_csv(best_date_path)
-        best_dict = df.to_dict()
-        save_idx = -1
-        if l2 < max(best_dict["l2"]):
-            save_idx = 0
-
-        if save_idx == -1:
-            print(
-                f"[INFO] current model is not better than the best model in {best_date_path}"
-            )
-        else:
-            self._remove_by_date(best_dict["date"][save_idx])
-            best_dict["date"][save_idx] = date
-            best_dict["l2"][save_idx] = l2
-            save_pickle(best_date_path, best_dict)
+        best_date = df["date"].values[0]
+        best_l2 = df["l2"].values[0]
+        
+        if l2 < best_l2:
+            self._remove_by_date(best_date)
+            best_date = date
+            best_l2 = l2
+            df = pd.DataFrame({"date": [best_date], "l2": [best_l2]})
+            df.to_csv(best_date_path, index=False)
             self._save_by_date(date)
             print(
                 f"[SUCCESS] save the date {date} with l2 {l2:.5f} in {best_date_path}"
             )
+        else:
+            print(
+                f"[INFO] current model is not better than the best model in {best_date_path}"
+            )
+            
         print(
-            f"[INFO] best date: {best_dict['date']}, best l2: {best_dict['l2']}")
+            f"[INFO] best date: {best_date}, best l2: {best_l2}")
 
     # remove by date
     def _remove_by_date(self, date: str):

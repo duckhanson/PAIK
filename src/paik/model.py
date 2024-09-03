@@ -28,7 +28,7 @@ def get_flow_model(config: SolverConfig) -> tuple[Flow, Optimizer, ReduceLROnPla
         tuple[Flow, Optimizer, ReduceLROnPlateau]: flow model, optimizer, and scheduler
     """
     # pprint(f"[INFO] create new model with config: {config}")
-    assert config.model_architecture in ["nsf"]
+    # assert config.model_architecture in ["nsf"]
     # Build Generative model, NSF
     # Neural spline flow (NSF) with inputs 7 features and 3 + 4 + 1 context
 

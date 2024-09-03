@@ -148,46 +148,43 @@ class Solver:
             value.astype(np.float32)).to(self._device)
         self._change_solver_base()
 
-    # a dictionary in weight_dir to store the information of top3 dates, their l2, and their model by save_by_date, save the date if the current model is better, and remove the worst date
-    def save_if_top3(self, date: str, l2: float):
-        top3_date_path = self._top3_date_path()
+    # a dictionary in weight_dir to store the information of best date, their l2, and their model by save_by_date, save the date if the current model is better, and remove the worst date
+    def save_if_best(self, date: str, l2: float):
+        best_date_path = self._best_date_path()
 
-        if not os.path.exists(top3_date_path):
-            save_pickle(
-                top3_date_path, {"date": ["", "", ""],
-                                 "l2": [1000, 1000, 1000]}
-            )
-        top3_date = load_pickle(top3_date_path)
+        if not os.path.exists(best_date_path):
+            df = pd.DataFrame({"date": ["first_init"], "l2": [1000]})
+            df.to_csv(best_date_path, index=False)
+            print(f"[INFO] create {best_date_path} with first_init.")
+            
+        df = pd.read_csv(best_date_path)
+        best_dict = df.to_dict()
         save_idx = -1
-        # # if the top3 date has the current date, then check if the current model is better, if so, replace it
-        if date in top3_date["date"]:
-            if l2 < top3_date["l2"][top3_date["date"].index(date)]:
-                save_idx = top3_date["date"].index(date)
-        elif l2 < max(top3_date["l2"]):
-            save_idx = top3_date["l2"].index(max(top3_date["l2"]))
+        if l2 < max(best_dict["l2"]):
+            save_idx = 0
 
         if save_idx == -1:
             print(
-                f"[INFO] current model is not better than the top3 model in {top3_date_path}"
+                f"[INFO] current model is not better than the best model in {best_date_path}"
             )
         else:
-            if (
-                top3_date["date"][save_idx] != ""
-                and top3_date["date"][save_idx] != date
-            ):
-                self._remove_by_date(top3_date["date"][save_idx])
-            top3_date["date"][save_idx] = date
-            top3_date["l2"][save_idx] = l2
-            save_pickle(top3_date_path, top3_date)
+            self._remove_by_date(best_dict["date"][save_idx])
+            best_dict["date"][save_idx] = date
+            best_dict["l2"][save_idx] = l2
+            save_pickle(best_date_path, best_dict)
             self._save_by_date(date)
             print(
-                f"[SUCCESS] save the date {date} with l2 {l2:.5f} in {top3_date_path}"
+                f"[SUCCESS] save the date {date} with l2 {l2:.5f} in {best_date_path}"
             )
         print(
-            f"[INFO] top3 dates: {top3_date['date']}, top3 l2: {top3_date['l2']}")
+            f"[INFO] best date: {best_dict['date']}, best l2: {best_dict['l2']}")
 
     # remove by date
     def _remove_by_date(self, date: str):
+        if date == "":
+            print(f"[WARNING] date is empty. Remove failed.")
+            return
+        
         if isdir(os.path.join(self.param.weight_dir, date)):
             shutil.rmtree(os.path.join(
                 self.param.weight_dir, date), ignore_errors=True)
@@ -251,26 +248,28 @@ class Solver:
 
         print(f"[SUCCESS] load from {load_dir}")
 
-    def _top3_date_path(self):
+    def _best_date_path(self):
         if self._use_nsf_only:
-            return os.path.join(self.param.weight_dir, "top3_date_nsf.pth")
+            return os.path.join(self.param.weight_dir, "best_date_nsf.csv")
         else:
-            return os.path.join(self.param.weight_dir, "top3_date_paik.pth")
+            return os.path.join(self.param.weight_dir, "best_date_paik.csv")
 
     def _load_best_date(self):
-        top3_date_path = self._top3_date_path()
-
-        if not os.path.exists(top3_date_path):
+        best_date_path = self._best_date_path()
+        
+        if not os.path.exists(best_date_path):
             raise FileNotFoundError(
-                f"{top3_date_path} not found. Please save the model first."
+                f"{best_date_path} not found. Please save the model first."
             )
-        top3_date = load_pickle(top3_date_path)
-
-        best_date = top3_date["date"][top3_date["l2"].index(
-            min(top3_date["l2"]))]
+            
+        # read the best date from the csv file
+        df = pd.read_csv(best_date_path)
+        best_date = df["date"].values[0]
+        best_l2 = df["l2"].values[0]
         self._load_by_date(best_date)
+
         print(
-            f"[SUCCESS] load best date {best_date} with l2 {min(top3_date['l2']):.5f} from {top3_date_path}."
+            f"[SUCCESS] load best date {best_date} with l2 {best_l2:.5f} from {best_date_path}."
         )
 
     # private methods
@@ -609,7 +608,7 @@ class Solver:
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
         df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
-        
+
         if verbose:
             print(df.describe())
 
@@ -749,7 +748,7 @@ class NSF(Solver):
     def generate_ik_solutions(
         self,
         P: np.ndarray,
-        num_sols: int=1,
+        num_sols: int = 1,
         std: Optional[float] = None,
         latent: Optional[np.ndarray] = None,
         batch_size: int = 4000,

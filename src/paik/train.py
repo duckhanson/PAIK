@@ -123,7 +123,7 @@ class Trainer:
 
             update_noise_esp(ep)
 
-            avg_pos_errs, avg_ori_errs, _= self.solver.random_ikp(  # type: ignore
+            avg_pos_errs, avg_ori_errs, _ = self.solver.random_ikp(  # type: ignore
                 num_poses=num_eval_poses, num_sols=num_eval_sols, verbose=False
             )  # type: ignore
             self.solver.base_std = self.param.base_std  # type: ignore
@@ -217,7 +217,7 @@ class EarlyStopping:
                 self.trace_func(
                     f"Validation loss decreased ({self.val_loss_min:.4f} --> {val_loss:.4f})."
                 )
-            solver.save_if_top3(date, val_loss)
+            solver.save_if_best(date, val_loss)
         else:
             if self.verbose:
                 self.trace_func(

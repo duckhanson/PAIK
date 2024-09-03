@@ -11,7 +11,7 @@ from klampt.math import so3
 
 class Robot:
     def __init__(self, name, active_joint_idx):
-        assert name in ["pr2", "atlas", "baxter", "robonaut2"]
+        assert name in ["atlas", "baxter", "robonaut2"]
         self.name = name
         self._world = WorldModel()
         robot_dir_path = "/home/luca/Klampt-examples/data/robots"
@@ -20,8 +20,8 @@ class Robot:
             f"{robot_dir_path}/{name}.rob"
         )  # pr2, atlas, baxter, robonaut2
         self._robot = self._world.robot(0)
-        self._ik_solver = IKSolver(self._robot)
-        self._all_joint_limits = np.array(self._ik_solver.getJointLimits()).T
+        _ik_solver = IKSolver(self._robot)
+        self._all_joint_limits = np.array(_ik_solver.getJointLimits()).T
         self._active_joint_idx = active_joint_idx
         self.set_active_dofs(active_joint_idx)
         self.n_dofs = len(active_joint_idx)
@@ -30,7 +30,6 @@ class Robot:
         )  # end effector link
 
     def set_active_dofs(self, active_dofs):
-        self._ik_solver.setActiveDofs(active_dofs)
         self.active_joint_names = [self._robot.link(ji).getName() for ji in active_dofs]
 
         self.active_joint_min = self._all_joint_limits[active_dofs, 0]
@@ -167,27 +166,29 @@ class Robot:
         return Q, P
 
     def inverse_kinematics_klampt(
-        self, p: np.ndarray, num_trails: int = 50, max_iterations: int = 150
+        self, pose: np.ndarray, seed=None, num_trails: int = 50, max_iterations: int = 150
     ) -> Optional[np.ndarray]:
         """Inverse kinematics using the klampt library"""
-        assert p.ndim == 1 and p.shape[0] == 7, f"p.shape: {p.shape}"
-        t = p[:3]
-        R = so3.from_quaternion(p[3:])  # type: ignore
-        obj = ik.objective(self._klampt_ee_link, t=t.tolist(), R=R)
+        assert pose.ndim == 1 and pose.shape[0] == 7, f"p.shape: {pose.shape}"
+        t = pose[:3]
+        R = so3.from_quaternion(pose[3:])  # type: ignore
+        
+        obj = ik.objective(self._klampt_ee_link, t=pose[0:3].tolist(), R=R)
 
         for _ in range(num_trails):
-            self._ik_solver.add(obj)
-            self._ik_solver.setActiveDofs(self._active_joint_idx)
-            self._ik_solver.setMaxIters(max_iterations)
-            self._ik_solver.sampleInitial()
+            solver = IKSolver(self._robot)
+            solver.add(obj)
+            solver.setActiveDofs(self._active_joint_idx)
+            solver.setMaxIters(max_iterations)
+            solver.sampleInitial()
 
-            res = self._ik_solver.solve()
+            res = solver.solve()
 
             if res:
                 q = self._Q_from_Qvec(np.asarray([self._robot.getConfig()]))[0]
                 return q
 
-        print(f"[INFO] Failed to find a solution for p: {p}")
+        # print(f"[INFO] Failed to find a solution for pose: {pose}")
         return None
 
     def __repr__(self):
@@ -221,22 +222,3 @@ class BaxterArm(Robot):
 #     def __init__(self):
 #         super().__init__("robonaut2", [4])
 #         raise NotImplementedError("Robonaut2Arm is not implemented yet.")
-
-
-class PR2(Robot):
-    def __init__(self):
-        # arm from 51 to 61, palm 63
-        super().__init__("pr2", [51, 52, 53, 55, 56, 60, 61, 63])
-
-
-# robot = BaxterArm()
-
-# Q, P = robot.sample_joint_angles_and_poses(5)
-# print(repr(Q))
-# print(repr(P))
-# qik = robot.inverse_kinematics_klampt(P[0])
-# print(qik)
-# pik = robot.forward_kinematics(np.array([qik]))
-# # print Pik, p0
-# print(f"Pik: {pik}, p0: {P[0]}")
-# assert np.allclose(Q, qik, atol=1e-5), f"Q: {Q}, Qik: {Qik}"

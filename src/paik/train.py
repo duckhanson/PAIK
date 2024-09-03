@@ -11,7 +11,7 @@ import wandb
 from torch.utils.data import DataLoader, TensorDataset
 
 from .settings import SolverConfig, PANDA_PAIK
-from .solver import Solver
+from .solver import Solver, get_solver_from_config, NSF, PAIK
 from .file import save_numpy, save_pickle, load_numpy, load_pickle
 
 PATIENCE = 4
@@ -32,12 +32,51 @@ def init_seeds(seed=42):
         torch.backends.cudnn.benchmark = False
 
 
-class Trainer(Solver):
+class Trainer:
     def __init__(self, solver_param: SolverConfig) -> None:
-        super().__init__(solver_param)
+        self.solver = get_solver_from_config(solver_param)
+        self._solver = self.solver._solver
+        self.param = self.solver.param
         self.__noise_esp = self.param.noise_esp
         self.__noise_esp_decay = self.param.noise_esp_decay  # 0.8 - 0.9
         self.__noise_scale = 1 / self.__noise_esp
+
+    def get_train_loader(self, batch_size: int):
+        """Get the training data loader."""
+
+        # add noise
+        if self.__noise_esp < 1e-9:
+            noise_std = np.zeros((len(self.solver.P), 1))
+        else:
+            noise_std = self.__noise_esp * \
+                np.random.rand(len(self.solver.P), 1)
+        J = self.solver.normalize_input_data(
+            self.solver.J + noise_std *
+            np.random.randn(*self.solver.J.shape), "J"
+        )
+        if isinstance(self.solver, NSF):
+            C = self.solver.normalize_input_data(
+                np.column_stack(
+                    (self.solver.P, self.__noise_scale * noise_std)),
+                "C",
+            )
+        else:
+            C = self.solver.normalize_input_data(
+                np.column_stack(
+                    (self.solver.P, self.solver.F, self.__noise_scale * noise_std)),
+                "C",
+            )
+
+        return DataLoader(
+            TensorDataset(
+                torch.from_numpy(J.astype(np.float32)).to(self.solver._device),
+                torch.from_numpy(C.astype(np.float32)).to(self.solver._device),
+            ),
+            batch_size=batch_size,
+            shuffle=True,
+            drop_last=True,
+            # generator=torch.Generator(device='cuda:0'), # when use train stand alone
+        )
 
     def mini_train(
         self,
@@ -49,6 +88,8 @@ class Trainer(Solver):
         num_eval_sols=100,
         seed=42,
     ) -> None:
+        """Train the model for a few epochs."""
+
         init_seeds(seed=seed)
         early_stopping = EarlyStopping(
             patience=patience,
@@ -56,39 +97,16 @@ class Trainer(Solver):
             enable_save=True,
         )
         # data generation
-        assert self._device == "cuda", "device should be cuda"
+        assert self.solver._device == "cuda", "device should be cuda"
 
         def update_noise_esp(num_epochs):
-            return self.param.noise_esp * (self.__noise_esp_decay**num_epochs)
+            self.__noise_esp = self.param.noise_esp * \
+                (self.__noise_esp_decay**num_epochs)
 
         self._solver.train()
 
         for ep in range(num_epochs):
-            # add noise
-            if self.__noise_esp < 1e-9:
-                noise_std = np.zeros((len(self.F), 1))
-            else:
-                noise_std = self.__noise_esp * np.random.rand(len(self.F), 1)
-            J = self.normalize_input_data(
-                self.J + noise_std * np.random.randn(*self.J.shape), "J"
-            )
-            C = self.normalize_input_data(
-                np.column_stack(
-                    (self.P, self.F, self.__noise_scale * noise_std)),
-                "C",
-            )
-            C = self._remove_partition_label(C) if self._use_nsf_only else C
-
-            train_loader = DataLoader(
-                TensorDataset(
-                    torch.from_numpy(J.astype(np.float32)).to(self._device),
-                    torch.from_numpy(C.astype(np.float32)).to(self._device),
-                ),
-                batch_size=batch_size,
-                shuffle=True,
-                drop_last=True,
-                # generator=torch.Generator(device='cuda:0'), # when use train stand alone
-            )
+            train_loader = self.get_train_loader(batch_size=batch_size)
 
             tqdm_train_loader = tqdm(train_loader)
             batch_loss = np.zeros((len(train_loader)))
@@ -103,17 +121,18 @@ class Trainer(Solver):
                     print(f"Early stopping ({loss} is nan)")
                     break
 
-            self.__noise_esp = update_noise_esp(ep)
+            update_noise_esp(ep)
 
-            avg_pos_errs, avg_ori_errs, _, _ = self.evaluate_ikp_iterative(  # type: ignore
+            avg_pos_errs, avg_ori_errs, _ = self.solver.random_ikp(  # type: ignore
                 num_poses=num_eval_poses, num_sols=num_eval_sols, verbose=False
             )  # type: ignore
-            self.base_std = self.param.base_std  # type: ignore
+            self.solver.base_std = self.param.base_std  # type: ignore
 
-            self._scheduler.step(avg_pos_errs)  # type: ignore
+            self.solver._scheduler.step(avg_pos_errs)  # type: ignore
 
             log_info = {
-                "lr": self._optimizer.param_groups[0]["lr"],  # type: ignore
+                # type: ignore
+                "lr": self.solver._optimizer.param_groups[0]["lr"],
                 "position_errors": avg_pos_errs,
                 "orientation_errors": avg_ori_errs,
                 "train_loss": batch_loss.mean(),
@@ -122,7 +141,8 @@ class Trainer(Solver):
 
             wandb.log(log_info)
 
-            early_stopping(avg_pos_errs, self, begin_time)  # type: ignore
+            early_stopping(avg_pos_errs, self.solver,
+                           begin_time)  # type: ignore
 
             if early_stopping.early_stop:
                 print("Early stopping")
@@ -131,25 +151,14 @@ class Trainer(Solver):
         print("Finished Training")
 
     def train_step(self, batch):
-        """
-        _summary_
-
-        Args:
-            model (_type_): _description_
-            batch (_type_): _description_
-            optimizer (_type_): _description_
-            scheduler (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
+        """Train step for a single batch."""
         x, y = batch
         loss = -self._solver(y).log_prob(x)  # -log p(x | y)
         loss = loss.mean()
 
-        self._optimizer.zero_grad()
+        self.solver._optimizer.zero_grad()
         loss.backward()
-        self._optimizer.step()
+        self.solver._optimizer.step()
 
         return loss.item()
 
@@ -201,14 +210,14 @@ class EarlyStopping:
             if self.counter >= self.patience:
                 self.early_stop = True
 
-    def save_checkpoint(self, val_loss, paik, date):
+    def save_checkpoint(self, val_loss, solver, date):
         """Saves model when validation loss decrease."""
         if self.enable_save:
             if self.verbose:
                 self.trace_func(
                     f"Validation loss decreased ({self.val_loss_min:.4f} --> {val_loss:.4f})."
                 )
-            paik.save_if_top3(date, val_loss)
+            solver.save_if_best(date, val_loss)
         else:
             if self.verbose:
                 self.trace_func(

@@ -13,7 +13,7 @@ from zuko.flows import Flow, Unconditional
 from zuko.flows.spline import NSF
 from .settings import SolverConfig
 from jrl.robots import Panda, Fetch, FetchArm, Iiwa7
-from .klampt_robot import AtlasArm, AtlasWaistArm, BaxterArm, PR2
+from .klampt_robot import AtlasArm, AtlasWaistArm, BaxterArm
 from pprint import pprint
 
 
@@ -27,8 +27,8 @@ def get_flow_model(config: SolverConfig) -> tuple[Flow, Optimizer, ReduceLROnPla
     Returns:
         tuple[Flow, Optimizer, ReduceLROnPlateau]: flow model, optimizer, and scheduler
     """
-    pprint(f"[INFO] create new model with config: {config}")
-    assert config.model_architecture in ["nsf"]
+    # pprint(f"[INFO] create new model with config: {config}")
+    # assert config.model_architecture in ["nsf"]
     # Build Generative model, NSF
     # Neural spline flow (NSF) with inputs 7 features and 3 + 4 + 1 context
 
@@ -59,7 +59,7 @@ def get_flow_model(config: SolverConfig) -> tuple[Flow, Optimizer, ReduceLROnPla
         betas=config.lr_beta,
     )
 
-    print("[WARNING] not load model yet.")
+    # print("[WARNING] not load model yet.")
 
     # Train to maximize the log-likelihood
     scheduler = ReduceLROnPlateau(

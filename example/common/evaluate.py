@@ -145,8 +145,8 @@ def mmd_evaluate_multiple_poses(
     _summary_
 
     Args:
-        J_hat_ (npt.NDArray): generated IK solutions with shape (num_poses, num_sols, num_dofs or n)
-        J_ground_truth_ (npt.NDArray): numerical IK solutions with shape (num_poses, num_sols, num_dofs or n)
+        J_hat_ (npt.NDArray): generated IK solutions with shape (num_sols, num_poses, num_dofs or n)
+        J_ground_truth_ (npt.NDArray): numerical IK solutions with shape (num_sols, num_poses, num_dofs or n)
         num_poses (int): the number of poses, which is the first dimension of J_hat_ and J_ground_truth_
         use_inverse_multi_quadric (bool, optional): if True, use inverse multiquadric kernel, else use gaussian kerenl. Defaults to True.
 
@@ -154,22 +154,24 @@ def mmd_evaluate_multiple_poses(
         float: a scalar of mmd score between the J_hat_ and J_ground_truth_ average over all poses
     """
 
+    # check if J_hat.shape=(1, num_sols*num_poses, num_dofs)
     if J_hat_.shape[0] == 1 and J_ground_truth_.shape[0] == 1:
-        J_hat_ = J_hat_.reshape(num_poses, -1, J_hat_.shape[-1])
-        J_ground_truth_ = J_ground_truth_.reshape(num_poses, -1, J_ground_truth_.shape[-1])
+        J_hat_ = J_hat_.reshape(-1, num_poses, J_hat_.shape[-1])
+        J_ground_truth_ = J_ground_truth_.reshape(-1, num_poses, J_ground_truth_.shape[-1])
     
-    assert (
-        len(J_hat_) == num_poses and J_hat_.shape == J_ground_truth_.shape
-    ), f"J_hat_.shape: {J_hat_.shape}, J_ground_truth_.shape: {J_ground_truth_.shape}, num_poses: {num_poses}"
+    assert J_hat_.shape[1] == num_poses, f"J_hat_.shape[1]: {J_hat_.shape[1]}, num_poses: {num_poses}"
+    assert J_ground_truth_.shape[1] == num_poses, f"J_ground_truth_.shape[1]: {J_ground_truth_.shape[1]}, num_poses: {num_poses}"
 
     device = "cuda"
+    
     J_hat_ = torch.from_numpy(J_hat_).float().to(device)  # type: ignore
     J_ground_truth_ = (
         torch.from_numpy(J_ground_truth_).float().to(device)
     )  # type: ignore
+    
     mmd_all_poses = torch.stack(
         [
-            mmd_score(J_hat_[i], J_ground_truth_[i], use_inverse_multi_quadric)
+            mmd_score(J_hat_[:, i], J_ground_truth_[:, i], use_inverse_multi_quadric)
             for i in range(num_poses)
         ],
         dim=0,

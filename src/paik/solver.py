@@ -1,6 +1,6 @@
 # Import required packages
 from __future__ import annotations
-from typing import Any, Tuple
+from typing import Any, Optional, Tuple
 import os
 import shutil
 from os.path import isdir
@@ -20,6 +20,7 @@ from .evaluate import evaluate_pose_error_P2d_P2d
 from zuko.distributions import DiagNormal
 from zuko.flows import Flow, Unconditional
 
+
 def get_solver(arch_name: str, robot_name: str, load: bool = False, work_dir: str = os.path.abspath(os.getcwd())) -> Solver:
     """
     Get the solver with the given architecture and robot.
@@ -34,12 +35,51 @@ def get_solver(arch_name: str, robot_name: str, load: bool = False, work_dir: st
     """
     solver_param = get_config(arch_name, robot_name)
 
-    solver = Solver(
-        solver_param=solver_param, # type: ignore
-        load_date="best" if load else "",
-        work_dir=work_dir,
-    )
-    
+    if arch_name == "paik":
+        solver = PAIK(
+            solver_param=solver_param,  # type: ignore
+            load_date="best" if load else "",
+            work_dir=work_dir,
+        )
+    elif arch_name == "nsf":
+        solver = NSF(
+            solver_param=solver_param,  # type: ignore
+            load_date="best" if load else "",
+            work_dir=work_dir,
+        )
+    else:
+        raise NotImplementedError(f"Architecture {arch_name} not supported.")
+
+    return solver
+
+
+def get_solver_from_config(solver_param: SolverConfig, load: bool = False) -> Solver:
+    """
+    Get the solver with the given solver config.
+
+    Args:
+        solver_param (SolverConfig): solver config
+        load (bool, optional): load the solver or not. Defaults to False.
+
+    Returns:
+        Solver: solver instance
+    """
+    if solver_param.model_architecture == "paik":
+        solver = PAIK(
+            solver_param=solver_param,  # type: ignore
+            load_date="best" if load else "",
+            work_dir=solver_param.workdir,
+        )
+    elif solver_param.model_architecture == "nsf":
+        solver = NSF(
+            solver_param=solver_param,  # type: ignore
+            load_date="best" if load else "",
+            work_dir=solver_param.workdir,
+        )
+    else:
+        raise NotImplementedError(
+            f"Architecture {solver_param.model_architecture} not supported.")
+
     return solver
 
 
@@ -57,20 +97,11 @@ class Solver:
 
         self.param = solver_param
 
-        if solver_param.use_dimension_reduction:
-            print(f"[INFO] use_dimension_reduction is True, use HNNE.")
-            raise NotImplementedError("Not support HNNE.")
-        else:
-            print(f"[INFO] use_dimension_reduction is False, use clustering.")
-
-        try:
-            if load_date == "best":
-                self.load_best_date()
-            else:
-                self.load_by_date(load_date)
-        except FileNotFoundError as e:
-            print(f"[WARNING] {e}. Load training data instead.")
-            self.__load_training_data()
+        # if solver_param.use_dimension_reduction:
+        #     print(f"[INFO] use_dimension_reduction is True, use HNNE.")
+        #     raise NotImplementedError("Not support HNNE.")
+        # else:
+        #     print(f"[INFO] use_dimension_reduction is False, use clustering.")
 
     @property
     def base_std(self):
@@ -101,62 +132,59 @@ class Solver:
         self._latent = torch.zeros((self.n,), device=self._device)
         # load inference data
         assert (
-            self.n == self._robot.n_dofs
-        ), f"n should be {self._robot.n_dofs} as the robot"
+            self.n == self.robot.n_dofs
+        ), f"n should be {self.robot.n_dofs} as the robot"
 
     @base_std.setter
     def base_std(self, value: float):
         assert value >= 0, "base_std should be greater than or equal to 0."
         self._base_std = value
-        self.__change_solver_base()
+        self._change_solver_base()
 
     @latent.setter
     def latent(self, value: np.ndarray):
         assert len(value) == self.n, f"latent should have length {self.n}."
         self._latent = torch.from_numpy(
             value.astype(np.float32)).to(self._device)
-        self.__change_solver_base()
+        self._change_solver_base()
 
-    # a dictionary in weight_dir to store the information of top3 dates, their l2, and their model by save_by_date, save the date if the current model is better, and remove the worst date
-    def save_if_top3(self, date: str, l2: float):
-        top3_date_path = self.__top3_date_path()
+    # a dictionary in weight_dir to store the information of best date, their l2, and their model by save_by_date, save the date if the current model is better, and remove the worst date
+    def save_if_best(self, date: str, l2: float):
+        best_date_path = self._best_date_path()
 
-        if not os.path.exists(top3_date_path):
-            save_pickle(
-                top3_date_path, {"date": ["", "", ""],
-                                 "l2": [1000, 1000, 1000]}
-            )
-        top3_date = load_pickle(top3_date_path)
-        save_idx = -1
-        # # if the top3 date has the current date, then check if the current model is better, if so, replace it
-        if date in top3_date["date"]:
-            if l2 < top3_date["l2"][top3_date["date"].index(date)]:
-                save_idx = top3_date["date"].index(date)
-        elif l2 < max(top3_date["l2"]):
-            save_idx = top3_date["l2"].index(max(top3_date["l2"]))
-
-        if save_idx == -1:
+        if not os.path.exists(best_date_path):
+            df = pd.DataFrame({"date": ["first_init"], "l2": [1000]})
+            df.to_csv(best_date_path, index=False)
+            print(f"[INFO] create {best_date_path} with first_init.")
+            
+        df = pd.read_csv(best_date_path)
+        best_date = df["date"].values[0]
+        best_l2 = df["l2"].values[0]
+        
+        if l2 < best_l2:
+            self._remove_by_date(best_date)
+            best_date = date
+            best_l2 = l2
+            df = pd.DataFrame({"date": [best_date], "l2": [best_l2]})
+            df.to_csv(best_date_path, index=False)
+            self._save_by_date(date)
             print(
-                f"[INFO] current model is not better than the top3 model in {top3_date_path}"
+                f"[SUCCESS] save the date {date} with l2 {l2:.5f} in {best_date_path}"
             )
         else:
-            if (
-                top3_date["date"][save_idx] != ""
-                and top3_date["date"][save_idx] != date
-            ):
-                self.remove_by_date(top3_date["date"][save_idx])
-            top3_date["date"][save_idx] = date
-            top3_date["l2"][save_idx] = l2
-            save_pickle(top3_date_path, top3_date)
-            self.save_by_date(date)
             print(
-                f"[SUCCESS] save the date {date} with l2 {l2:.5f} in {top3_date_path}"
+                f"[INFO] current model is not better than the best model in {best_date_path}"
             )
+            
         print(
-            f"[INFO] top3 dates: {top3_date['date']}, top3 l2: {top3_date['l2']}")
+            f"[INFO] best date: {best_date}, best l2: {best_l2}")
 
     # remove by date
-    def remove_by_date(self, date: str):
+    def _remove_by_date(self, date: str):
+        if date == "":
+            print(f"[WARNING] date is empty. Remove failed.")
+            return
+        
         if isdir(os.path.join(self.param.weight_dir, date)):
             shutil.rmtree(os.path.join(
                 self.param.weight_dir, date), ignore_errors=True)
@@ -167,7 +195,7 @@ class Solver:
             )
 
     # save model, J, P, F, J_knn, P_knn in the directory of date in the weight_dir
-    def save_by_date(self, date: str):
+    def _save_by_date(self, date: str):
         save_dir = os.path.join(self.param.weight_dir, date)
         os.makedirs(save_dir, exist_ok=True)
         torch.save(
@@ -181,7 +209,8 @@ class Solver:
         if not os.path.exists(os.path.join(save_dir, "J.npy")):
             save_numpy(os.path.join(save_dir, "J.npy"), self.J)
             save_numpy(os.path.join(save_dir, "P.npy"), self.P)
-            save_numpy(os.path.join(save_dir, "F.npy"), self.F)
+            if not self._use_nsf_only:
+                save_numpy(os.path.join(save_dir, "F.npy"), self.F)
 
             save_pickle(os.path.join(save_dir, "param.pth"), self.param)
             save_pickle(os.path.join(save_dir, "J_knn.pth"), self.J_knn)
@@ -190,7 +219,7 @@ class Solver:
             print(f"[INFO] J, P, F, J_knn, P_knn already exist in {save_dir}.")
         print(f"[SUCCESS] save model, J, P, F, J_knn, P_knn in {save_dir}")
 
-    def load_by_date(self, date: str):
+    def _load_by_date(self, date: str):
         if not isdir(os.path.join(self.param.weight_dir, date)):
             raise FileNotFoundError(
                 f"{date} not found in {self.param.weight_dir}.")
@@ -205,92 +234,107 @@ class Solver:
         P_knn_path = os.path.join(load_dir, "P_knn.pth")
 
         self.param = load_pickle(param_path)
-        self._solver.load_state_dict(torch.load(model_path)["solver"])
+        try:
+            self._solver.load_state_dict(torch.load(model_path)["solver"])
+        except RuntimeError as e:
+            print(f"[Warning] {e}. Please check the model path {model_path}.")
+
         self.J = np.load(J_path)
         self.P = np.load(P_path)
-        self.F = np.load(F_path)
-        self.__compute_normalizing_elements()
+        if self._use_nsf_only:
+            self.C = self.P
+        else:
+            self.F = np.load(F_path)
+            self.C = np.column_stack((self.P, self.F))
+        self._compute_normalizing_elements()
         self.J_knn = load_pickle(J_knn_path)
         self.P_knn = load_pickle(P_knn_path)
 
-        print(f"[SUCCESS] load model, J, P, F, J_knn, P_knn from {load_dir}")
+        print(f"[SUCCESS] load from {load_dir}")
 
-    def __top3_date_path(self):
+    def _best_date_path(self):
         if self._use_nsf_only:
-            return os.path.join(self.param.weight_dir, "top3_date_nsf.pth")
+            return os.path.join(self.param.weight_dir, "best_date_nsf.csv")
         else:
-            return os.path.join(self.param.weight_dir, "top3_date_paik.pth")
+            return os.path.join(self.param.weight_dir, "best_date_paik.csv")
 
-    def load_best_date(self):
-        top3_date_path = self.__top3_date_path()
-
-        if not os.path.exists(top3_date_path):
+    def _load_best_date(self):
+        best_date_path = self._best_date_path()
+        
+        if not os.path.exists(best_date_path):
             raise FileNotFoundError(
-                f"{top3_date_path} not found. Please save the model first."
+                f"{best_date_path} not found. Please save the model first."
             )
-        top3_date = load_pickle(top3_date_path)
+            
+        # read the best date from the csv file
+        df = pd.read_csv(best_date_path)
+        best_date = df["date"].values[0]
+        best_l2 = df["l2"].values[0]
+        self._load_by_date(best_date)
 
-        best_date = top3_date["date"][top3_date["l2"].index(
-            min(top3_date["l2"]))]
-        self.load_by_date(best_date)
         print(
-            f"[SUCCESS] load best date {best_date} with l2 {min(top3_date['l2']):.5f} from {top3_date_path}."
+            f"[SUCCESS] load best date {best_date} with l2 {best_l2:.5f} from {best_date_path}."
         )
 
     # private methods
-    def __compute_normalizing_elements(self):
-        C = np.column_stack((self.P, self.F))
-
-        self.__normalization_elements = {
+    def _compute_normalizing_elements(self):
+        self._normalization_elements = {
             "J": {"mean": self.J.mean(axis=0), "std": self.J.std(axis=0)},
             "C": {
                 # extra column for tuning std of noise for training data
-                "mean": np.concatenate((C.mean(axis=0), np.zeros((1)))),
-                "std": np.concatenate((C.std(axis=0), np.ones((1)))) + 1e-6,
+                "mean": np.concatenate((self.C.mean(axis=0), np.zeros((1)))),
+                "std": np.concatenate((self.C.std(axis=0), np.ones((1)))) + 1e-6,
             },
         }
 
-    def __load_training_data(self):
+    def _load_J_P(self):
         """
-        Load training data from the given path, if not found, generate and save it.
+        Load J and P from the given path, if not found, generate and save it.
         """
-        assert isdir(
-            self.__solver_param.train_dir
-        ), f"{self.__solver_param.train_dir} not found, please change workdir to the project root!"
-        data_path = (
-            lambda name: f"{self.__solver_param.train_dir}/{name}-{self.__solver_param.N}-{self.n}-{self.m}-{self.r}.npy"
-        )
-
-        J, P, F = [load_numpy(file_path=data_path(name))
-                   for name in ["J", "P", "F"]]
+        J, P = [load_numpy(file_path=self._load_JPF_path(name))
+                for name in ["J", "P"]]
 
         if J is None or P is None:
             print(
-                f"[WARNING] J or P not found, generate and save in {data_path('J')}.")
-            J, P = self._robot.sample_joint_angles_and_poses(
-                n=self.__solver_param.N
+                f"[WARNING] J or P not found, generate and save in {self._load_JPF_path('J')}.")
+            J, P = self.robot.sample_joint_angles_and_poses(
+                n=self.param.N
             )
-            save_numpy(file_path=data_path("J"), arr=J)
-            save_numpy(file_path=data_path("P"), arr=P)
+            save_numpy(file_path=self._load_JPF_path("J"), arr=J)
+            save_numpy(file_path=self._load_JPF_path("P"), arr=P)
             print(
-                f"[SUCCESS] J and P saved in {data_path('J')} and {data_path('P')}.")
+                f"[SUCCESS] J and P saved in {self._load_JPF_path('J')} and {self._load_JPF_path('P')}.")
 
-        if self._use_nsf_only:
-            F = np.zeros((len(J), 1))
+        self.J, self.P = J, P
+
+    def _load_JPF_path(self, name: str):
+        """
+        JPF path for saving and loading J, P, F.
+        """
+        assert isdir(
+            self.param.train_dir
+        ), f"{self.param.train_dir} not found, please change workdir to the project root!"
+        return f"{self.param.train_dir}/{name}-{self.param.N}-{self.n}-{self.m}-{self.r}.npy"
+
+    def _load_F(self):
+        """
+        Load F from the given path, if not found, generate and save it.
+        """
+        F = load_numpy(file_path=self._load_JPF_path("F"))
 
         if F is None:
             print(
-                f"[WARNING] F not found, generate and save in {data_path('F')}.")
+                f"[WARNING] F not found, generate and save in {self._load_JPF_path('F')}.")
             assert self.r > 0, "r should be greater than 0."
             # maximum number of data for hnne (11M), we use max_num_data_hnne to test
-            num_data = min(self.__solver_param.max_num_data_hnne, len(J))
+            num_data = min(self.param.max_num_data_hnne, len(J))
 
             # hnne = HNNE(dim=r, ann_threshold=config.num_neighbors)
             hnne = HNNE()
             F = hnne.fit_transform(X=J[:num_data], dim=self.r, verbose=True)
 
             if not self.param.use_dimension_reduction:
-                print(f"[INFO] use_dimension_reduction is False, use clustering.")
+                # print(f"[INFO] use_dimension_reduction is False, use clustering.")
                 partitions = hnne.hierarchy_parameters.partitions
                 num_clusters = hnne.hierarchy_parameters.partition_sizes
                 closest_idx_to_num_clusters_20 = np.argmin(
@@ -311,51 +355,62 @@ class Solver:
                             ).flatten()  # type: ignore
                         ],
                     )
-                )  # type: ignore
+                )
 
-            save_numpy(file_path=data_path("F"), arr=F)
-            print(f"[SUCCESS] F saved in {data_path('F')}.")
+            save_numpy(file_path=self._load_JPF_path("F"), arr=F)
+            print(f"[SUCCESS] F saved in {self._load_JPF_path('F')}.")
 
-        df = pd.DataFrame(F)
-        print(df.describe())
+        self.F = F
 
         if not self.param.use_dimension_reduction:
             # check if numbers of F are integers
-            assert np.allclose(F, F.astype(int)), "F should be integers."
+            assert np.allclose(self.F, self.F.astype(int)
+                               ), "F should be integers."
 
-        self.J, self.P, self.F = J, P, F
-        # for normalization
-        self.__compute_normalizing_elements()
+    def _load_training_data(self):
+        """
+        Load training data from the given path, if not found, generate and save it.
+        """
+        self._load_J_P()
+        self._load_F()
 
-        path_P_knn = f"{self.__solver_param.weight_dir}/P_knn-{self.__solver_param.N}-{self.n}-{self.m}-{self.r}.pth"
+        self.C = np.column_stack((self.P, self.F))
+
+        self._compute_normalizing_elements()
+        self._load_knn()
+
+    def _load_knn(self):
+        """
+        Load knn models from the given path, if not found, generate and save it.
+        """
+
+        path_P_knn = f"{self.param.weight_dir}/P_knn-{self.param.N}-{self.n}-{self.m}-{self.r}.pth"
         try:
             self.P_knn = load_pickle(path_P_knn)
         except:
             print(
                 f"[WARNING] P_knn not found, generate and save in {path_P_knn}.")
-            self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(P)
+            self.P_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.P)
             save_pickle(
                 path_P_knn,
                 self.P_knn,
             )
         print(f"[SUCCESS] P_knn load from {path_P_knn}.")
 
-        path_J_knn = f"{self.__solver_param.weight_dir}/J_knn-{self.__solver_param.N}-{self.n}-{self.m}-{self.r}.pth"
+        path_J_knn = f"{self.param.weight_dir}/J_knn-{self.param.N}-{self.n}-{self.m}-{self.r}.pth"
         try:
             self.J_knn = load_pickle(path_J_knn)
         except:
             print(
                 f"[WARNING] J_knn not found, generate and save in {path_J_knn}.")
-            self.J_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(J)
+            self.J_knn = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(self.J)
             save_pickle(
                 path_J_knn,
                 self.J_knn,
             )
         print(f"[SUCCESS] J_knn load from {path_J_knn}.")
 
-        return J, P, F
-
-    def __change_solver_base(self):
+    def _change_solver_base(self):
         """
         Change the base distribution of the solver to the new base distribution.
         """
@@ -363,16 +418,16 @@ class Solver:
             transforms=self._solver.transforms,  # type: ignore
             base=Unconditional(
                 DiagNormal,
-                torch.zeros((self._robot.n_dofs,),
+                torch.zeros((self.robot.n_dofs,),
                             device=self._device) + self._latent,
-                torch.ones((self._robot.n_dofs,),
+                torch.ones((self.robot.n_dofs,),
                            device=self._device) * self._base_std,
                 buffer=True,
             ),  # type: ignore
         )
 
     # public methods
-    def normalize_input_data(self, data: np.ndarray, name: str) -> np.ndarray:
+    def normalize_input_data(self, data: np.ndarray, name: str, return_torch: bool = False):
         """
         Normalize input data. J_norm = (J - J_mean) / J_std, C_norm = (C - C_mean) / C_std
 
@@ -383,9 +438,14 @@ class Solver:
         Returns:
             np.ndarray: normalized data
         """
-        return (
-            data - self.__normalization_elements[name]["mean"]
-        ) / self.__normalization_elements[name]["std"]
+        norm = (data - self._normalization_elements[name]
+                ["mean"]) / self._normalization_elements[name]["std"]
+        if return_torch:
+            return torch.from_numpy(
+                norm.astype(np.float32)
+            ).to(self._device)
+
+        return norm
 
     def denormalize_output_data(self, data: np.ndarray, name: str) -> np.ndarray:
         """
@@ -399,47 +459,18 @@ class Solver:
             np.ndarray: denormalized data
         """
         return (
-            data * self.__normalization_elements[name]["std"]
-            + self.__normalization_elements[name]["mean"]
+            data * self._normalization_elements[name]["std"]
+            + self._normalization_elements[name]["mean"]
         )
 
-    def _remove_partition_label(self, C: np.ndarray):
-        """
-        Remove posture feature from C
-
-        Args:
-            C (np.ndarray): conditions
-
-        Returns:
-            np.ndarray: conditions without posture feature
-        """
-        assert self._use_nsf_only and isinstance(C, np.ndarray)
-        # delete the last 2 of the last dimension of C, which is posture feature
-        C = np.delete(C, -2, -1)
-        return C
-
-    def solve(self, P: np.ndarray, F: np.ndarray, num_sols: int) -> np.ndarray:
-        """
-        Solve inverse kinematics problem.
-
-        Args:
-            P (np.ndarray): poses as least 2D array
-            F (np.ndarray): posture features as least 2D array
-            num_sols (int): number of solutions
-
-        Returns:
-            np.ndarray: J with shape (num_sols, num_poses, num_dofs)
-        """
-        C = self.normalize_input_data(
-            np.column_stack((P, F, np.zeros((len(F), 1)))), "C"
-        )
-        C = self._remove_partition_label(C) if self._use_nsf_only else C
-        C = torch.from_numpy(C.astype(np.float32)).to(self._device)
+    def _solve_conditions(self, conditions: np.ndarray, num_sols: int):
+        conditions_torch = self.normalize_input_data(
+            conditions, "C", return_torch=True)
         with torch.inference_mode():
-            J = self._solver(C).sample((num_sols,))
+            J = self._solver(conditions_torch).sample((num_sols,))
         return self.denormalize_output_data(J.detach().cpu().numpy(), "J")
 
-    def make_divisible_C(
+    def _get_divisible_conditions(
         self, C: np.ndarray, batch_size: int
     ) -> tuple[np.ndarray, int]:
         """
@@ -459,7 +490,7 @@ class Solver:
                            axis=0) if complementary > 0 else C
         return C, complementary
 
-    def remove_complementary_J(self, J: np.ndarray, complementary: int) -> np.ndarray:
+    def _remove_complementary_ik_solutions(self, J: np.ndarray, complementary: int) -> np.ndarray:
         """
         Remove the complementary conditions from J.
 
@@ -473,52 +504,45 @@ class Solver:
         assert J.ndim == 2
         return J[:-complementary] if complementary > 0 else J
 
-    def solve_batch(
-        self,
-        P: np.ndarray,
-        F: np.ndarray,
-        num_sols: int,
-        batch_size: int = 4000,
-        verbose: bool = True,
-    ) -> np.ndarray:
+    def _get_conditions(self, P: np.ndarray, F: Optional[np.ndarray] = None):
+        if F is None:
+            return np.column_stack((P, np.zeros((len(P), 1))))
+        else:
+            return np.column_stack((P, F, np.zeros((len(F), 1))))
+
+    def _get_conditions_batch(self, P: np.ndarray, num_sols: int, batch_size: int, F: Optional[np.ndarray] = None):
+        # shape: (num_poses, C.shape[-1] = m + r + 1)
+        C = self._get_conditions(P, F)
+        C = self.normalize_input_data(C, "C")
+        # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
+        C = np.tile(C, (num_sols, 1))
+        C, complementary = self._get_divisible_conditions(C, batch_size)
+        C = torch.from_numpy(
+            C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])
+        ).to(self._device)
+        return C, complementary
+
+    def _solve_conditions_batch(self, C: np.ndarray, num_sols: int, complementary: int, verbose: bool = False) -> np.ndarray:
         """
         Solve inverse kinematics problem in batch.
 
         Args:
-            P (np.ndarray): poses with shape (num_poses, m)
-            F (np.ndarray): F with shape (num_poses, r)
-            num_sols (int): number of solutions
-            batch_size (int, optional): batch size. Defaults to 4000.
-            verbose (bool, optional): use trange or not. Defaults to True.
+            C (np.ndarray): conditions with shape (num_poses, m + x + 1), x = 1 for paik, x = 0 for nsf
 
         Returns:
-            np.ndarray: J with shape (num_sols, num_poses, num_dofs)
+            np.ndarray: J with shape (num_poses, num_dofs)
         """
-
-        if len(P) * num_sols < batch_size:
-            return self.solve(P, F, num_sols)
-
-        # shape: (num_poses, C.shape[-1] = m + r + 1)
-        C = np.column_stack((P, F, np.zeros((len(F), 1))))
-        C = self.normalize_input_data(C, "C")
-        # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
-        C = np.tile(C, (num_sols, 1))
-        C = self._remove_partition_label(C) if self._use_nsf_only else C
-        C, complementary = self.make_divisible_C(C, batch_size)
-        # shape: ((num_sols * num_poses + complementary) // batch_size, batch_size, C.shape[-1])
-        C = torch.from_numpy(
-            C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])
-        ).to(self._device)
-
+        batch_size = C.shape[1]
         J = torch.empty((len(C), batch_size, self._robot.n_dofs),
                         device=self._device)
+
         iterator = trange(len(C)) if verbose else range(len(C))
         with torch.inference_mode():
             for i in iterator:
                 J[i] = self._solver(C[i]).sample()
 
         J = J.detach().cpu().numpy()
-        J = self.remove_complementary_J(
+        J = self._remove_complementary_ik_solutions(
             J.reshape(-1, self._robot.n_dofs), complementary
         )
         return self.denormalize_output_data(
@@ -546,12 +570,12 @@ class Solver:
         """
         num_poses, num_sols = len(P), len(J)
         assert len(J.shape) == 3 and len(
-            P.shape) == 2 and J.shape[1] == num_poses
+            P.shape) == 2 and J.shape[1] == num_poses, f"J: {J.shape}, P: {P.shape}"
 
         # P: (num_poses, m), P_expand: (num_sols * num_poses, m)
         P_expand = np.tile(P, (num_sols, 1))
 
-        P_hat = self._robot.forward_kinematics(J.reshape(-1, self.n))
+        P_hat = self.robot.forward_kinematics(J.reshape(-1, self.n))
         l2, ang = evaluate_pose_error_P2d_P2d(P_hat, P_expand)  # type: ignore
 
         if return_posewise_evalution:
@@ -563,12 +587,92 @@ class Solver:
             return l2, ang
         return l2.mean(), ang.mean()
 
+    def generate_ik_solutions(self, *args, **kwargs):
+        raise NotImplementedError("generate_ik_solutions not implemented.")
+
+    def random_ikp(
+        self,
+        num_poses: int,
+        num_sols: int,
+        batch_size: int = 5000,
+        std: float = 0.25,
+        # success_threshold: Tuple[float, float] = (1e-4, 1e-4),
+        select_reference: str = "knn",
+        verbose: bool = True,
+    ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
+        self.base_std = std
+        # Randomly sample poses from test set
+        _, P = self.robot.sample_joint_angles_and_poses(n=num_poses)
+        time_begin = time()
+
+        J_hat = self.generate_ik_solutions(
+            P=P, num_sols=num_sols, batch_size=batch_size, verbose=verbose)
+
+        l2, ang = self.evaluate_pose_error_J3d_P2d(J_hat, P, return_all=True)
+        avg_inference_time = round((time() - time_begin) / num_poses, 3)
+
+        df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
+
+        if verbose:
+            print(df.describe())
+
+            print(
+                tabulate(
+                    [
+                        [
+                            np.round(l2.mean() * 1e3, decimals=2),
+                            np.round(np.rad2deg(ang.mean()), decimals=2),
+                            np.round(avg_inference_time * 1e3, decimals=0),
+                        ]
+                    ],
+                    headers=[
+                        "l2 (mm)",
+                        "ang (deg)",
+                        "inference_time (ms)",
+                    ],
+                )
+            )
+
+        return tuple(
+            [
+                l2.mean(),
+                ang.mean(),
+                avg_inference_time,
+                # round(
+                #     len(
+                #         df.query(
+                #             f"l2 < {success_threshold[0]} & ang < {success_threshold[1]}"
+                #         )
+                #     )
+                #     / (num_poses * num_sols),
+                #     3,
+                # ),
+            ]
+        )
+
+
+class PAIK(Solver):
+    def __init__(
+        self,
+        solver_param: SolverConfig = PANDA_PAIK,
+        load_date: str = "",
+        work_dir: str = os.path.abspath(os.getcwd()),
+    ) -> None:
+        super().__init__(solver_param, load_date, work_dir)
+
+        try:
+            if load_date == "best":
+                self._load_best_date()
+            else:
+                self._load_by_date(load_date)
+        except FileNotFoundError as e:
+            print(f"[WARNING] {e}. Load training data instead.")
+            self._load_training_data()
+
     def get_reference_partition_label(
         self, P: np.ndarray, select_reference: str = "knn", num_sols: int = 1
     ):
-        if select_reference == "zero":
-            return np.zeros((len(P), num_sols)).flatten()
-        elif select_reference == "knn":
+        if select_reference == "knn":
             # type: ignore
             n_neighbors = min(num_sols, 10)
             F = self.F[
@@ -585,81 +689,84 @@ class Solver:
             # randomly pick one posture from train set
             return self.F[np.random.randint(0, len(self.F), len(P))]
         else:
-            raise NotImplementedError
+            raise NotImplementedError(
+                f"select_reference {select_reference} not supported.")
 
     def generate_ik_solutions(
         self,
         P: np.ndarray,
-        F: np.ndarray,
-        num_sols: int,
-        std: float,
-        latent: np.ndarray,
-    ):
-        assert len(P) == len(F), "P and F should have the same length."
-        if std != self.base_std:
-            self.base_std = std
-        if not np.array_equal(latent, np.zeros((self.n,))):
-            self.latent = latent
-        J_hat = self.solve_batch(P, F, num_sols)
-        return J_hat
-
-    def evaluate_ikp_iterative(
-        self,
-        num_poses: int,
-        num_sols: int,
-        batch_size: int = 5000,
-        std: float = 0.25,
-        success_threshold: Tuple[float, float] = (1e-4, 1e-4),
+        num_sols: int = 1,
+        F: Optional[np.ndarray] = None,
+        std: Optional[float] = None,
+        latent: Optional[np.ndarray] = None,
         select_reference: str = "knn",
+        batch_size: int = 4000,
         verbose: bool = True,
-    ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
-        self.base_std = std
-        # Randomly sample poses from test set
-        _, P = self._robot.sample_joint_angles_and_poses(n=num_poses)
-        time_begin = time()
-        # Data Preprocessing
-        F = self.get_reference_partition_label(P, select_reference)
+    ):
+        if F is None:
+            F = self.get_reference_partition_label(P, select_reference)
+        assert len(P) == len(F), "P and F should have the same length."
+        if std is not None and std != self.base_std:
+            self.base_std = std
+        if latent is not None:
+            self.latent = latent
 
-        # Begin inference
-        J_hat = self.solve_batch(
-            P, F, num_sols, batch_size=batch_size, verbose=verbose)
+        if len(P) * num_sols < batch_size:
+            conditions = self._get_conditions(P, F)
+            return self._solve_conditions(conditions, num_sols)
 
-        l2, ang = self.evaluate_pose_error_J3d_P2d(J_hat, P, return_all=True)
-        avg_inference_time = round((time() - time_begin) / num_poses, 3)
+        C, complementary = self._get_conditions_batch(
+            P=P, num_sols=num_sols, batch_size=batch_size, F=F)
+        return self._solve_conditions_batch(C, num_sols, complementary, verbose)
 
-        df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
-        print(df.describe())
 
-        print(
-            tabulate(
-                [
-                    [
-                        np.round(l2.mean() * 1e3, decimals=2),
-                        np.round(np.rad2deg(ang.mean()), decimals=2),
-                        np.round(avg_inference_time * 1e3, decimals=0),
-                    ]
-                ],
-                headers=[
-                    "l2 (mm)",
-                    "ang (deg)",
-                    "inference_time (ms)",
-                ],
-            )
-        )
+class NSF(Solver):
+    def __init__(
+        self,
+        solver_param: SolverConfig = PANDA_PAIK,
+        load_date: str = "",
+        work_dir: str = os.path.abspath(os.getcwd()),
+    ) -> None:
+        super().__init__(solver_param, load_date, work_dir)
 
-        return tuple(
-            [
-                l2.mean(),
-                ang.mean(),
-                avg_inference_time,
-                round(
-                    len(
-                        df.query(
-                            f"l2 < {success_threshold[0]} & ang < {success_threshold[1]}"
-                        )
-                    )
-                    / (num_poses * num_sols),
-                    3,
-                ),
-            ]
-        )
+        try:
+            if load_date == "best":
+                self._load_best_date()
+            else:
+                self._load_by_date(load_date)
+        except FileNotFoundError as e:
+            print(f"[WARNING] {e}. Load training data instead.")
+            self._load_training_data()
+
+    def _load_training_data(self):
+        """
+        Load training data from the given path, if not found, generate and save it.
+        """
+        self._load_J_P()
+
+        self.C = self.P
+
+        self._compute_normalizing_elements()
+        self._load_knn()
+
+    def generate_ik_solutions(
+        self,
+        P: np.ndarray,
+        num_sols: int = 1,
+        std: Optional[float] = None,
+        latent: Optional[np.ndarray] = None,
+        batch_size: int = 4000,
+        verbose: bool = True,
+    ):
+        if std is not None and std != self.base_std:
+            self.base_std = std
+        if latent is not None:
+            self.latent = latent
+
+        if len(P) * num_sols < batch_size:
+            C = self._get_conditions(P)
+            return self._solve_conditions(C, num_sols)
+
+        C, complementary = self._get_conditions_batch(
+            P=P, num_sols=num_sols, batch_size=batch_size)
+        return self._solve_conditions_batch(C, num_sols, complementary, verbose)

@@ -6,25 +6,24 @@ from paik.solver import get_solver
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 from common.config import Config_Diversity
-from ikp import solver_batch, random_ikp
+from ikp import solver_batch, random_ikp, numerical_inverse_kinematics_batch
 
 # set random seeds for numpy and torch for reproducibility
 np.random.seed(0)
 torch.manual_seed(0)
 
-def plot_random_3d_joints_scatter(ax, J, c, label, joint_nums=None):
-    left_J = J[0]
-    right_J = J[1]
-    
-    # reshape input to (num_poses*num_sols, n)
-    left_J = left_J.reshape(-1, left_J.shape[-1])
-    right_J = right_J.reshape(-1, right_J.shape[-1])
-    
+def plot_random_3d_joints_scatter(ax, keys, J, c, marker, label, joint_nums=None):
     if joint_nums is None:
-        joint_nums = np.random.choice(left_J.shape[-1], 3, replace=False)
+        joint_nums = np.random.choice(J[0].shape[-1], 3, replace=False)
     x, y, z = joint_nums
-    ax.scatter(left_J[:, x], left_J[:, y], left_J[:, z], c=c[0], marker='o', label=label[0])
-    ax.scatter(right_J[:, x], right_J[:, y], right_J[:, z], c=c[1], marker='^', label=label[1])
+    
+    for i in keys:
+        Ji = J[i].reshape(-1, J[i].shape[-1])
+        if i == 'num':
+            # alpha is used to make the NUM solution more transparent
+            ax.scatter(Ji[:, x], Ji[:, y], Ji[:, z], c=c[i], marker=marker[i], label=label[i], alpha=0.8)
+        else:
+            ax.scatter(Ji[:, x], Ji[:, y], Ji[:, z], c=c[i], marker=marker[i], label=label[i])
     ax.set_xlabel(f'Joint {x}')
     ax.set_ylabel(f'Joint {y}')
     ax.set_zlabel(f'Joint {z}')
@@ -38,7 +37,7 @@ if __name__ == "__main__":
     config.num_sols = 70
     std = 0.01
     robot_name = "panda"
-    num_x_sub_plots = 4
+    num_x_sub_plots = 2
     num_y_sub_plots = 2
     
     nsf_solver = get_solver(arch_name="nsf", robot_name=robot_name, load=True, work_dir=config.workdir)
@@ -49,9 +48,11 @@ if __name__ == "__main__":
     # Experiment shows the first execute of random_ikp is slow, so we execute a dummy one.
     random_ikp(paik_solver, P, config.num_sols, solver_batch, std=std, verbose=False)
     
+    num_results = random_ikp(nsf_solver, P, config.num_sols, numerical_inverse_kinematics_batch, verbose=False)
     nsf_001_results = random_ikp(nsf_solver, P, config.num_sols, solver_batch, std=std, verbose=True)
     paik_001_results = random_ikp(paik_solver, P, config.num_sols, solver_batch, std=std, verbose=True)
     nsf_025_results = random_ikp(nsf_solver, P, config.num_sols, solver_batch, std=0.25, verbose=True)
+    paik_025_results = random_ikp(paik_solver, P, config.num_sols, solver_batch, std=0.25, verbose=True)
 
         
     # plot and save scatter of J_nsf, J_paik in randomly 3 dimensions (under solver.n)
@@ -59,50 +60,63 @@ if __name__ == "__main__":
     gs = GridSpec(num_x_sub_plots, num_y_sub_plots, figure=fig)
     
     color_map = {
+        'num': 'orange',
         'nsf_001': 'r',
         'paik_001': 'b',
         'nsf_025': 'violet',
+        'paik_025': 'g',
     }
     
+    marker_map = {
+        'num': 'x',
+        'nsf_001': 'o',
+        'paik_001': '^',
+        'nsf_025': 's',
+        'paik_025': 'd',
+    }
+
     label_map = {
+        'num': 'NUM',
         'nsf_001': f'NSF (std={std})',
         'paik_001': f'PAIK (std={std})',
         'nsf_025': f'NSF (std=0.25)',
+        'paik_025': f'PAIK (std=0.25)',
     }
     
     J_map = {
+        'num': num_results[0],
         'nsf_001': nsf_001_results[0],
         'paik_001': paik_001_results[0],
         'nsf_025': nsf_025_results[0],
+        'paik_025': paik_025_results[0],
     }
     
     handles_list = {}
-    
+
+    random_joint_nums = np.random.choice(J_map['nsf_001'].shape[-1], 3, replace=False)
     for x in range(num_x_sub_plots):
-        random_joint_nums = np.random.choice(J_map['nsf_001'].shape[-1], 3, replace=False)
         for y in range(num_y_sub_plots):
             ax = fig.add_subplot(gs[x, y], projection='3d')
-            
-            if y == 0:
-                left_model = 'nsf_001'
-                right_model = 'paik_001'
-            elif y == 1:
-                left_model = 'nsf_025'
-                right_model = 'paik_001'
+            if x == 0 and y == 0:
+                keys = ['nsf_001', 'num']
+            elif x == 0 and y == 1:
+                keys = ['nsf_025', 'num']
+            elif x == 1 and y == 0:
+                keys = ['paik_001', 'num']
+            elif x == 1 and y == 1:
+                keys = ['paik_025', 'num']
             else:
                 raise ValueError(f"Invalid y value: {y}")
             
-            c = (color_map[left_model], color_map[right_model])
-            l = (label_map[left_model], label_map[right_model])
-            J = (J_map[left_model], J_map[right_model])
-            handles, _ = plot_random_3d_joints_scatter(ax, J, c, l, random_joint_nums)
-            handles_list.update({left_model: handles[0], right_model: handles[1]})
+            handles, _ = plot_random_3d_joints_scatter(ax, keys, J_map, color_map, marker_map, label_map, random_joint_nums)
+            # each key is the label, and each value is the handle
+            handles_list.update(dict(zip(keys, handles)))
     
     # set title
     fig.suptitle(f'3D Joints Scatter with Random {config.num_poses} poses and {config.num_sols} solutions')
     
-    # plot legend
-    fig.legend(handles=handles_list.values(), loc='upper right')
+    # plot legend, and set location to upper right but not overlap with the plot
+    fig.legend(handles=handles_list.values(), loc='upper right', bbox_to_anchor=(0.9, 0.9))
     
     # save and show
     plt.savefig(config.record_dir + f"/scatter.png")

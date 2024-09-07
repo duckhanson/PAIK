@@ -703,21 +703,27 @@ class PAIK(Solver):
         batch_size: int = 4000,
         verbose: bool = True,
     ):
+        # shape: (num_sols, num_poses, m)
+        P_num_sols = np.expand_dims(P, axis=0).repeat(num_sols, axis=0)
+        # shape: (num_sols*num_poses, n)
+        P_num_sols = P_num_sols.reshape(-1, P.shape[-1])
+        
         if F is None:
-            F = self.get_reference_partition_label(P, select_reference)
-        assert len(P) == len(F), "P and F should have the same length."
+            F = self.get_reference_partition_label(P, select_reference, num_sols)
+
+        assert len(P_num_sols) == len(F), "P and F should have the same length."
         if std is not None and std != self.base_std:
             self.base_std = std
         if latent is not None:
             self.latent = latent
 
-        if len(P) * num_sols < batch_size:
-            conditions = self._get_conditions(P, F)
-            return self._solve_conditions(conditions, num_sols)
+        if len(P_num_sols) < batch_size:
+            conditions = self._get_conditions(P_num_sols, F)
+            return self._solve_conditions(conditions, 1)
 
         C, complementary = self._get_conditions_batch(
-            P=P, num_sols=num_sols, batch_size=batch_size, F=F)
-        return self._solve_conditions_batch(C, num_sols, complementary, verbose)
+            P=P_num_sols, num_sols=1, batch_size=batch_size, F=F)
+        return self._solve_conditions_batch(C, 1, complementary, verbose)
 
 
 class NSF(Solver):

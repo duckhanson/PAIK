@@ -46,6 +46,12 @@ class Robot:
 
     def get_all_joint_limits(self):
         return self._all_joint_limits
+    
+    def set_klampt_robot_config(self, x: np.ndarray):
+        """Set the internal klampt robots config with the given joint angle vector"""
+        assert x.shape == (self.n_dofs,), f"Expected x to be of shape ({self.n_dofs},) but got {x.shape}"
+        q = self._x_to_qs(np.resize(x, (1, self.n_dofs)))[0]
+        self._robot.setConfig(q)
 
     def _get_klampt_active_driver_idxs(self):
         """We need to know which indexes of the klampt driver vector are from user specified active joints.

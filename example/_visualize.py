@@ -20,11 +20,7 @@ np.random.seed(47) # 37 stable,
 import numpy as np
 from tqdm import trange
 
-from paik.solver import Solver
-from paik.settings import (
-    PANDA_NSF,
-    PANDA_PAIK,
-)
+from paik.solver import PAIK, get_solver, Solver
 
 _OSCILLATE_LATENT_TARGET_POSES = {
     Panda.name: np.array([0.25, 0.35, 0.6, 0.5, -0.5,  0.5, 0.5]),
@@ -43,8 +39,21 @@ _TARGET_POSE_FUNCTIONS = {
     ),
 }
 
-PI = np.pi
+@dataclass
+class Config:
+    n_worlds: int = 2
+    time_p_loop: float = 0.01
+    time_dilation: float = 0.75
 
+@dataclass
+class DemoState:
+    counter: int = 0
+    target_pose: np.ndarray = np.zeros(7)
+    ave_l2_error: float = 0
+    ave_angular_error: float = 0
+    last_joint_vector: np.ndarray = np.zeros(7)
+    last_latent: np.ndarray = np.zeros(7)
+    last_locality: np.ndarray = np.zeros(7)
 
 def _plot_pose(name: str, pose: np.ndarray, hide_label: bool = False):
     vis.add(
@@ -110,12 +119,6 @@ def _run_demo(
     vis.kill()
 
 
-@dataclass
-class Config:
-    n_worlds: int = 2
-    time_p_loop: float = 0.01
-    time_dilation: float = 0.75
-
 def oscillate_latent(ik_solver: Solver, show_mug: bool = False, change_F_per_cnt: int = 1000):
     """Fixed end pose, oscillate through the latent space"""
     config = Config()
@@ -143,7 +146,7 @@ def oscillate_latent(ik_solver: Solver, show_mug: bool = False, change_F_per_cnt
         # Configure joint angle plot
         vis.addPlot("joint_vector")
         vis.setPlotDuration("joint_vector", 5)
-        vis.setPlotRange("joint_vector", -PI, PI)
+        vis.setPlotRange("joint_vector", -np.pi, np.pi)
 
         # Configure joint angle plot
         vis.addPlot("latent_vector")
@@ -164,28 +167,11 @@ def oscillate_latent(ik_solver: Solver, show_mug: bool = False, change_F_per_cnt
         vis.setPlotDuration("solution_error", 5)
         vis.setPlotRange("solution_error", 0, 8)
 
-    @dataclass
-    class DemoState:
-        counter: int
-        last_joint_vector: np.ndarray
-        last_latent: np.ndarray
-        last_locality: np.ndarray
-        ave_l2_error: float
-        ave_angular_error: float
-    
-    def solve_latent(solver, P, F, latent):
-        if len(P.shape) == 1:
-            P = P.reshape(1, -1)
-        
-        J_hat = solver.generate_ik_solutions(P, F, num_sols=1, std=0.0, latent=latent)
-        # (1, 1, solver.n)
-        return J_hat
-
     def loop_fn(worlds, _demo_state):
         latent = np.zeros(ik_solver.n)
         for i in range(ik_solver.n):
             counter = config.time_dilation * _demo_state.counter
-            offset = 2 * PI * i / ik_solver.n
+            offset = 2 * np.pi * i / ik_solver.n
             latent[i] = (
                 0.25 * np.cos(counter / 25 + offset)
                 - 0.25 * np.cos(counter / 100 + offset)
@@ -194,23 +180,21 @@ def oscillate_latent(ik_solver: Solver, show_mug: bool = False, change_F_per_cnt
         _demo_state.last_latent = latent
 
         # Get solutions to pose of random sample
-        ik_solution = solve_latent(ik_solver, target_pose, _demo_state.last_locality, latent)
-        l2_errors, ang_errors = ik_solver.evaluate_pose_error_J3d_P2d(ik_solution, target_pose.reshape(-1, solver.m), return_all=True)
+        ik_solution = ik_solver.generate_ik_solutions(target_pose, F=[_demo_state.last_locality], num_sols=1, std=0.0, latent=latent)
+        l2_errors, ang_errors = ik_solver.evaluate_pose_error_J3d_P2d(ik_solution, target_pose.reshape(1, ik_solver.m), return_all=True)
         _demo_state.ave_l2_error = l2_errors.mean() * 1000
         _demo_state.ave_ang_error = np.rad2deg(ang_errors.mean())
-        # qs = robot._x_to_qs(solutions)
         ik_solution = ik_solution.reshape(ik_solver.n)
         robot.set_klampt_robot_config(ik_solution)
 
         # Update _demo_state
         _demo_state.counter += 1
         
-        if _demo_state.counter % change_F_per_cnt == 0:
+        if isinstance(solver, PAIK) and _demo_state.counter % change_F_per_cnt == 0:
             print(f"[INFO] counter={_demo_state.counter}")
-            F = solver.select_reference_posture(target_pose, "knn", num_sols=50)
-            F = F[np.random.randint(0, F.shape[0])]
-            print(f"[INFO] chaning F={F}")
-            _demo_state.last_locality = F
+            F = solver.get_reference_partition_label(target_pose, num_sols=50)
+            _demo_state.last_locality = F[np.random.randint(0, F.shape[0])]
+            print(f"[INFO] chaning F={_demo_state.last_locality}")
         _demo_state.last_joint_vector = ik_solution
         
     def viz_update_fn(worlds, _demo_state):
@@ -221,22 +205,25 @@ def oscillate_latent(ik_solver: Solver, show_mug: bool = False, change_F_per_cnt
             distance_to_move = 0.15
             t += R[-3:] * distance_to_move
             # rotate the mug around the z-axis of the end effector with 90 degrees
-            R = so3.mul(R, so3.from_axis_angle(([0, 0, 1], PI / 2)))  # type: ignore
+            R = so3.mul(R, so3.from_axis_angle(([0, 0, 1], np.pi / 2)))  # type: ignore
             # rotate the mug around the y-axis of the end effector with -120 degrees
-            R = so3.mul(R, so3.from_axis_angle(([0, 1, 0], PI * -120 / 180)))  # type: ignore
+            R = so3.mul(R, so3.from_axis_angle(([0, 1, 0], np.pi * -120 / 180)))  # type: ignore
             mug.setCurrentTransform(R, t)  # type: ignore
             
         for i in range(ik_solver.n):
             vis.logPlot(f"joint_vector", f"joint_{i}", _demo_state.last_joint_vector[i])
-        for i in range(ik_solver.n):
             vis.logPlot(f"latent_vector", f"latent_{i}", _demo_state.last_latent[i])
-        for i in range(ik_solver.r):
-            vis.logPlot(f"locality_vector", f"locality_{i}", _demo_state.last_locality[i])
+        vis.logPlot(f"locality_vector", f"locality", _demo_state.last_locality)
         vis.logPlot("solution_error", "l2 (mm)", _demo_state.ave_l2_error)
         vis.logPlot("solution_error", "angular (deg)", _demo_state.ave_ang_error)
 
+    if isinstance(ik_solver, PAIK):
+        init_F = ik_solver.get_reference_partition_label(target_pose, num_sols=50)[0]
+    else:
+        init_F = 0
+    
     demo_state = DemoState(
-        counter=0, last_joint_vector=np.zeros(ik_solver.n), last_latent=np.zeros(ik_solver.n), last_locality=solver.select_reference_posture(target_pose, "knn"), ave_l2_error=0, ave_angular_error=0
+        counter=0, last_joint_vector=np.zeros(ik_solver.n), last_latent=np.zeros(ik_solver.n), last_locality=init_F, ave_l2_error=0, ave_angular_error=0
     )
 
     _run_demo(
@@ -273,7 +260,7 @@ def oscillate_locality(ik_solver: Solver, show_mug: bool = False, from_nn: bool 
         # Configure joint angle plot
         vis.addPlot("joint_vector")
         vis.setPlotDuration("joint_vector", 5)
-        vis.setPlotRange("joint_vector", -PI, PI)
+        vis.setPlotRange("joint_vector", -np.pi, np.pi)
 
         # Configure joint angle plot
         vis.addPlot("locality_vector")
@@ -292,7 +279,7 @@ def oscillate_locality(ik_solver: Solver, show_mug: bool = False, from_nn: bool 
     class DemoState:
         counter: int
         last_joint_vector: np.ndarray
-        last_locality: np.ndarray
+        last_locality: int
         ave_l2_error: float
         ave_angular_error: float
     
@@ -314,7 +301,7 @@ def oscillate_locality(ik_solver: Solver, show_mug: bool = False, from_nn: bool 
             locality = np.zeros((ik_solver.r))
             for i in range(ik_solver.r):
                 counter = config.time_dilation * _demo_state.counter
-                offset = 2 * PI * i / ik_solver.r
+                offset = 2 * np.pi * i / ik_solver.r
                 locality[i] = (
                     F_max * np.sin(counter / 25 + offset)
                 )
@@ -347,28 +334,55 @@ def oscillate_locality(ik_solver: Solver, show_mug: bool = False, from_nn: bool 
             distance_to_move = 0.15
             t += R[-3:] * distance_to_move
             # rotate the mug around the z-axis of the end effector with 90 degrees
-            R = so3.mul(R, so3.from_axis_angle(([0, 0, 1], PI / 2)))  # type: ignore
+            R = so3.mul(R, so3.from_axis_angle(([0, 0, 1], np.pi / 2)))  # type: ignore
             # rotate the mug around the y-axis of the end effector with -120 degrees
-            R = so3.mul(R, so3.from_axis_angle(([0, 1, 0], PI * -120 / 180)))  # type: ignore
+            R = so3.mul(R, so3.from_axis_angle(([0, 1, 0], np.pi * -120 / 180)))  # type: ignore
             mug.setCurrentTransform(R, t)  # type: ignore
         
         for i in range(3):
             vis.logPlot(f"joint_vector", f"joint_{i}", _demo_state.last_joint_vector[i])
-        for i in range(ik_solver.r):
-            vis.logPlot(f"locality_vector", f"locality_{i}", _demo_state.last_locality[i])
+        vis.logPlot(f"locality_vector", f"locality", _demo_state.last_locality)
         
         vis.logPlot("solution_error", "l2 (mm)", _demo_state.ave_l2_error)
         vis.logPlot("solution_error", "angular (deg)", _demo_state.ave_ang_error)
 
     demo_state = DemoState(
-        counter=0, last_joint_vector=np.zeros(ik_solver.n), last_locality=np.zeros(ik_solver.r), ave_l2_error=0, ave_angular_error=0
+        counter=0, last_joint_vector=np.zeros(ik_solver.n), last_locality=0, ave_l2_error=0, ave_angular_error=0
     )
     _run_demo(
         robot, config.n_worlds, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=config.time_p_loop, title=title
     )
 
+def visualize_ik_solutions(robot: Robot, ik_solutions: np.ndarray):
+    """Visualize the solutions"""
+    config = Config()
+    title = "Visualize IK solutions"
+    ik_solutions = ik_solutions.reshape(-1, robot.n_dofs)
+    
+    def setup_fn(worlds):
+        vis.add("coordinates", coordinates.manager())
+        for i in range(len(worlds)):
+            vis.add(f"robot_{i}", worlds[i].robot(0))
 
-def oscillate_target(ik_solver: Solver, nb_sols=5):
+    @dataclass
+    class DemoState:
+        counter: int
+        
+    def loop_fn(worlds, _demo_state):
+        # Update viz with solutions
+        qs = robot._x_to_qs(ik_solutions)
+        for i in range(len(worlds)):
+            worlds[i].robot(0).setConfig(qs[i])
+
+    def viz_update_fn(worlds, _demo_state):
+        del worlds
+
+    demo_state = DemoState(counter=0)
+    _run_demo(
+        robot, len(ik_solutions), setup_fn, loop_fn, viz_update_fn, time_p_loop=config.time_p_loop, title=title
+    )
+
+def oscillate_target(ik_solver: Solver, num_sols=5):
     """Oscillating target pose"""
     config = Config()
     title = "Solutions for oscillating target pose"
@@ -392,45 +406,21 @@ def oscillate_target(ik_solver: Solver, nb_sols=5):
         vis.setPlotDuration("solution_error", 5)
         vis.setPlotRange("solution_error", 0, 8)
 
-        # update the cameras pose
-        # vp = vis.getViewport()
-        # camera_tf = vp.get_transform()
-        # vis.setViewport(vp)
-        # vp.fit((0, 0.25, 0.5), 1.5)
-
-    @dataclass
-    class DemoState:
-        counter: int
-        target_pose: np.ndarray
-        ave_l2_error: float
-        ave_angular_error: float
-        
-    def solve_pose(solver, P):
-        if len(P.shape) == 1:
-            P = P.reshape(1, -1)
-        # num_sols from locality.
-        F = solver.select_reference_posture(P, "knn", num_sols=nb_sols)
-        P = np.repeat(P, nb_sols, axis=0)
-        assert F.shape[0] == P.shape[0], (F.shape, P.shape)
-        J_hat = solver.generate_ik_solutions(P, F, num_sols=1, std=0.0, latent=np.zeros(solver.n))
-        # (1, 1, solver.n)
-        return J_hat.reshape(nb_sols, 1, solver.n)
-
     def loop_fn(worlds, _demo_state):
         # Update target pose
         _demo_state.target_pose = target_pose_fn(_demo_state.counter)
 
         # Get solutions to pose of random sample
-        ik_solutions = solve_pose(ik_solver, _demo_state.target_pose)
+        ik_solutions = ik_solver.generate_ik_solutions(_demo_state.target_pose, num_sols=num_sols, std=0.0)
         l2_errors, ang_errors = ik_solver.evaluate_pose_error_J3d_P2d(ik_solutions, _demo_state.target_pose.reshape(-1, solver.m), return_all=True)
         # print(f"l2_errors.shape: {l2_errors.shape}")
         _demo_state.ave_l2_error = l2_errors.mean().item() * 1000
         _demo_state.ave_ang_error = np.rad2deg(ang_errors.mean().item())
-        ik_solutions = ik_solutions.reshape(nb_sols, solver.n)
+        ik_solutions = ik_solutions.reshape(num_sols, solver.n)
 
         # Update viz with solutions
         qs = robot._x_to_qs(ik_solutions)
-        for i in range(nb_sols):
+        for i in range(num_sols):
             worlds[i].robot(0).setConfig(qs[i])
 
         # Update _demo_state
@@ -445,12 +435,12 @@ def oscillate_target(ik_solver: Solver, nb_sols=5):
 
     demo_state = DemoState(counter=0, target_pose=target_pose_fn(0), ave_l2_error=0, ave_angular_error=0)
     _run_demo(
-        robot, nb_sols, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=config.time_p_loop, title=title
+        robot, num_sols, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=config.time_p_loop, title=title
     )
 
 
-def random_target_pose(ik_solver: Solver, nb_sols=20):
-    """Set the end effector to a randomly drawn pose. Generate and visualize `nb_sols` solutions for the pose"""
+def random_target_pose(ik_solver: Solver, num_sols=20):
+    """Set the end effector to a randomly drawn pose. Generate and visualize `num_sols` solutions for the pose"""
     config = Config()
     config.time_p_loop = 5
     title = "Solutions for random target pose"
@@ -482,39 +472,23 @@ def random_target_pose(ik_solver: Solver, nb_sols=20):
         camera_tf = vp.get_transform()
         vis.setViewport(vp)
         vp.fit((0, 0.25, 0.5), 1.5)
-
-    @dataclass
-    class DemoState:
-        counter: int
-        target_pose: np.ndarray
-        ave_l2_error: float
-        ave_angular_error: float
         
-    def solve_pose(solver, P):
-        if len(P.shape) == 1:
-            P = P.reshape(1, -1)
-        # num_sols from locality.
-        F = solver.select_reference_posture(P, "knn", num_sols=nb_sols)
-        P = np.repeat(P, nb_sols, axis=0)
-        assert F.shape[0] == P.shape[0], (F.shape, P.shape)
-        J_hat = solver.generate_ik_solutions(P, F, num_sols=1, std=0.0, latent=np.zeros(solver.n))
-        # (1, 1, solver.n)
-        return J_hat.reshape(nb_sols, 1, solver.n)
-
     def loop_fn(worlds, _demo_state):
         # Update target pose
         _demo_state.target_pose = generate_random_pose()
         # Get solutions to pose of random sample
-        ik_solutions = solve_pose(ik_solver, _demo_state.target_pose)
+        ik_solutions = ik_solver.generate_ik_solutions(_demo_state.target_pose, num_sols=num_sols, std=0.0)        
         l2_errors, ang_errors = ik_solver.evaluate_pose_error_J3d_P2d(ik_solutions, _demo_state.target_pose.reshape(-1, solver.m), return_all=True)
         # print(f"l2_errors.shape: {l2_errors.shape}")
         _demo_state.ave_l2_error = l2_errors.mean().item() * 1000
         _demo_state.ave_ang_error = np.rad2deg(ang_errors.mean().item())
-        ik_solutions = ik_solutions.reshape(nb_sols, solver.n)
+        ik_solutions = ik_solutions.reshape(num_sols, solver.n)
 
         # Update viz with solutions
         qs = robot._x_to_qs(ik_solutions)
-        for i in range(nb_sols):
+        qs = np.array(qs)
+        # print(f"[INFO] qs.shape: {qs.shape}")
+        for i in range(num_sols):
             worlds[i].robot(0).setConfig(qs[i])
 
         # Update _demo_state
@@ -529,7 +503,7 @@ def random_target_pose(ik_solver: Solver, nb_sols=20):
 
     demo_state = DemoState(counter=0, target_pose=generate_random_pose(), ave_l2_error=0, ave_angular_error=0)
     _run_demo(
-        robot, nb_sols, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=config.time_p_loop, title=title
+        robot, num_sols, setup_fn, loop_fn, viz_update_fn, demo_state=demo_state, time_p_loop=config.time_p_loop, title=title
     )
 
 
@@ -586,7 +560,6 @@ def oscillate_joints(robot: Robot):
         title=title,
         demo_state=demo_state,
     )
-    
 
 def mug_moving(ik_solver: Solver, nb_sols=5, from_locality=True):
     """Oscillating target pose"""
@@ -635,11 +608,7 @@ def mug_moving(ik_solver: Solver, nb_sols=5, from_locality=True):
     def solve_pose(solver, P):
         if len(P.shape) == 1:
             P = P.reshape(1, -1)
-        # num_sols from locality.
-        F = solver.select_reference_posture(P, "knn", num_sols=nb_sols)
-        P = np.repeat(P, nb_sols, axis=0)
-        assert F.shape[0] == P.shape[0], (F.shape, P.shape)
-        J_hat = solver.generate_ik_solutions(P, F, num_sols=1, std=0.0, latent=np.zeros(solver.n))
+        J_hat = solver.generate_ik_solutions(P, num_sols=nb_sols, std=0.0, latent=np.zeros(solver.n))
         # (1, 1, solver.n)
         return J_hat.reshape(nb_sols, 1, solver.n)
 
@@ -683,11 +652,16 @@ def mug_moving(ik_solver: Solver, nb_sols=5, from_locality=True):
 
 
 if __name__ == "__main__":
-    solver = Solver(solver_param=PANDA_PAIK, load_date="0707-1713", work_dir="/home/luca/paik")
-    # solver = Solver(solver_param=PANDA_NSF, load_date="0115-0234", work_dir="/home/luca/paik")
-    oscillate_latent(solver, show_mug=True, change_F_per_cnt=200)
+    robot_name = "panda"
+    solver = get_solver(arch_name="paik", robot_name=robot_name, load=True, work_dir="/home/luca/paik")
+    # oscillate_latent(solver, show_mug=True, change_F_per_cnt=200)
     # oscillate_locality(solver, show_mug=True, from_nn=True)
     # oscillate_target(solver)
+    
     # random_target_pose(solver)
     # oscillate_joints(solver.robot)
     # mug_moving(solver, nb_sols=10, from_locality=True)
+    
+    pose = _OSCILLATE_LATENT_TARGET_POSES[solver.param.robot_name]
+    ik_solutions = solver.generate_ik_solutions(pose, num_sols=10)
+    visualize_ik_solutions(solver.robot, ik_solutions)

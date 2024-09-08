@@ -188,3 +188,114 @@ def mmd_evaluate_multiple_poses(
         mmd_all_poses[~torch.isnan(mmd_all_poses)], dim=0, keepdim=True
     ).item()
     return round(mmd_mean, ndigits=2)
+
+
+def geodesic_distance_between_quaternions(
+    q1: np.ndarray, q2: np.ndarray
+) -> np.ndarray:
+    """
+    Compute the geodesic distance between two sets of quaternions. Reference from jrl.conversions.
+
+    Args:
+        q1 (np.ndarray): quaternions, shape: (num_quaternions, m - 3)
+        q2 (np.ndarray): quaternions, shape: (num_quaternions, m - 3)
+
+    Returns:
+        np.ndarray: geodesic distance, shape: (num_poses,)
+    """
+    acos_clamp_epsilon = 1e-7
+    ang = np.abs(
+        np.remainder(
+            2
+            * np.arccos(
+                np.clip(
+                    np.clip(np.sum(q1 * q2, axis=1), -1, 1),
+                    -1 + acos_clamp_epsilon,
+                    1 - acos_clamp_epsilon,
+                )
+            )
+            + np.pi,
+            2 * np.pi,
+        )
+        - np.pi
+    )
+    return ang
+
+
+def evaluate_pose_error_P2d_P2d(
+    P1: np.ndarray, P2: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Evaluate pose error between two sets of poses
+
+    Args:
+        P1 (np.ndarray): poses, shape: (num_poses, m)
+        P2 (np.ndarray): poses, shape: (num_poses, m)
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: positional (l2, meters) and angular (ang, rads) errors
+    """
+    assert len(P1.shape) == 2 and len(
+        P2.shape) == 2 and P1.shape[0] == P2.shape[0]
+    l2 = np.linalg.norm(P1[:, :3] - P2[:, :3], axis=1)
+    ang = geodesic_distance_between_quaternions(P1[:, 3:], P2[:, 3:])
+    return l2, ang
+
+def evaluate_pose_error_J3d_P2d(
+    robot,
+    J: np.ndarray,
+    P: np.ndarray,
+    return_posewise_evalution: bool = False,
+    return_all: bool = False,
+) -> tuple[Any, Any]:
+    """
+    Evaluate pose error given generated joint configurations J and ground truth poses P. Return default is l2 and ang with shape (1).
+
+    Args:
+        J (np.ndarray): generated joint configurations with shape (num_sols, num_poses, num_dofs)
+        P (np.ndarray): ground truth poses with shape (num_poses, m)
+        return_posewise_evalution (bool, optional): return l2 and ang with shape (num_poses,). Defaults to False.
+        return_all (bool, optional): return l2 and ang with shape (num_sols * num_poses). Defaults to False.
+
+    Returns:
+        tuple[Any, Any]: l2 and ang, default shape (1), posewise evaluation with shape (num_poses,), or all evaluation with shape (num_sols * num_poses)
+    """
+    num_poses, num_sols = len(P), len(J)
+    assert len(J.shape) == 3 and len(
+        P.shape) == 2 and J.shape[1] == num_poses, f"J: {J.shape}, P: {P.shape}"
+
+    # P: (num_poses, m), P_expand: (num_sols * num_poses, m)
+    P_expand = np.tile(P, (num_sols, 1))
+    
+    # if J is torch.Tensor, cast it to np.ndarray
+    if hasattr(J, "detach"):
+        J = J.detach().cpu().numpy()
+    
+    P_hat = robot.forward_kinematics(J.reshape(-1, robot.n_dofs))
+    l2, ang = evaluate_pose_error_P2d_P2d(P_hat, P_expand)  # type: ignore
+
+    if return_posewise_evalution:
+        return (
+            l2.reshape(num_sols, num_poses).mean(axis=1),
+            ang.reshape(num_sols, num_poses).mean(axis=1),
+        )
+    elif return_all:
+        return l2, ang
+    return l2.mean(), ang.mean()
+
+def mmd_J3d_J3d(J1, J2, num_poses):
+    """
+    Calculate the maximum mean discrepancy between two sets of joint angles
+
+    Args:
+        J1 (np.ndarray): the first set of joint angles with shape (num_sols, num_poses, num_dofs or n)
+        J2 (np.ndarray): the second set of joint angles with shape (num_sols, num_poses, num_dofs or n)
+        
+    Returns:
+        float: the maximum mean discrepancy between the two sets of joint angles
+    """
+    # check num_poses is the same for J1 and J2
+    if J1.shape[1] != num_poses or J2.shape[1] != num_poses:
+        raise ValueError(f"The number of poses must be the same for both J1 ({J1.shape[1]}) and J2 ({J1.shape[1]})")
+    mmd_score = mmd_evaluate_multiple_poses(J1, J2, num_poses)
+    return mmd_score

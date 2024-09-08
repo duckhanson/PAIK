@@ -5,11 +5,10 @@ from time import time
 import pandas as pd
 from tqdm import tqdm
 
-from common.evaluate import mmd_evaluate_multiple_poses
+from common.evaluate import mmd_evaluate_multiple_poses, evaluate_pose_error_J3d_P2d, mmd_J3d_J3d
 from paik.solver import PAIK, Solver, get_solver
 from common.config import Config_IKP
 from common.display import save_ikp
-
 
 def numerical_inverse_kinematics_single(solver, pose, num_sols):
     seeds, _ = solver.robot.sample_joint_angles_and_poses(n=num_sols)
@@ -77,35 +76,18 @@ def random_ikp(solver: Solver, P: np.ndarray, num_sols: int, solve_fn_batch: Any
         J_hat = solve_fn_batch(solver, P, num_sols)
     else:
         J_hat = solve_fn_batch(solver, P, num_sols, std)
-    assert J_hat.shape == (num_sols, num_poses, solver.n), f"J_hat shape {J_hat.shape} is not correct"
+    assert J_hat.shape == (num_sols, num_poses, solver.robot.n_dofs), f"J_hat shape {J_hat.shape} is not correct"
 
-    l2, ang = solver.evaluate_pose_error_J3d_P2d(
+    l2, ang = evaluate_pose_error_J3d_P2d(
         # input J.shape = (num_sols, num_poses, num_dofs or n)
-        J_hat, P, return_all=True
+        solver.robot, J_hat, P, return_all=True
     )
     l2_mm = l2[~np.isnan(l2)].mean() * 1000
     ang_deg = np.rad2deg(ang[~np.isnan(ang)].mean())
-    solve_time_ms = (time() - begin)/num_poses *1000
+    solve_time_ms = round((time() - begin) / len(P), 3) * 1000
     return J_hat, l2_mm, ang_deg, solve_time_ms
 
-def mmd(J1, J2, num_poses):
-    """
-    Calculate the maximum mean discrepancy between two sets of joint angles
-
-    Args:
-        J1 (np.ndarray): the first set of joint angles with shape (num_sols, num_poses, num_dofs or n)
-        J2 (np.ndarray): the second set of joint angles with shape (num_sols, num_poses, num_dofs or n)
-        
-    Returns:
-        float: the maximum mean discrepancy between the two sets of joint angles
-    """
-    # check num_poses is the same for J1 and J2
-    if J1.shape[1] != num_poses or J2.shape[1] != num_poses:
-        raise ValueError(f"The number of poses must be the same for both J1 ({J1.shape[1]}) and J2 ({J1.shape[1]})")
-    mmd_score = mmd_evaluate_multiple_poses(J1, J2, num_poses)
-    return mmd_score
-
-def random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std: float, record_dir: str, verbose: bool=False):
+def test_random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std: float, record_dir: str, verbose: bool=False):
     """
     Generate random IK solutions for a given robot and poses
 
@@ -120,40 +102,47 @@ def random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std: flo
     Returns:
         None
     """
-    nsf_solver = get_solver(arch_name="nsf", robot_name=robot_name, load=True)
-    paik_solver = get_solver(arch_name="paik", robot_name=robot_name, load=True)
     
-    _, P = nsf_solver.robot.sample_joint_angles_and_poses(n=num_poses)
-    num_results = random_ikp(nsf_solver, P, num_sols, numerical_inverse_kinematics_batch, verbose=verbose)
+    solvers = {
+        "nsf": get_solver(arch_name="nsf", robot_name=robot_name, load=True),
+        "paik": get_solver(arch_name="paik", robot_name=robot_name, load=True)
+    }
 
+    _, P = solvers["nsf"].robot.sample_joint_angles_and_poses(n=num_poses)
+    
     # dummy run to load the model
-    random_ikp(nsf_solver, P, num_sols, solver_batch, std=std, verbose=False)
-    nsf_results = random_ikp(nsf_solver, P, num_sols, solver_batch, std=std, verbose=verbose)
-    paik_results = random_ikp(paik_solver, P, num_sols, solver_batch, std=std, verbose=verbose)
+    random_ikp(solvers["nsf"], P, num_sols, solver_batch, std=std, verbose=False)
     
-    nsf_mmd = mmd(num_results[0], nsf_results[0], num_poses)
-    paik_mmd = mmd(num_results[0], paik_results[0], num_poses)
+    results = {
+        "num": random_ikp(solvers["nsf"], P, num_sols, numerical_inverse_kinematics_batch, verbose=False),
+        **{key: random_ikp(solver, P, num_sols, solver_batch, std=std, verbose=True) for key, solver in solvers.items()}
+    }
     
+
+    mmd_results = {
+        "num": 0,
+        **{key: mmd_J3d_J3d(results[key][0], results["num"][0], num_poses) for key in results.keys() if key != "num"}
+    }
 
     if verbose:
         print_out_format = "l2: {:1.2f} mm, ang: {:1.2f} deg, time: {:1.1f} ms"
         print("="*70)
         print(f"Robot: {robot_name} computes {num_sols} solutions and average over {num_poses} poses")
         # print the results of the random IKP with l2_mm, ang_deg, and solve_time_ms
-        print(f"NUM:  {print_out_format.format(*num_results[1:])}")
-        print(f"NSF:  {print_out_format.format(*nsf_results[1:])}", f", MMD: {nsf_mmd}")
-        print(f"PAIK: {print_out_format.format(*paik_results[1:])}", f", MMD: {paik_mmd}")
+        for key in results.keys():
+            print(f"{key.upper()}:  {print_out_format.format(*results[key][1:])}", f", MMD: {mmd_results[key]}")
         print("="*70)
     
-    # use a dataframe to save the results without J_hat
-    # each row is a robot, a solver, and the results of l2_mm, ang_deg, and solve_time_ms, and MMD
+    # get count results keys
+    num_solvers = len(results.keys())
+    
     df = pd.DataFrame({
-        "robot": [robot_name, robot_name, robot_name],
-        "solver": ["NUM", "NSF", "PAIK"],
-        "l2_mm": [num_results[1], nsf_results[1], paik_results[1]],
-        "ang_deg": [num_results[2], nsf_results[2], paik_results[2]],
-        "solve_time_ms": [num_results[3], nsf_results[3], paik_results[3]],
-        "MMD": [0, nsf_mmd, paik_mmd]
+        "robot": [robot_name] * num_solvers,
+        "solver": list(results.keys()),
+        "l2_mm": [results[key][1] for key in results.keys()],
+        "ang_deg": [results[key][2] for key in results.keys()],
+        "solve_time_ms": [results[key][3] for key in results.keys()],
+        "mmd": [mmd_results[key] for key in mmd_results.keys()],
     })
     
     # save the results to a csv file
@@ -166,7 +155,7 @@ if __name__ == "__main__":
     config = Config_IKP()
 
     for robot_name in robot_names:
-        random_ikp_with_mmd(robot_name, config.num_poses, config.num_sols, config.std, config.record_dir, verbose=True)
+        test_random_ikp_with_mmd(robot_name, config.num_poses, config.num_sols, config.std, config.record_dir, verbose=True)
         
     
     

@@ -17,12 +17,11 @@ from common.display import display_ikp
 
 from common.config import Config_Posture
 from common.display import display_posture
-from common.evaluate import compute_distance_J
+from common.evaluate import mmd_J3d_J3d
 
 from common.config import Config_Diversity
 from common.file import save_diversity, load_poses_and_numerical_ik_sols
-
-from ikp import numerical_inverse_kinematics_batch, mmd
+from ikp import numerical_inverse_kinematics_batch, random_ikp
 
 def solve_batch(solver, P: np.ndarray, num_sols: int, std: float):
     num_poses = len(P)
@@ -41,48 +40,19 @@ def solve_batch(solver, P: np.ndarray, num_sols: int, std: float):
         ).clone().detach().cpu()  # type: ignore
     return J
 
-def evaluate_2d_pose_error(solver, J_hat, P):
-    num_sols = J_hat.shape[0]
-    num_poses = J_hat.shape[1]
-    
-    l2 = np.zeros((num_sols, num_poses))
-    ang = np.zeros((num_sols, num_poses))
-    
-    # cast J_hat to torch tensor
-    J_hat = torch.tensor(J_hat, dtype=torch.float32, device="cpu")
-    # cast P to torch tensor
-    P = torch.tensor(P, dtype=torch.float32, device="cpu")
-    
-    if num_poses < num_sols:
-        for i in range(num_poses):
-            l2[:, i], ang[:, i] = solution_pose_errors(solver.robot, J_hat[:, i, :], P[i])
+def get_ikflow_solver(robot_name: str):
+    if robot_name == "panda":
+        return get_ik_solver("panda__full__lp191_5.25m")
+    elif robot_name == "fetch":
+        return get_ik_solver("fetch_full_temp_nsc_tpm")
+    elif robot_name == "fetch_arm":
+        return get_ik_solver("fetch_arm__large__mh186_9.25m")
     else:
-        for i in range(num_sols):
-            l2[i], ang[i] = solution_pose_errors(solver.robot, J_hat[i], P)
-    return l2, ang            
-
-def random_ikp(solver, P: np.ndarray, num_sols: int, solve_fn_batch, std: float=None, verbose: bool=False):
-    begin = time.time()
-    if solve_fn_batch == numerical_inverse_kinematics_batch:
-        ik_sols = solve_fn_batch(solver, P, num_sols)
-    else:      
-        ik_sols = solve_fn_batch(solver, P, num_sols, std)
-    l2, ang = evaluate_2d_pose_error(solver, ik_sols, P)
-    l2_mm = l2[~np.isnan(l2)].mean() * 1000
-    ang_deg = np.rad2deg(ang[~np.isnan(ang)].mean())
-    solve_time_ms = round((time.time() - begin) / len(P), 3) * 1000
-    return ik_sols, l2_mm, ang_deg, solve_time_ms
+        raise ValueError(f"Unknown robot name: {robot_name}")
 
 def test_random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std: float, record_dir: str, verbose: bool=False):
     
-    if robot_name == "panda":
-        ikflow_solver, _ = get_ik_solver(f"panda__full__lp191_5.25m")
-    elif robot_name == "fetch":
-        ikflow_solver, _ = get_ik_solver(f"fetch_full_temp_nsc_tpm")
-    elif robot_name == "fetch_arm":
-        ikflow_solver, _ = get_ik_solver(f"fetch_arm__large__mh186_9.25m")
-    else:
-        raise ValueError(f"Unknown robot name: {robot_name}")
+    ikflow_solver = get_ikflow_solver(robot_name)
     
     _, P = ikflow_solver.robot.sample_joint_angles_and_poses(num_poses)
     
@@ -93,7 +63,7 @@ def test_random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std
     
     mmd_results = {
         "num": 0,
-        "ikflow": mmd(results["ikflow"][0], results["num"][0], num_poses)
+        "ikflow": mmd_J3d_J3d(results["ikflow"][0], results["num"][0], num_poses)
     }
 
     if verbose:

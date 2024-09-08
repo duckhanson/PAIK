@@ -89,18 +89,15 @@ def random_ikp(solver: Solver, P: np.ndarray, num_sols: int, solve_fn_batch: Any
 
 def test_random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std: float, record_dir: str, verbose: bool=False):
     """
-    Generate random IK solutions for a given robot and poses
+    Test the random IKP with MMD evaluation
 
     Args:
-        robot_name (str): the name of the robot
-        num_poses (int): the number of poses to generate
-        num_sols (int): the number of solutions per pose to generate
-        std (float): the standard deviation for the solver
+        robot_name (str): robot name
+        num_poses (int): number of poses  
+        num_sols (int): number of solutions per pose
+        std (float): standard deviation for the solver
         record_dir (str): the directory to save the results
         verbose (bool, optional): print the statistics of the generated solutions. Defaults to False.
-        
-    Returns:
-        None
     """
     
     solvers = {

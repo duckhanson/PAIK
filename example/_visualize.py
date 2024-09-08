@@ -354,7 +354,13 @@ def oscillate_locality(ik_solver: Solver, show_mug: bool = False, from_nn: bool 
     )
 
 def visualize_ik_solutions(robot: Robot, ik_solutions: np.ndarray):
-    """Visualize the solutions"""
+    """
+    Visualize the IK solutions for a given robot
+
+    Args:
+        robot (Robot): the robot 
+        ik_solutions (np.ndarray): the IK solutions with shape (num_sols, num_poses, num_dofs)
+    """
     config = Config()
     title = "Visualize IK solutions"
     ik_solutions = ik_solutions.reshape(-1, robot.n_dofs)

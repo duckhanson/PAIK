@@ -1,7 +1,7 @@
 import numpy as np
 import numpy.typing as npt
 import torch
-
+from typing import Any
 
 def make_batches(arr: np.ndarray, batch_size: int):
     # Split the array into batches

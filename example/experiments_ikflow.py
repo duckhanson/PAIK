@@ -1,6 +1,8 @@
 # Import required packages
+from tabnanny import verbose
 import time
 import numpy as np
+import pandas as pd
 from tqdm import trange
 import torch
 # from paik.solver import Solver
@@ -19,50 +21,107 @@ from common.evaluate import compute_distance_J
 
 from common.config import Config_Diversity
 from common.file import save_diversity, load_poses_and_numerical_ik_sols
-from common.evaluate import (
-    mmd_evaluate_multiple_poses,
-    make_batches,
-    batches_back_to_array,
-)
 
+from ikp import numerical_inverse_kinematics_batch, mmd
 
-def ikp():
-    set_seed()
-    config = Config_IKP()
-    # Build IKFlowSolver and set weights
-    ik_solver, _ = get_ik_solver("panda__full__lp191_5.25m")
-    _, P = ik_solver.robot.sample_joint_angles_and_poses(n=config.num_poses)
-    l2 = np.zeros((config.num_sols, len(P)))
-    ang = np.zeros((config.num_sols, len(P)))
-    J = torch.empty((config.num_sols, len(P), 7),
+def solve_batch(solver, P: np.ndarray, num_sols: int, std: float):
+    num_poses = len(P)
+    J = torch.empty((num_sols, num_poses, solver.robot.n_dofs),
                     dtype=torch.float32, device="cpu")
-    begin = time.time()
-    if config.num_poses < config.num_sols:
-        for i in trange(config.num_poses):
-            J[:, i, :] = ik_solver.solve(
-                P[i],
-                n=config.num_sols,
-                latent_scale=config.std,
-                refine_solutions=False,
-                return_detailed=False,
-            ).cpu()  # type: ignore
+    # cast P to torch tensor
+    P = torch.tensor(P, dtype=torch.float32, device="cuda")
+    
+    for i in trange(num_poses):
+        J[:, i, :] = solver.generate_ik_solutions(
+            P[i],
+            n=num_sols,
+            latent_scale=std,
+            refine_solutions=False,
+            return_detailed=False,
+        ).clone().detach().cpu()  # type: ignore
+    return J
 
-            l2[:, i], ang[:, i] = solution_pose_errors(
-                ik_solver.robot, J[:, i, :], P[i]
-            )
+def evaluate_2d_pose_error(solver, J_hat, P):
+    num_sols = J_hat.shape[0]
+    num_poses = J_hat.shape[1]
+    
+    l2 = np.zeros((num_sols, num_poses))
+    ang = np.zeros((num_sols, num_poses))
+    
+    # cast J_hat to torch tensor
+    J_hat = torch.tensor(J_hat, dtype=torch.float32, device="cpu")
+    # cast P to torch tensor
+    P = torch.tensor(P, dtype=torch.float32, device="cpu")
+    
+    if num_poses < num_sols:
+        for i in range(num_poses):
+            l2[:, i], ang[:, i] = solution_pose_errors(solver.robot, J_hat[:, i, :], P[i])
     else:
-        for i in trange(config.num_sols):
-            J[i] = ik_solver.solve_n_poses(
-                P,
-                latent_scale=config.std,
-                refine_solutions=False,
-                return_detailed=False,
-            ).cpu()
-            l2[i], ang[i] = solution_pose_errors(ik_solver.robot, J[i], P)
-    avg_inference_time = round((time.time() - begin) / config.num_poses, 3)
+        for i in range(num_sols):
+            l2[i], ang[i] = solution_pose_errors(solver.robot, J_hat[i], P)
+    return l2, ang            
 
-    display_ikp(l2.mean(), ang.mean(), avg_inference_time)
+def random_ikp(solver, P: np.ndarray, num_sols: int, solve_fn_batch, std: float=None, verbose: bool=False):
+    begin = time.time()
+    if solve_fn_batch == numerical_inverse_kinematics_batch:
+        ik_sols = solve_fn_batch(solver, P, num_sols)
+    else:      
+        ik_sols = solve_fn_batch(solver, P, num_sols, std)
+    l2, ang = evaluate_2d_pose_error(solver, ik_sols, P)
+    l2_mm = l2[~np.isnan(l2)].mean() * 1000
+    ang_deg = np.rad2deg(ang[~np.isnan(ang)].mean())
+    solve_time_ms = round((time.time() - begin) / len(P), 3) * 1000
+    return ik_sols, l2_mm, ang_deg, solve_time_ms
 
+def test_random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std: float, record_dir: str, verbose: bool=False):
+    
+    if robot_name == "panda":
+        ikflow_solver, _ = get_ik_solver(f"panda__full__lp191_5.25m")
+    elif robot_name == "fetch":
+        ikflow_solver, _ = get_ik_solver(f"fetch_full_temp_nsc_tpm")
+    elif robot_name == "fetch_arm":
+        ikflow_solver, _ = get_ik_solver(f"fetch_arm__large__mh186_9.25m")
+    else:
+        raise ValueError(f"Unknown robot name: {robot_name}")
+    
+    _, P = ikflow_solver.robot.sample_joint_angles_and_poses(num_poses)
+    
+    results = {
+        "num": random_ikp(ikflow_solver, P, num_sols, numerical_inverse_kinematics_batch, verbose=False),
+        "ikflow": random_ikp(ikflow_solver, P, num_sols, solve_batch, std=std, verbose=True)
+    }
+    
+    mmd_results = {
+        "num": 0,
+        "ikflow": mmd(results["ikflow"][0], results["num"][0], num_poses)
+    }
+
+    if verbose:
+        print_out_format = "l2: {:1.2f} mm, ang: {:1.2f} deg, time: {:1.1f} ms"
+        print("="*70)
+        print(f"Robot: {robot_name} computes {num_sols} solutions and average over {num_poses} poses")
+        # print the results of the random IKP with l2_mm, ang_deg, and solve_time_ms
+        for key in results.keys():
+            print(f"{key.upper()}:  {print_out_format.format(*results[key][1:])}", f", MMD: {mmd_results[key]}")
+        print("="*70)
+    
+    # get count results keys
+    num_solvers = len(results.keys())
+    
+    df = pd.DataFrame({
+        "robot": [robot_name] * num_solvers,
+        "solver": list(results.keys()),
+        "l2_mm": [results[key][1] for key in results.keys()],
+        "ang_deg": [results[key][2] for key in results.keys()],
+        "solve_time_ms": [results[key][3] for key in results.keys()],
+        "mmd": [mmd_results[key] for key in mmd_results.keys()],
+    }) 
+    
+    # save the results to a csv file
+    df_file_path = f"{record_dir}/ikp_ikflow_{robot_name}_{num_poses}_{num_sols}_{std}.csv"
+    df.to_csv(df_file_path, index=False)
+    print(f"Results are saved to {df_file_path}")
+    
 
 # def posture(config: Config_Posture):
 #     set_seed()
@@ -185,4 +244,6 @@ def ikp():
 
 
 if __name__ == "__main__":
-    ikp()
+    config = Config_IKP()
+    robot_name = "fetch_arm" # "panda", "fetch", "fetch_arm"
+    test_random_ikp_with_mmd(robot_name=robot_name, num_poses=config.num_poses, num_sols=config.num_sols, std=config.std, record_dir=config.record_dir, verbose=True)

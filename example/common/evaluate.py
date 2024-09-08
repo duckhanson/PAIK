@@ -164,10 +164,18 @@ def mmd_evaluate_multiple_poses(
 
     device = "cuda"
     
-    J_hat_ = torch.from_numpy(J_hat_).float().to(device)  # type: ignore
-    J_ground_truth_ = (
-        torch.from_numpy(J_ground_truth_).float().to(device)
-    )  # type: ignore
+    # if J_hat_ is a numpy array, convert it to a torch tensor
+    if not torch.is_tensor(J_hat_):
+        J_hat_ = torch.from_numpy(J_hat_).float().to(device)  # type: ignore
+    
+    if not torch.is_tensor(J_ground_truth_):
+        J_ground_truth_ = (
+            torch.from_numpy(J_ground_truth_).float().to(device)
+        )  # type: ignore
+        
+    # cast J_hat_ and J_ground_truth_ to the same device
+    J_hat_ = J_hat_.to(device)
+    J_ground_truth_ = J_ground_truth_.to(device)
     
     mmd_all_poses = torch.stack(
         [

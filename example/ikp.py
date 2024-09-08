@@ -14,7 +14,7 @@ from common.display import save_ikp
 def numerical_inverse_kinematics_single(solver, pose, num_sols):
     seeds, _ = solver.robot.sample_joint_angles_and_poses(n=num_sols)
 
-    ik_sols = np.empty((num_sols, solver.n))
+    ik_sols = np.empty((num_sols, solver.robot.n_dofs))
     for i, seed in enumerate(seeds):
         ik_sols[i] = solver.robot.inverse_kinematics_klampt(
             pose=pose, seed=seed
@@ -22,7 +22,7 @@ def numerical_inverse_kinematics_single(solver, pose, num_sols):
     return ik_sols
 
 def numerical_inverse_kinematics_batch(solver, P, num_sols):
-    ik_sols_batch = np.empty((num_sols, P.shape[0], solver.n))
+    ik_sols_batch = np.empty((num_sols, P.shape[0], solver.robot.n_dofs))
     for i, pose in enumerate(tqdm(P)):
         ik_sols_batch[:, i] = numerical_inverse_kinematics_single(solver, pose, num_sols)
     # return shape: (num_sols, num_poses, n)
@@ -83,10 +83,10 @@ def random_ikp(solver: Solver, P: np.ndarray, num_sols: int, solve_fn_batch: Any
         # input J.shape = (num_sols, num_poses, num_dofs or n)
         J_hat, P, return_all=True
     )
-    l2_mm = l2 * 1000
-    ang_deg = np.rad2deg(ang)
+    l2_mm = l2[~np.isnan(l2)].mean() * 1000
+    ang_deg = np.rad2deg(ang[~np.isnan(ang)].mean())
     solve_time_ms = (time() - begin)/num_poses *1000
-    return J_hat, l2_mm[~np.isnan(l2_mm)].mean(), ang_deg[~np.isnan(ang_deg)].mean(), solve_time_ms
+    return J_hat, l2_mm, ang_deg, solve_time_ms
 
 def mmd(J1, J2, num_poses):
     """
@@ -162,7 +162,7 @@ def random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std: flo
     print(f"Results are saved to {df_file_path}")
 
 if __name__ == "__main__":
-    robot_names = ["atlas_waist_arm"] # ["panda", "fetch", "fetch_arm", "atlas_arm", "atlas_waist_arm", "baxter_arm"]
+    robot_names = ["panda"] # ["panda", "fetch", "fetch_arm", "atlas_arm", "atlas_waist_arm", "baxter_arm"]
     config = Config_IKP()
 
     for robot_name in robot_names:

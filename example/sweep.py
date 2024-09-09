@@ -13,9 +13,9 @@ ROBOT_NAME = "panda"
 WANDB_PROJECT_NAME = f"{ROBOT_NAME} {SOVLER_ARCH} FINCH"
 SOLVER_PARAM = get_config(SOVLER_ARCH, ROBOT_NAME)
 WANDB_ENTITY = "luca_nthu"  # please change to your own entity name
-PATIENCE = 10
+PATIENCE = 20
 EXPERMENT_COUNT = 10
-NUM_EPOCHS = 60
+NUM_EPOCHS = 90
 
 def get_range(left_bound, right_bound, scale):
     return [i * scale for i in range(left_bound, right_bound)]

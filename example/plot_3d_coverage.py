@@ -156,7 +156,7 @@ def visualize_3d_joints_scatter(J_map: dict, std: float, pick_up_solver: str, pi
         elif key == 'not_pick_up':
             label_map[key] = 'Not pick up'
         else:
-            label_map[key] = f'{key.upper()} (std={std})'
+            label_map[key] = f'{key.upper()}'
             
     fig = plt.figure()
     gs = GridSpec(num_x_sub_plots, num_y_sub_plots, figure=fig)
@@ -170,7 +170,7 @@ def visualize_3d_joints_scatter(J_map: dict, std: float, pick_up_solver: str, pi
             handles_list.update(dict(zip(keys_list[count], handles)))
 
     fig.suptitle(f'3D Joints Scatter with Random {config.num_poses} poses and {config.num_sols} solutions')
-    fig.legend(handles=handles_list.values(), loc='upper right', bbox_to_anchor=(0.9, 0.9))
+    fig.legend(handles=handles_list.values(), loc='upper center', bbox_to_anchor=(0.9, 0.9))
     plt.savefig(record_dir + f"/scatter.png")
     plt.show()
 
@@ -180,7 +180,7 @@ if __name__ == "__main__":
     config = Config_Diversity()
     config.num_poses = 1
     config.num_sols = 70
-    num_random_pick_up = 5
+    num_random_pick_up = 1
     std = 0.01
     robot_name = "panda"
     num_x_sub_plots = 3
@@ -191,7 +191,7 @@ if __name__ == "__main__":
     
     solvers = get_solvers(robot_name, config.workdir)
     
-    J_map = get_J_map(solvers, config.num_poses, config.num_sols, std, config.record_dir, load=True)
+    J_map = get_J_map(solvers, config.num_poses, config.num_sols, std, config.record_dir, load=False)
 
     for pick_up_idx in pick_up_idxs:
         print(f"Pick up index: {pick_up_idx}")

@@ -73,7 +73,10 @@ def get_flow_model(config: SolverConfig) -> tuple[Flow, Optimizer, ReduceLROnPla
 
     return flow, optimizer, scheduler
 
-SUPPORTED_ROBOTS = ["panda", "fetch", "fetch_arm", "iiwa7", "atlas_arm", "atlas_waist_arm", "baxter_arm", "pr2"]
+
+SUPPORTED_ROBOTS = ["panda", "fetch", "fetch_arm", "iiwa7",
+                    "atlas_arm", "atlas_waist_arm", "baxter_arm", "pr2"]
+
 
 def get_robot(robot_name: str, robot_dirs: Tuple[str, str, str, str]):
     """
@@ -85,7 +88,7 @@ def get_robot(robot_name: str, robot_dirs: Tuple[str, str, str, str]):
     """
     if robot_name not in SUPPORTED_ROBOTS:
         raise NotImplementedError(f"Robot {robot_name} is not supported yet.")
-    
+
     # def create_robot_dirs(dir_paths) -> None:
     for dp in robot_dirs:
         if not os.path.exists(path=dp):

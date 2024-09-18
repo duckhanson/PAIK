@@ -240,13 +240,14 @@ PR2_PAIK = SolverConfig(
     num_transforms=7,
 )
 
+
 def get_config(arch_name: str, robot_name: str):
     support_archs = ["paik", "nsf"]
     support_robots = ["panda", "fetch", "fetch_arm",
-                     "atlas_arm", "atlas_waist_arm", "baxter_arm"]
+                      "atlas_arm", "atlas_waist_arm", "baxter_arm"]
     assert arch_name in support_archs, f"arch_name should be one of {support_archs}."
     assert robot_name in support_robots, f"robot_name should be one of {support_robots}."
-    
+
     if robot_name == "panda":
         if arch_name == "nsf":
             return PANDA_NSF

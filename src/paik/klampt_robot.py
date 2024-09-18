@@ -6,7 +6,8 @@ import math
 import numpy as np
 from klampt.model import ik
 from klampt.math import so3
-
+from torch import Tensor
+import torch
 
 
 class Robot:
@@ -15,7 +16,7 @@ class Robot:
         self.name = name
         self._world = WorldModel()
         robot_dir_path = "/home/luca/Klampt-examples/data/robots"
-        
+
         self._world.loadElement(
             f"{robot_dir_path}/{name}.rob"
         )  # pr2, atlas, baxter, robonaut2
@@ -25,15 +26,21 @@ class Robot:
         self._active_joint_idx = active_joint_idx
         self.set_active_dofs(active_joint_idx)
         self.n_dofs = len(active_joint_idx)
+        self.ndof = self.n_dofs
         self._klampt_ee_link = self._robot.link(
             active_joint_idx[-1]
         )  # end effector link
+        
+    def clamp_to_joint_limits(self, x: np.ndarray) -> np.ndarray:
+        """Not used in the current implementation"""
+        return x
 
     def set_active_dofs(self, active_dofs):
         self.active_joint_names = [self._robot.link(ji).getName() for ji in active_dofs]
 
         self.active_joint_min = self._all_joint_limits[active_dofs, 0]
         self.active_joint_max = self._all_joint_limits[active_dofs, 1]
+        self.actuated_joints_limits = self._all_joint_limits[active_dofs, :]
 
     def get_active_joint_limits(self):
         return self.active_joint_min, self.active_joint_max
@@ -74,15 +81,15 @@ class Robot:
         active_driver_idxs = list(locate(driver_vec_tester, lambda x: x == 1))
 
         assert (
-            len(active_driver_idxs) == self.n_dofs
-        ), f"Error - the number of active drivers != n_dofs ({len(active_driver_idxs)} != {self.n_dofs})"
+            len(active_driver_idxs) == self.ndof
+        ), f"Error - the number of active drivers != ndof ({len(active_driver_idxs)} != {self.ndof})"
         return active_driver_idxs
 
     def _driver_vec_from_x(self, x: np.ndarray):
         """Format a joint angle vector into a klampt driver vector. Non user specified joints will have a value of 0.
 
         Args:
-            x (np.ndarray): (self.n_dofs,) joint angle vector
+            x (np.ndarray): (self.ndof,) joint angle vector
 
         Returns:
             List[float]: A list with the joint angle vector formatted in the klampt driver format. Note that klampt
@@ -117,14 +124,14 @@ class Robot:
         """Return a list of klampt configurations (qs) from an array of joint angles (x)
 
         Args:
-            x: (n x n_dofs) array of joint angle settings
+            x: (n x ndof) array of joint angle settings
 
         Returns:
             A list of configurations representing the robots state in klampt
         """
         assert (
-            x.ndim == 2 and x.shape[1] == self.n_dofs
-        ), f"x.shape: {x.shape}, n_dofs: {self.n_dofs}"
+            x.ndim == 2 and x.shape[1] == self.ndof
+        ), f"x.shape: {x.shape}, ndof: {self.ndof}"
         n = x.shape[0]
         qs = []
         for i in range(n):
@@ -134,8 +141,8 @@ class Robot:
 
     def _Q_to_Qvec(self, Q: np.ndarray):
         assert (
-            Q.ndim == 2 and Q.shape[1] == self.n_dofs
-        ), f"Q.shape: {Q.shape}, n_dofs: {self.n_dofs}"
+            Q.ndim == 2 and Q.shape[1] == self.ndof
+        ), f"Q.shape: {Q.shape}, ndof: {self.ndof}"
         Q_vec = np.zeros((Q.shape[0], len(self._robot.getConfig())))
         Q_vec[:, self._active_joint_idx] = Q
         return Q_vec
@@ -147,39 +154,53 @@ class Robot:
         Q = Qvec[:, self._active_joint_idx]
         return Q
 
-    def forward_kinematics(self, Q: np.ndarray) -> np.ndarray:
+    def forward_kinematics(self, Q: np.ndarray, solver=None) -> np.ndarray:
         """Forward kinematics using the klampt library"""
-
-        P = np.zeros((len(Q), 7))  # x, y, z, qx, qy, qz, qw
-        Qvec = self._Q_to_Qvec(Q)
+        if isinstance(Q, Tensor):
+            Q_numpy = Q.detach().cpu().numpy()
+            _device = Q.device
+        else:
+            Q_numpy = Q
+            _device = "cpu"
+        P = np.zeros((len(Q_numpy), 7))  # x, y, z, qx, qy, qz, qw
+        Qvec = self._Q_to_Qvec(Q_numpy)
         for i, q in enumerate(Qvec):
             self._robot.setConfig(q)
             R, t = self._klampt_ee_link.getTransform()  # type ignore
             P[i, 0:3] = np.array(t)
             P[i, 3:] = np.array(so3.quaternion(R))
-        return P
-
-    def sample_joint_angles_and_poses(self, n: int):
+        
+        # turn into torch tensor
+        return torch.from_numpy(P).float().to(_device)
+    
+    def sample_joint_angles(self, n: int):
         """Randomly sample n joint angles within the joint limits"""
-        Q = np.zeros((n, self.n_dofs))
-        for j in range(self.n_dofs):
+        Q = np.zeros((n, self.ndof))
+        for j in range(self.ndof):
             Q[:, j] = np.random.uniform(
                 self.active_joint_min[j], self.active_joint_max[j], n
             )
 
-        P = self.forward_kinematics(Q)
+        return Q
+    
+    def forward_kinematics_klampt(self, Q: np.ndarray, solver=None) -> np.ndarray:
+        """Forward kinematics using the klampt library"""
+        return self.forward_kinematics(Q)
 
+    def sample_joint_angles_and_poses(self, n: int):
+        """Randomly sample n joint angles within the joint limits"""
+        Q = self.sample_joint_angles(n)
+        P = self.forward_kinematics(Q)
         return Q, P
 
     def inverse_kinematics_klampt(
-        self, pose: np.ndarray, seed=None, num_trails: int = 50, max_iterations: int = 150
+        self, p: np.ndarray, num_trails: int = 50, max_iterations: int = 150
     ) -> Optional[np.ndarray]:
         """Inverse kinematics using the klampt library"""
-        assert pose.ndim == 1 and pose.shape[0] == 7, f"p.shape: {pose.shape}"
-        t = pose[:3]
-        R = so3.from_quaternion(pose[3:])  # type: ignore
+        assert p.ndim == 1 and p.shape[0] == 7, f"p.shape: {p.shape}"
+        R = so3.from_quaternion(p[3:])  # type: ignore
         
-        obj = ik.objective(self._klampt_ee_link, t=pose[0:3].tolist(), R=R)
+        obj = ik.objective(self._klampt_ee_link, t=p[0:3].tolist(), R=R)
 
         for _ in range(num_trails):
             solver = IKSolver(self._robot)
@@ -194,12 +215,12 @@ class Robot:
                 q = self._Q_from_Qvec(np.asarray([self._robot.getConfig()]))[0]
                 return q
 
-        # print(f"[INFO] Failed to find a solution for pose: {pose}")
+        print(f"[INFO] Failed to find a solution for p: {p}")
         return None
 
     def __repr__(self):
-        # print robot name, n_dofs, and active joint names, and joint limits
-        return f"Robot: {self.name}, n_dofs: {self.n_dofs}, active joints: {self.active_joint_names}, joint limits: {self.get_active_joint_limits()}"
+        # print robot name, ndof, and active joint names, and joint limits
+        return f"Robot: {self.name}, ndof: {self.ndof}, active joints: {self.active_joint_names}, joint limits: {self.get_active_joint_limits()}"
 
 
 class AtlasArm(Robot):
@@ -218,6 +239,22 @@ class BaxterArm(Robot):
         super().__init__("baxter", [15, 16, 17, 18, 19, 21, 22])
 
 
+def get_robot_names():
+    return ["atlas_arm", "atlas_waist_arm", "baxter_arm"]
+
+
+def get_robot(name: str) -> Robot:
+    assert name in get_robot_names(), f"Unknown robot name: {name}"
+    if name == "atlas_arm":
+        return AtlasArm()
+    elif name == "atlas_waist_arm":
+        return AtlasWaistArm()
+    elif name == "baxter_arm":
+        return BaxterArm()
+    else:
+        raise ValueError(f"Unknown robot name: {name}")
+
+
 # class Robonaut2WaistArm(Robot):
 #     def __init__(self):
 #         super().__init__("robonaut2", [4])
@@ -228,3 +265,21 @@ class BaxterArm(Robot):
 #     def __init__(self):
 #         super().__init__("robonaut2", [4])
 #         raise NotImplementedError("Robonaut2Arm is not implemented yet.")
+
+
+class PR2(Robot):
+    def __init__(self):
+        # arm from 51 to 61, palm 63
+        super().__init__("pr2", [51, 52, 53, 55, 56, 60, 61, 63])
+
+
+if __name__ == "__main__":
+    # Test the Robot class
+    robot = AtlasWaistArm()
+    
+    # dim_latent_space = 9
+    
+    # for i in range(dim_latent_space):    
+    #     k = 1.0 / max(abs(robot.actuated_joints_limits[i][0]), abs(robot.actuated_joints_limits[i][1]))
+    #     print(f"dim {i}: {k}")
+    

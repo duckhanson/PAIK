@@ -203,6 +203,11 @@ def geodesic_distance_between_quaternions(
     Returns:
         np.ndarray: geodesic distance, shape: (num_poses,)
     """
+    if isinstance(q1, torch.Tensor):
+        q1 = q1.detach().cpu().numpy()
+    if isinstance(q2, torch.Tensor):
+        q2 = q2.detach().cpu().numpy()
+    
     acos_clamp_epsilon = 1e-7
     ang = np.abs(
         np.remainder(

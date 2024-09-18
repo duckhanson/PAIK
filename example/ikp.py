@@ -74,8 +74,7 @@ def load_ikflow_solver_from_lightning_checkpoint(robot_name: str):
 def numerical_inverse_kinematics_single(solver, pose, num_sols):
     ik_sols = np.empty((num_sols, solver.robot.n_dofs))
     for i in range(num_sols):
-        ik_sols[i] = solver.robot.inverse_kinematics_klampt(
-            p=pose)  # type: ignore
+        ik_sols[i] = solver.robot.inverse_kinematics_klampt(pose)  # type: ignore
     return ik_sols
 
 

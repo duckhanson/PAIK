@@ -3,7 +3,7 @@ import os
 import pickle
 import torch
 import numpy as np
-from paik.solver import get_solver
+from paik.solver import Solver, get_solver
 from paik.file import save_pickle, load_pickle
 
 from matplotlib import pyplot as plt
@@ -46,15 +46,17 @@ def plot_random_3d_joints_scatter(ax, keys, J: dict, c: dict, marker: dict, labe
             ax.scatter(Ji[:, x], Ji[:, y], Ji[:, z], c=c[i], marker=marker[i], label=label[i], alpha=0.8)
         else:
             ax.scatter(Ji[:, x], Ji[:, y], Ji[:, z], c=c[i], marker=marker[i], label=label[i])
+            
+        
 
     ax.set_xlabel(f'Joint {x}')
     ax.set_ylabel(f'Joint {y}')
     ax.set_zlabel(f'Joint {z}')
     
     # return legend handles
-    return ax.get_legend_handles_labels()
+    return ax # ax.get_legend_handles_labels()
 
-def get_solvers(robot_name: str, work_dir: str):
+def get_solvers(robot_name: str, work_dir: str) -> dict[str, Solver]:
     """
     Get solvers for the robot
 
@@ -158,17 +160,57 @@ def visualize_3d_joints_scatter(J_map: dict, std: float, pick_up_solver: str, pi
         else:
             label_map[key] = f'{key.upper()}'
             
-    fig = plt.figure()
+    fig = plt.figure(figsize=(10, 7.5))
     gs = GridSpec(num_x_sub_plots, num_y_sub_plots, figure=fig)
     handles_list = {}
     keys_list = [(key, 'num') for key in J_map.keys() if key != 'num']
+
+    # Initialize lists to store ticks and limits
+    x_min, y_min, z_min = float('inf'), float('inf'), float('inf')
+    x_max, y_max, z_max = float('-inf'), float('-inf'), float('-inf')
+
+    axes = []
+    # First pass to determine the common ticks and limits
     for x in range(num_x_sub_plots):
         for y in range(num_y_sub_plots):
             ax = fig.add_subplot(gs[x, y], projection='3d')
             count = x * num_y_sub_plots + y
-            handles, _ = plot_random_3d_joints_scatter(ax, keys_list[count], J_map, color_map, marker_map, label_map, random_joint_nums)
-            handles_list.update(dict(zip(keys_list[count], handles)))
+            ax = plot_random_3d_joints_scatter(ax, keys_list[count], J_map, color_map, marker_map, label_map, random_joint_nums)
+            axes.append(ax)
 
+            x_min = min(x_min, ax.get_xlim()[0])
+            x_max = max(x_max, ax.get_xlim()[1])
+            y_min = min(y_min, ax.get_ylim()[0])
+            y_max = max(y_max, ax.get_ylim()[1])
+            z_min = min(z_min, ax.get_zlim()[0])
+            z_max = max(z_max, ax.get_zlim()[1])
+            
+            handles, _ = ax.get_legend_handles_labels()
+            handles_list.update(dict(zip(keys_list[count], handles)))
+            
+    for x in range(num_x_sub_plots):
+        for y in range(num_y_sub_plots):
+            count = x * num_y_sub_plots + y
+            ax = axes[count]
+            ax.set_xlim(x_min, x_max)
+            ax.set_ylim(y_min, y_max)
+            ax.set_zlim(z_min, z_max)
+            
+            # show num_ticks ticks and round to 1 decimal
+            num_ticks = 3
+            ax.set_xticks(np.round(np.linspace(x_min, x_max, num_ticks), 1))
+            ax.set_yticks(np.round(np.linspace(y_min, y_max, num_ticks), 1))
+            ax.set_zticks(np.round(np.linspace(z_min, z_max, num_ticks), 1))
+            
+            # Set font sizes for axis labels and tick labels
+            fontsize = 14
+            labelpad = 10  # Adjust this value to move the labels further away from the ticks
+            ax.set_xlabel(ax.get_xlabel(), fontsize=fontsize, labelpad=labelpad)
+            ax.set_ylabel(ax.get_ylabel(), fontsize=fontsize, labelpad=labelpad)
+            ax.set_zlabel(ax.get_zlabel(), fontsize=fontsize, labelpad=labelpad)
+            ax.tick_params(axis='both', which='major', labelsize=12)
+    # Adjust the spacing between subplots
+    plt.subplots_adjust(wspace=0.2, hspace=0.2)
     fig.suptitle(f'3D Joints Scatter with Random {config.num_poses} poses and {config.num_sols} solutions')
     fig.legend(handles=handles_list.values(), loc='upper center', bbox_to_anchor=(0.9, 0.9))
     plt.savefig(record_dir + f"/scatter.png")
@@ -179,19 +221,19 @@ def visualize_3d_joints_scatter(J_map: dict, std: float, pick_up_solver: str, pi
 if __name__ == "__main__":
     config = Config_Diversity()
     config.num_poses = 1
-    config.num_sols = 70
-    num_random_pick_up = 1
+    config.num_sols = 20
+    num_random_pick_up = 3
     std = 0.01
     robot_name = "panda"
-    num_x_sub_plots = 3
+    num_x_sub_plots = 2
     num_y_sub_plots = 2
     pick_up_solver = f'paik_{std}'
-    pick_up_idxs = np.random.randint(0, config.num_sols, num_random_pick_up)
+    pick_up_idxs = [17] # 2, 11, 17
     random_joint_nums = np.array([1, 3, 5])
     
     solvers = get_solvers(robot_name, config.workdir)
     
-    J_map = get_J_map(solvers, config.num_poses, config.num_sols, std, config.record_dir, load=False)
+    J_map = get_J_map(solvers, config.num_poses, config.num_sols, std, config.record_dir, load=True)
 
     for pick_up_idx in pick_up_idxs:
         print(f"Pick up index: {pick_up_idx}")

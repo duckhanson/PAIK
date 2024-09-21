@@ -52,7 +52,7 @@ def get_ikflow_solver(robot_name: str):
 
 def test_random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std: float, record_dir: str, verbose: bool=False):
     
-    ikflow_solver = get_ikflow_solver(robot_name)
+    ikflow_solver, _ = get_ikflow_solver(robot_name)
     
     _, P = ikflow_solver.robot.sample_joint_angles_and_poses(num_poses)
     
@@ -81,10 +81,10 @@ def test_random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std
     df = pd.DataFrame({
         "robot": [robot_name] * num_solvers,
         "solver": list(results.keys()),
+        "mmd": [mmd_results[key] for key in mmd_results.keys()],
         "l2_mm": [results[key][1] for key in results.keys()],
         "ang_deg": [results[key][2] for key in results.keys()],
         "solve_time_ms": [results[key][3] for key in results.keys()],
-        "mmd": [mmd_results[key] for key in mmd_results.keys()],
     }) 
     
     # save the results to a csv file
@@ -215,5 +215,5 @@ def test_random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std
 
 if __name__ == "__main__":
     config = Config_IKP()
-    robot_name = "fetch_arm" # "panda", "fetch", "fetch_arm"
+    robot_name = "panda" # "panda", "fetch", "fetch_arm"
     test_random_ikp_with_mmd(robot_name=robot_name, num_poses=config.num_poses, num_sols=config.num_sols, std=config.std, record_dir=config.record_dir, verbose=True)

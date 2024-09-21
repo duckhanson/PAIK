@@ -20,7 +20,7 @@ from common.evaluate import mmd_evaluate_multiple_poses, compute_distance_J
 from common.display import display_posture, display_ikp
 from common.config import Config_File, Config_IKP, Config_Diversity, Config_Posture
 from common.file import load_poses_and_numerical_ik_sols
-
+from jrl.robots import Panda
 
 @dataclass
 class args:
@@ -90,16 +90,29 @@ def get_pair_from_robot(robot, num_poses):
         P[i] = robot.get_pair()[robot.active_joint_dim:]
     return J, P
 
+def ikp_numerical_ik_sols(P_num_poses_num_sols, krbt=Panda()):
+    num_poses, num_sols = P_num_poses_num_sols.shape[0:2]
+    print(f"Start numerical ik solutions for {num_poses} poses and {num_sols} solutions")
+    J_hat = np.empty(
+        (num_poses, num_sols, robot.active_joint_dim))
+    for i in trange(num_poses):
+        for j in range(num_sols):
+            J_hat[i, j] = krbt.inverse_kinematics_klampt(P_num_poses_num_sols[i, j])
+    
+    return J_hat
 
-def ikp():
-    config = Config_IKP()
-    robot, nodeik = init_nodeik(args, config.std)
 
+def ikp(config: Config_IKP, robot: Robot, nodeik: ModelWrapper):
     _, P = get_pair_from_robot(robot, config.num_poses)
     P = np.repeat(
         np.expand_dims(P, axis=1), config.num_sols, axis=1
     )  # (config.num_poses, config.num_sols, len(x))
 
+    begin = time.time()
+    J_numerical = ikp_numerical_ik_sols(P, krbt=Panda())
+    numerical_inference_time = round((time.time() - begin) / config.num_poses, 3)
+
+    print(f"Start nodeik ik solutions for {config.num_poses} poses and {config.num_sols} solutions")
     begin = time.time()
     J_hat = np.empty(
         (config.num_poses, config.num_sols, robot.active_joint_dim))
@@ -107,122 +120,38 @@ def ikp():
     for i in trange(config.num_poses):
         J_hat[i], _ = nodeik.inverse_kinematics(P[i])
         P_hat[i] = nodeik.forward_kinematics(J_hat[i])
+    l2, ang = evaluate_pose_errors_P2d_P2d(
+        P_hat.reshape(-1, P.shape[-1]), P.reshape(-1, P.shape[-1])
+    )
+
+    # transpose to (num_sols, num_poses, len(x))
+    # compute mmd
+    J_hat = J_hat.transpose(1, 0, 2)
+    J_numerical = J_numerical.transpose(1, 0, 2)
+    mmd = mmd_evaluate_multiple_poses(J_hat, J_numerical, config.num_poses)
     avg_inference_time = round((time.time() - begin) / config.num_poses, 3)
-    l2, ang = evaluate_pose_errors_P2d_P2d(
-        P_hat.reshape(-1, P.shape[-1]), P.reshape(-1, P.shape[-1])
-    )
-    display_ikp(l2.mean(), ang.mean(), avg_inference_time)
 
-
-def posture_constraint_ikp():
-    config = Config_Posture()
-    robot, nodeik = init_nodeik(args, config.std)
-    J, P = get_pair_from_robot(robot, config.num_poses)
-
-    # P.shape = (config.num_sols, config.num_poses, len(x))
-    P = np.repeat(np.expand_dims(P, axis=0), config.num_sols, axis=0)
-
-    J_hat = np.empty(
-        (config.num_sols, config.num_poses, robot.active_joint_dim))
-    P_hat = np.empty_like(P)
-    for i in trange(config.num_sols):
-        J_hat[i], _ = nodeik.inverse_kinematics(P[i])
-        P_hat[i] = nodeik.forward_kinematics(J_hat[i])
-    l2, ang = evaluate_pose_errors_P2d_P2d(
-        P_hat.reshape(-1, P.shape[-1]), P.reshape(-1, P.shape[-1])
-    )
-
-    # J_hat.shape = (num_sols, num_poses, num_dofs or n)
-    # J.shape = (num_poses, num_dofs or n)
-    distance_J = compute_distance_J(J_hat, J)
-    display_posture(
-        config.record_dir,
-        "nodeik",
-        l2.flatten(),
-        ang.flatten(),
-        distance_J.flatten(),
-        config.success_distance_thresholds,
-    )
-
-
-def load_poses_and_numerical_ik_sols_nodeik(record_dir: str, nodeik: ModelWrapper):
-    P, J = load_poses_and_numerical_ik_sols(record_dir)
-    print(f"P.shape: {P.shape}, J.shape: {J.shape}")
-    P_hat = np.empty_like(P)
-    for i in range(len(P)):
-        P_hat[i] = nodeik.forward_kinematics(
-            J[i, np.random.randint(0, J.shape[1])])
-    l2, ang = evaluate_pose_errors_P2d_P2d(P_hat, P)
-    df = pd.DataFrame({"l2": l2, "ang": ang})
-    assert df["l2"].mean() < 1e-3, f"[LOAD ERROR] l2.mean(): {df['l2'].mean()}"
-    # check if the numerical ik solutions are correct
-    return P, J
-
-
-def diversity():
-    config = Config_Diversity()
-    robot, nodeik = init_nodeik(args, 0.1)
-    P, J = load_poses_and_numerical_ik_sols_nodeik(config.record_dir, nodeik)
-
-    num_poses, num_sols = J.shape[0:2]
-    base_stds = config.base_stds
-
-    print(f"num_poses: {num_poses}, num_sols: {num_sols}")
-
-    l2_nodeik = np.empty((len(base_stds)))
-    ang_nodeik = np.empty((len(base_stds)))
-    mmd_nodeik = np.empty((len(base_stds)))
-
-    # (num_poses, num_sols, len(x))
-    P_repeat = np.expand_dims(P, axis=1).repeat(num_sols, axis=1)
-    assert P_repeat.shape == (num_poses, num_sols, P.shape[-1])
-
-    J_hat_nodeik = np.empty(
-        (len(base_stds), num_poses, num_sols, robot.active_joint_dim)
-    )
-    for i, std in enumerate(base_stds):
-        _, nodeik = init_nodeik(args, std, robot)
-
-        J_hat = np.empty_like(J)
-        P_hat = np.empty_like(P_repeat)
-        for ip in (pbar := trange(num_poses)):
-            pbar.set_description(f"i: {i}, std: {round(std, 1)}")
-            J_hat[ip], _ = nodeik.inverse_kinematics(P_repeat[ip])
-            for isols in range(num_sols):
-                P_hat[ip, isols] = nodeik.forward_kinematics(J_hat[ip, isols])
-        J_hat = J_hat.reshape(-1, J_hat.shape[-1])
-        P_hat = P_hat.reshape(-1, P_hat.shape[-1])
-        l2, ang = evaluate_pose_errors_P2d_P2d(
-            P_hat, P_repeat.reshape(-1, P_repeat.shape[-1])
-        )
-
-        # filter out the outliers
-        l2_threshold, ang_threshold = config.pose_error_threshold
-        condition = (l2 < l2_threshold) & (np.rad2deg(ang) < ang_threshold)
-        l2_nodeik[i] = l2[condition].mean()
-        ang_nodeik[i] = ang[condition].mean()
-        # print(f"nan condition sum: {condition.sum()}, remaining: {len(condition) - condition.sum()}")
-        J_hat[~condition] = np.nan
-        P_hat[~condition] = np.nan
-
-        J_hat = J_hat.reshape(num_poses, num_sols, J_hat.shape[-1])
-        P_hat = P_hat.reshape(num_poses, num_sols, P_hat.shape[-1])
-
-        J_hat_nodeik[i] = J_hat
-        mmd_nodeik[i] = mmd_evaluate_multiple_poses(J_hat, J, num_poses)
-
-    save_diversity(
-        config.record_dir,
-        "nodeik",
-        J_hat_nodeik,
-        l2_nodeik,
-        ang_nodeik,
-        mmd_nodeik,
-        base_stds,
-    )
+    
+    l2_mm = l2[~np.isnan(l2)].mean() * 1000
+    ang_deg = np.rad2deg(ang[~np.isnan(ang)].mean())
+    
+    df = pd.DataFrame({
+        "robot": ["panda"] * 2,
+        "solver": ["numerical", "nodeik"],
+        "l2_mm": [0, l2_mm],
+        "ang_deg": [0, ang_deg],
+        "mmd": [0, mmd],
+        "inference_time (ms)": [numerical_inference_time, avg_inference_time],
+    })
+    print(df)
+    
 
 
 if __name__ == "__main__":
-    ikp()
-    # posture_constraint_ikp()
-    # diversity()
+    # ikp()
+    config = Config_IKP()
+    robot, nodeik = init_nodeik(args, config.std)
+    ikp(config, robot, nodeik)
+        
+    
+    

@@ -194,7 +194,7 @@ class Robot:
         return Q, P
 
     def inverse_kinematics_klampt(
-        self, p: np.ndarray, num_trails: int = 50, max_iterations: int = 150
+        self, p: np.ndarray, num_trails: int = 50, max_iterations: int = 150, positional_tolerance: float = 1e-3, seed: Optional[np.ndarray] = None, return_iterations: bool = False
     ) -> Optional[np.ndarray]:
         """Inverse kinematics using the klampt library"""
         assert p.ndim == 1 and p.shape[0] == 7, f"p.shape: {p.shape}"
@@ -207,15 +207,22 @@ class Robot:
             solver.add(obj)
             solver.setActiveDofs(self._active_joint_idx)
             solver.setMaxIters(max_iterations)
-            solver.sampleInitial()
-
+            solver.setTolerance(positional_tolerance)
+            if seed is None:
+                solver.sampleInitial()
+            else:
+                self._robot.setConfig(self._Q_to_Qvec(np.asarray([seed]))[0])
+            
             res = solver.solve()
 
             if res:
                 q = self._Q_from_Qvec(np.asarray([self._robot.getConfig()]))[0]
+                if return_iterations:
+                    return q, solver.lastSolveIters() # type: ignore
+                
                 return q
 
-        print(f"[INFO] Failed to find a solution for p: {p}")
+        # print(f"[INFO] Failed to find a solution for p: {p}")
         return None
 
     def __repr__(self):

@@ -21,7 +21,6 @@ from common.evaluate import mmd_J3d_J3d
 
 from common.config import Config_Diversity
 from common.file import save_diversity, load_poses_and_numerical_ik_sols
-from ikp import numerical_inverse_kinematics_batch, random_ikp
 
 def solve_batch(solver, P: np.ndarray, num_sols: int, std: float):
     num_poses = len(P)

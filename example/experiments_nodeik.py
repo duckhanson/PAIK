@@ -109,7 +109,7 @@ def ikp(config: Config_IKP, robot: Robot, nodeik: ModelWrapper):
     )  # (config.num_poses, config.num_sols, len(x))
 
     begin = time.time()
-    J_numerical = ikp_numerical_ik_sols(P, krbt=Panda())
+    # J_numerical = ikp_numerical_ik_sols(P, krbt=Panda())
     numerical_inference_time = round((time.time() - begin) / config.num_poses, 3)
 
     print(f"Start nodeik ik solutions for {config.num_poses} poses and {config.num_sols} solutions")
@@ -126,10 +126,10 @@ def ikp(config: Config_IKP, robot: Robot, nodeik: ModelWrapper):
 
     # transpose to (num_sols, num_poses, len(x))
     # compute mmd
-    J_hat = J_hat.transpose(1, 0, 2)
-    J_numerical = J_numerical.transpose(1, 0, 2)
-    mmd = mmd_evaluate_multiple_poses(J_hat, J_numerical, config.num_poses)
-    avg_inference_time = round((time.time() - begin) / config.num_poses, 3)
+    # J_hat = J_hat.transpose(1, 0, 2)
+    # J_numerical = J_numerical.transpose(1, 0, 2)
+    # mmd = mmd_evaluate_multiple_poses(J_hat, J_numerical, config.num_poses)
+    avg_inference_time = round((time.time() - begin) / config.num_poses, 3) * 1000
 
     
     l2_mm = l2[~np.isnan(l2)].mean() * 1000
@@ -140,16 +140,17 @@ def ikp(config: Config_IKP, robot: Robot, nodeik: ModelWrapper):
         "solver": ["numerical", "nodeik"],
         "l2_mm": [0, l2_mm],
         "ang_deg": [0, ang_deg],
-        "mmd": [0, mmd],
+        # "mmd": [0, mmd],
         "inference_time (ms)": [numerical_inference_time, avg_inference_time],
     })
     print(df)
-    
+    df.to_csv(f"{config.record_dir}/ikp_panda_nodeik_{config.num_poses}_{config.num_sols}_{config.std}.csv")
 
 
 if __name__ == "__main__":
     # ikp()
     config = Config_IKP()
+    config.num_poses = 500
     robot, nodeik = init_nodeik(args, config.std)
     ikp(config, robot, nodeik)
         

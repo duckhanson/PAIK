@@ -20,6 +20,7 @@ import paik.klampt_robot as chlib
 
 import torch
 from ikflow.training.lt_model import IkfLitModel
+from experiments_ikflow import get_ikflow_solver
 
 # set the same random seed for reproducibility
 np.random.seed(0)
@@ -31,19 +32,20 @@ DEFAULT_WEIGHTS_PATH = {
     'baxter_arm': '/home/luca/ikflow/training_logs/baxter--Sep.12.2024_09:27:AM/ikflow-checkpoint-step=960000.ckpt',
 }
 
+def get_robot(robot_name: str):
+    try:
+        robot = jrlib.get_robot(robot_name)
+    except ValueError:
+        try:
+            robot = chlib.get_robot(robot_name)
+        except ValueError:
+            raise ValueError(
+                f"Error: Robot '{robot_name}' not found in either jrlib or chlib")
+
+    return robot
 
 def _load_ikflow_local_pretrain(robot_name: str):
-    def get_robot(robot_name: str):
-        try:
-            robot = jrlib.get_robot(robot_name)
-        except ValueError:
-            try:
-                robot = chlib.get_robot(robot_name)
-            except ValueError:
-                raise ValueError(
-                    f"Error: Robot '{robot_name}' not found in either jrlib or chlib")
-
-        return robot
+    
 
     ckpt_filepath = DEFAULT_WEIGHTS_PATH[robot_name]
 
@@ -62,13 +64,16 @@ def _load_ikflow_local_pretrain(robot_name: str):
 
 
 def load_ikflow_solver_from_lightning_checkpoint(robot_name: str):
-    ik_solver, hyper_parameters, ckpt_filepath = _load_ikflow_local_pretrain(
-        robot_name)
-    model = IkfLitModel.load_from_checkpoint(
-        ckpt_filepath, ik_solver=ik_solver)
-    model.eval()
-
-    return model.ik_solver
+    if robot_name in DEFAULT_WEIGHTS_PATH:
+        ik_solver, hyper_parameters, ckpt_filepath = _load_ikflow_local_pretrain(
+            robot_name)
+        model = IkfLitModel.load_from_checkpoint(
+            ckpt_filepath, ik_solver=ik_solver)
+        model.eval()
+        ik_solver = model.ik_solver
+    else:
+        ik_solver, _ = get_ikflow_solver(robot_name)
+    return ik_solver
 
 
 def numerical_inverse_kinematics_single(solver, pose, num_sols):
@@ -226,8 +231,7 @@ def test_random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std
 
 
 if __name__ == "__main__":
-    # ["panda", "fetch", "fetch_arm", "atlas_arm", "atlas_waist_arm", "baxter"]
-    robot_names = ["baxter_arm"]
+    robot_names = ["panda", "fetch", "fetch_arm", "atlas_arm", "atlas_waist_arm", "baxter_arm"]
     config = Config_IKP()
 
     for robot_name in robot_names:

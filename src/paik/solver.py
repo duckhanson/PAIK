@@ -674,7 +674,7 @@ class PAIK(Solver):
     ):
         if select_reference == "knn":
             # type: ignore
-            n_neighbors = min(num_sols, 10)
+            n_neighbors = min(num_sols, 30)
             F = self.F[
                 self.P_knn.kneighbors(
                     np.atleast_2d(P), n_neighbors=n_neighbors, return_distance=False

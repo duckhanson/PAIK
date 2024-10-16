@@ -232,7 +232,7 @@ def display_diversity_all(iksolver_names: list, record_dir: str):
     x_ticks = np.arange(0, 1.5, 0.3)[1:]
     df_l2.plot(x="Base std", grid=True, fontsize=fontsize, ax=sub_ax[0], legend=False)
     sub_ax[0].set_xticks(x_ticks)
-    sub_ax[0].set_xlabel("Base std", fontsize=title_fontsize)
+    sub_ax[0].set_xlabel("Std", fontsize=title_fontsize)
     sub_ax[0].set_ylabel("L2 Error (mm)", fontsize=title_fontsize)
     sub_ax[0].set_title("Position Error", fontsize=title_fontsize)
     # sub_ax[0].figure.set_size_inches(ax_figsize)
@@ -240,12 +240,12 @@ def display_diversity_all(iksolver_names: list, record_dir: str):
 
     df_mmd.plot(x="Base std", grid=True, fontsize=fontsize, ax=sub_ax[1], legend=False)
     sub_ax[1].set_xticks(x_ticks)
-    sub_ax[1].set_xlabel("Base std", fontsize=title_fontsize)
+    sub_ax[1].set_xlabel("Std", fontsize=title_fontsize)
     sub_ax[1].set_ylabel("MMD Score", fontsize=title_fontsize)
     sub_ax[1].set_title("MMD Score", fontsize=title_fontsize)
     # sub_ax[1].figure.set_size_inches(ax_figsize)
     # sub_ax[1].legend(fontsize=fontsize)
-    iksolver_names = ["IKFlow", "NODEIK", "NSF", "Locality + NSF"]
+    iksolver_names = ["IKFlow", "NODEIK", "NSF", "PAIK"]
     fig.legend(iksolver_names, loc="center right", bbox_to_anchor=(0.9, 0.7), fontsize=title_fontsize)
     
     plt.subplots_adjust(wspace=0.3)

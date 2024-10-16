@@ -13,8 +13,11 @@ from ikp import solver_batch, random_ikp, numerical_inverse_kinematics_batch
 from _visualize import visualize_ik_solutions
 
 # set random seeds for numpy and torch for reproducibility
-np.random.seed(17)
+np.random.seed(11)
 torch.manual_seed(0)
+
+import OpenGL.GLUT as glut
+glut.glutInit()
 
 def plot_random_3d_joints_scatter(ax, keys, J: dict, c: dict, marker: dict, label: dict, joint_nums=None):
     if joint_nums is None:
@@ -43,11 +46,11 @@ def plot_random_3d_joints_scatter(ax, keys, J: dict, c: dict, marker: dict, labe
                         
         if i == 'num':
             # alpha is used to make the NUM solution more transparent
-            ax.scatter(Ji[:, x], Ji[:, y], Ji[:, z], c=c[i], marker=marker[i], label=label[i], alpha=0.8)
+            ax.scatter(Ji[:, x], Ji[:, y], Ji[:, z], c=c[i], marker=marker[i], label=label[i], alpha=0.8, s=70)
         else:
-            ax.scatter(Ji[:, x], Ji[:, y], Ji[:, z], c=c[i], marker=marker[i], label=label[i])
+            ax.scatter(Ji[:, x], Ji[:, y], Ji[:, z], c=c[i], marker=marker[i], label=label[i], s=70)
             
-        
+    
 
     ax.set_xlabel(f'Joint {x}')
     ax.set_ylabel(f'Joint {y}')
@@ -105,7 +108,7 @@ def get_J_map(solvers: dict, num_poses: int, num_sols: int, std: float, record_d
     
     return J_map
 
-def visualize_3d_joints_scatter(J_map: dict, std: float, pick_up_solver: str, pick_up_idx: int, num_x_sub_plots: int, num_y_sub_plots: int, random_joint_nums: np.ndarray, record_dir: str):
+def visualize_3d_joints_scatter(J_map: dict, num_x_sub_plots: int, num_y_sub_plots: int, random_joint_nums: np.ndarray, record_dir: str):
     """
     Visualize 3D Joints Scatter
 
@@ -121,7 +124,7 @@ def visualize_3d_joints_scatter(J_map: dict, std: float, pick_up_solver: str, pi
     # num is gray and alpha is 0.5, 
     # nsf_0.01 and nsf_0.25 are from color of red series, but nsf_0.25 is ligher than nsf_0.01
     # paik_0.01 and paik_0.25 are from color of blue series, but paik_0.25 is ligher than paik_0.01
-    _lighter_color = lambda color: np.clip(np.atleast_2d([c + 0.1 for c in color]), 0, 1)
+    _lighter_color = lambda color: np.clip(np.atleast_2d([c + 0.2 for c in color]), 0, 1)
     
     solver_color = {
         'num': np.atleast_2d((0.5, 0.5, 0.5, 0.5)),
@@ -160,7 +163,7 @@ def visualize_3d_joints_scatter(J_map: dict, std: float, pick_up_solver: str, pi
         else:
             label_map[key] = f'{key.upper()}'
             
-    fig = plt.figure(figsize=(10, 7.5))
+    fig = plt.figure(figsize=(15, 12))
     gs = GridSpec(num_x_sub_plots, num_y_sub_plots, figure=fig)
     handles_list = {}
     keys_list = [(key, 'num') for key in J_map.keys() if key != 'num']
@@ -221,25 +224,34 @@ def visualize_3d_joints_scatter(J_map: dict, std: float, pick_up_solver: str, pi
 if __name__ == "__main__":
     config = Config_Diversity()
     config.num_poses = 1
-    config.num_sols = 20
-    num_random_pick_up = 3
+    config.num_sols = 100
     std = 0.01
     robot_name = "panda"
     num_x_sub_plots = 2
     num_y_sub_plots = 2
     pick_up_solver = f'paik_{std}'
-    pick_up_idxs = [17] # 2, 11, 17
-    random_joint_nums = np.array([1, 3, 5])
+    pick_up_idxs = [39] # 83, 74, 67, 63, 39
     
     solvers = get_solvers(robot_name, config.workdir)
     
     J_map = get_J_map(solvers, config.num_poses, config.num_sols, std, config.record_dir, load=True)
 
-    for pick_up_idx in pick_up_idxs:
-        print(f"Pick up index: {pick_up_idx}")
-        J_map['pick_up'] = J_map[pick_up_solver][pick_up_idx]
-        J_map['not_pick_up'] = np.delete(J_map[pick_up_solver], pick_up_idx, axis=0)
-        
-        visualize_3d_joints_scatter(J_map, std, pick_up_solver, pick_up_idx, num_x_sub_plots, num_y_sub_plots, random_joint_nums, config.record_dir)    
-        # visualize_ik_solutions(robot=solvers['nsf'].robot, ik_solutions=J_map['pick_up']) # type: ignore
+
+    random_joint_list = np.array([[2, 4, 6]]) # [[1, 3, 5], [2, 4, 6]]
+    for random_joint_nums in random_joint_list:
+        print(f"Pick up index: {pick_up_idxs}, Random joint numbers: {random_joint_nums}")
+        J_map['pick_up'] = J_map[pick_up_solver][pick_up_idxs]
+        J_map['not_pick_up'] = np.delete(J_map[pick_up_solver], pick_up_idxs, axis=0)
+        visualize_3d_joints_scatter(J_map, num_x_sub_plots, num_y_sub_plots, random_joint_nums, config.record_dir)    
+        visualize_ik_solutions(robot=solvers['nsf'].robot, ik_solutions=J_map['pick_up']) # type: ignore
     
+    
+    # random pick up 
+    # num_random_pick_up = 30
+    # for _ in range(num_random_pick_up):
+    #     random_idx = np.random.choice(J_map[pick_up_solver].shape[0], 1)
+    #     print(f"Random pick up index: {random_idx}")
+    #     J_map['pick_up'] = J_map[pick_up_solver][random_idx]
+    #     J_map['not_pick_up'] = np.delete(J_map[pick_up_solver], random_idx, axis=0)
+    #     visualize_3d_joints_scatter(J_map, num_x_sub_plots, num_y_sub_plots, random_joint_nums, config.record_dir) 
+        

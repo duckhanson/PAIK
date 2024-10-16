@@ -58,7 +58,7 @@ class Config_IKP(Config_File):
     # commons
     num_poses: int = 500
     num_sols: int = 250
-    std: float = 0.001
+    std: float = 0.25
     # success_threshold: Tuple = (5e-3, 2)
 
     # paik

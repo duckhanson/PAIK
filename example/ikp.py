@@ -3,12 +3,15 @@ import numpy as np
 from time import time
 
 import pandas as pd
+import scipy
 from tqdm import tqdm
 
-from common.evaluate import mmd_evaluate_multiple_poses, evaluate_pose_error_J3d_P2d, mmd_J3d_J3d
+from common.evaluate import evaluate_pose_error_J3d_P2d, mmd_J3d_J3d
 from paik.solver import NSF, PAIK, Solver, get_solver
+from sklearn.cluster import DBSCAN
 from common.config import Config_IKP
 from common.display import save_ikp
+from scipy.spatial.distance import cdist
 
 
 import os
@@ -85,7 +88,7 @@ def numerical_inverse_kinematics_single(solver, pose, num_sols):
 
 def numerical_inverse_kinematics_batch(solver, P, num_sols):
     ik_sols_batch = np.empty((num_sols, P.shape[0], solver.robot.n_dofs))
-    for i, pose in enumerate(tqdm(P)):
+    for i, pose in enumerate(P):
         ik_sols_batch[:, i] = numerical_inverse_kinematics_single(
             solver, pose, num_sols)
     # return shape: (num_sols, num_poses, n)
@@ -103,9 +106,9 @@ def solver_batch(solver, P, num_sols, std=0.001):
     if isinstance(solver, PAIK):
         F = solver.get_reference_partition_label(P=P, num_sols=num_sols)
         # shape: (1, num_sols*num_poses, n)
-        J_hat = solver.generate_ik_solutions(P=P_num_sols, F=F)
+        J_hat = solver.generate_ik_solutions(P=P_num_sols, F=F, verbose=False)
     elif isinstance(solver, NSF):
-        J_hat = solver.generate_ik_solutions(P=P_num_sols)
+        J_hat = solver.generate_ik_solutions(P=P_num_sols, verbose=False)
     else:
         J_hat = np.empty((num_sols, P.shape[0], solver.robot.n_dofs))
         P_torch = torch.tensor(P, dtype=torch.float32).to('cuda')
@@ -122,7 +125,64 @@ def solver_batch(solver, P, num_sols, std=0.001):
     return J_hat.reshape(num_sols, P.shape[0], -1)
 
 
-def random_ikp(solver: Solver, P: np.ndarray, num_sols: int, solve_fn_batch: Any, std: float = None, verbose: bool = False):
+def gaussian_kernel(x, y, sigma=1.0):
+    """Compute the Gaussian (RBF) kernel between two vectors."""
+    return np.exp(-cdist(x, y, 'sqeuclidean') / (2 * sigma ** 2))
+
+def inverse_multiquadric_kernel(x, y, c=1.0):
+    """Compute the Inverse Multi-Quadric (IMQ) kernel between two vectors."""
+    return 1.0 / np.sqrt(cdist(x, y, 'sqeuclidean') + c**2)
+
+def compute_mmd(X, Y, kernel=gaussian_kernel):
+    """Compute the Maximum Mean Discrepancy (MMD) between two distributions."""
+    
+    # filter out the nan values
+    X = X[~np.isnan(X).any(axis=1)]
+    Y = Y[~np.isnan(Y).any(axis=1)]
+    
+    XX = kernel(X, X)
+    YY = kernel(Y, Y)
+    XY = kernel(X, Y)
+    
+    mmd = XX.mean() + YY.mean() - 2 * XY.mean()
+    return mmd
+
+def get_number_of_distinct_solutions(J_hat: np.ndarray, eps: float, min_samples: int):
+    """
+    Get the number of distinct solutions for each pose
+
+    Args:
+        J_hat (np.ndarray): the generated IK solutions with shape (num_sols, num_poses, num_dofs or n)
+
+    Returns:
+        np.ndarray: the number of distinct solutions for each pose
+    """
+    
+    # if the input is 3D, reshape it to 2D
+    if len(J_hat.shape) == 3:
+        J_hat = J_hat.reshape(J_hat.shape[0], -1)
+    
+    # fileter out the nan values
+    J_hat = J_hat[~np.isnan(J_hat).any(axis=1)]
+        
+    # Initialize DBSCAN with chosen parameters
+    dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+
+    # Fit the model
+    dbscan.fit(J_hat)
+
+    # Get the labels (clusters)
+    labels = dbscan.labels_
+
+    # Count the number of clusters (excluding noise)
+    num_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+
+    # print(f"Number of representatives (clusters): {num_clusters}")
+
+    return num_clusters, labels
+
+
+def random_ikp(solver: Solver, P: np.ndarray, num_sols: int, solve_fn_batch: Any, std: float = None, verbose: bool = False, return_dict: bool = False):
     """
     Generate random IK solutions for a given solve_fn_batch and poses
 
@@ -163,10 +223,37 @@ def random_ikp(solver: Solver, P: np.ndarray, num_sols: int, solve_fn_batch: Any
     l2_mm = l2[~np.isnan(l2)].mean() * 1000
     ang_deg = np.rad2deg(ang[~np.isnan(ang)].mean())
     solve_time_ms = round((time() - begin) / len(P), 3) * 1000
-    return J_hat, l2_mm, ang_deg, solve_time_ms
+    num_rep, _ = get_number_of_distinct_solutions(J_hat, eps=0.01, min_samples=5)
+    
+    if return_dict:
+        return {
+            "J_hat": J_hat,
+            "l2_mm": l2_mm,
+            "ang_deg": ang_deg,
+            "solve_time_ms": solve_time_ms,
+            "#rep": num_rep
+        }
+    
+    return list((J_hat, l2_mm, ang_deg, solve_time_ms, num_rep))
+
+def _test_1_random_pose_ikp_w_mmd(solvers, pose, num_sols, std, verbose=False):
+    assert len(pose.shape) == 1, f"Pose shape {pose.shape} is not correct"
+    results = {
+        key: random_ikp(solver, pose.reshape(1, -1), num_sols, solver_batch, std=std, verbose=verbose, return_dict=True)
+        for key, solver in solvers.items()
+    }
+    results["num"] = random_ikp(solvers["nsf"], pose.reshape(1, -1), num_sols, numerical_inverse_kinematics_batch, verbose=verbose, return_dict=True)
+    
+    num_ik_solutions = results["num"]["J_hat"].reshape(-1, results["num"]["J_hat"].shape[-1])
+    for key in results.keys():
+        ik_solutions = results[key]["J_hat"].reshape(-1, results[key]["J_hat"].shape[-1])
+        results[key]["mmd_guassian"] = compute_mmd(ik_solutions, num_ik_solutions)
+        results[key]["mmd_imq"] = compute_mmd(ik_solutions, num_ik_solutions, kernel=inverse_multiquadric_kernel)
+        
+    return results
 
 
-def test_random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std: float, record_dir: str, verbose: bool = False):
+def test_random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, stds: list, record_dir: str, verbose: bool = False):
     """
     Test the random IKP with MMD evaluation
 
@@ -188,52 +275,40 @@ def test_random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std
     _, P = solvers["nsf"].robot.sample_joint_angles_and_poses(n=num_poses)
 
     # dummy run to load the model
-    random_ikp(solvers["nsf"], P, num_sols,
-               solver_batch, std=std, verbose=False)
+    # random_ikp(solvers["nsf"], P, num_sols,
+    #            solver_batch, std=stds[0], verbose=False)
+    
+    solver_names = list(solvers.keys()) + ["num"]
+    
+    for std in stds:
+        df_dicts = {}
 
-    results = {
-        "num": random_ikp(solvers["nsf"], P, num_sols, numerical_inverse_kinematics_batch, verbose=False),
-        **{key: random_ikp(solver, P, num_sols, solver_batch, std=std, verbose=True) for key, solver in solvers.items()}
-    }
+        for pose in tqdm(P):
+            results = _test_1_random_pose_ikp_w_mmd(solvers, pose, num_sols, std, verbose=verbose)
+            
+            if df_dicts == {}:  # initialize the dictionary
+                col_names = list(results["num"].keys())
+                for key in solver_names:
+                    df_dicts[key] = {col: [] for col in col_names}
+            
+            for key in solver_names:
+                for col in col_names:
+                    df_dicts[key][col].append(results[key][col])
 
-    mmd_results = {
-        "num": 0,
-        **{key: mmd_J3d_J3d(results[key][0], results["num"][0], num_poses) for key in results.keys() if key != "num"}
-    }
-
-    if verbose:
-        print_out_format = "l2: {:1.2f} mm, ang: {:1.2f} deg, time: {:1.1f} ms"
-        print("="*70)
-        print(
-            f"Robot: {robot_name} computes {num_sols} solutions and average over {num_poses} poses")
-        # print the results of the random IKP with l2_mm, ang_deg, and solve_time_ms
-        for key in results.keys():
-            print(
-                f"{key.upper()}: MMD: {mmd_results[key]}, {print_out_format.format(*results[key][1:])}")
-        print("="*70)
-
-    # get count results keys
-    num_solvers = len(results.keys())
-
-    df = pd.DataFrame({
-        "robot": [robot_name] * num_solvers,
-        "solver": list(results.keys()),
-        "l2_mm": [results[key][1] for key in results.keys()],
-        "ang_deg": [results[key][2] for key in results.keys()],
-        "solve_time_ms": [results[key][3] for key in results.keys()],
-        "mmd": [mmd_results[key] for key in mmd_results.keys()],
-    })
-
-    # save the results to a csv file
-    df_file_path = f"{record_dir}/ikp_{robot_name}_{num_poses}_{num_sols}_{std}.csv"
-    df.to_csv(df_file_path, index=False)
-    print(f"Results are saved to {df_file_path}")
+        for key, df_dict in df_dicts.items():
+            df = pd.DataFrame(df_dict)
+            print(f"Solver: {key}, std: {std}, num_poses: {num_poses}, num_sols: {num_sols}")
+            print(df.describe())
+            df_file_path = f"{record_dir}/ikp_{robot_name}_{num_poses}_{num_sols}_{std}_{key}.csv"
+            df.to_csv(df_file_path, index=False)
+            print(f"Results are saved to {df_file_path}")
 
 
 if __name__ == "__main__":
-    robot_names = ["panda", "fetch", "fetch_arm", "atlas_arm", "atlas_waist_arm", "baxter_arm"]
+    robot_names = ["panda"] # , "fetch", "fetch_arm", "atlas_arm", "atlas_waist_arm", "baxter_arm"
     config = Config_IKP()
-
+    
+    stds = [0.01, 0.1, 0.25]
     for robot_name in robot_names:
         test_random_ikp_with_mmd(robot_name, config.num_poses,
-                                 config.num_sols, config.std, config.record_dir, verbose=True)
+                                config.num_sols, stds, config.record_dir, verbose=False)

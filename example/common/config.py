@@ -56,9 +56,9 @@ class Config_File:
 @dataclass()
 class Config_IKP(Config_File):
     # commons
-    num_poses: int = 500
-    num_sols: int = 250
-    std: float = 0.25
+    num_poses: int = 1000
+    num_sols: int = 1000
+    std: float = 0.01
     # success_threshold: Tuple = (5e-3, 2)
 
     # paik

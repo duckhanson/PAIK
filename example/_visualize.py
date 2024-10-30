@@ -22,6 +22,10 @@ from tqdm import trange
 
 from paik.solver import PAIK, get_solver, Solver
 
+print("="*50)
+print(f"[INFO] When encountering an error, please check if execute the following command in the terminal: 'export PYOPENGL_PLATFORM=osmesa'")	
+print("="*50)
+
 _OSCILLATE_LATENT_TARGET_POSES = {
     Panda.name: np.array([0.25, 0.35, 0.6, 0.5, -0.5,  0.5, 0.5]),
     Fetch.name: np.array([0.45, 0.65, 0.55, 1.0, 0.0, 0.0, 0.0]),

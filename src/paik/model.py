@@ -1,20 +1,73 @@
 # Import required packages
 from __future__ import annotations
-from typing import Tuple
+from typing import Optional, Tuple
 
 import os
 import numpy as np
 import torch
+from torch import nn
+from torch import Tensor
 from torch.nn import LeakyReLU
 from torch.optim import Optimizer, AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from zuko.distributions import DiagNormal
-from zuko.flows import Flow, Unconditional
+from torch.distributions import Distribution, Transform
+from zuko.flows import Unconditional, LazyDistribution, LazyTransform
+from zuko.transforms import ComposedTransform
+from zuko.distributions import NormalizingFlow
 from zuko.flows.spline import NSF
+from typing import Sequence
 from .settings import SolverConfig
 from jrl.robots import Panda, Fetch, FetchArm, Iiwa7
 from .klampt_robot import AtlasArm, AtlasWaistArm, BaxterArm
 from pprint import pprint
+
+class ExtendNormalizingFlow(NormalizingFlow):
+    def __init__(self, transform: Transform, base: Distribution):
+        super().__init__(transform, base)
+
+    def zsample(self, z: Tensor) -> Tensor:
+        print(f"[INFO] zsample: {z.shape}")
+        return self.transform.inv(z)
+
+class Flow(LazyDistribution):
+    r"""Creates a lazy normalizing flow.
+
+    See also:
+        :class:`zuko.distributions.NormalizingFlow`
+
+    Arguments:
+        transforms: A sequence of lazy transformations.
+        base: A lazy distribution.
+    """
+
+    def __init__(
+        self,
+        transforms: Sequence[LazyTransform],
+        base: LazyDistribution,
+    ):
+        super().__init__()
+
+        self.transforms = nn.ModuleList(transforms)
+        self.base = base
+
+    def forward(self, c: Optional[Tensor] = None) -> ExtendNormalizingFlow:
+        r"""
+        Arguments:
+            c: A context :math:`c`.
+
+        Returns:
+            A normalizing flow :math:`p(X | c)`.
+        """
+
+        transform = ComposedTransform(*(t(c) for t in self.transforms))
+
+        if c is None:
+            base = self.base(c)
+        else:
+            base = self.base(c).expand(c.shape[:-1])
+
+        return ExtendNormalizingFlow(transform, base)
 
 
 def get_flow_model(config: SolverConfig) -> tuple[Flow, Optimizer, ReduceLROnPlateau]:

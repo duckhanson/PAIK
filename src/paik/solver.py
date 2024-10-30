@@ -14,7 +14,7 @@ from sklearn.neighbors import NearestNeighbors
 from tqdm import trange
 
 from .settings import get_config, SolverConfig, PANDA_PAIK
-from .model import get_flow_model, get_robot
+from .model import get_flow_model, get_robot, Flow
 from .file import load_numpy, save_numpy, save_pickle, load_pickle
 from .evaluate import evaluate_pose_error_P2d_P2d
 from zuko.distributions import DiagNormal, BoxUniform
@@ -511,6 +511,14 @@ class Solver:
             J = self._solver(conditions_torch).sample((num_sols,))
         return self.denormalize_output_data(J.detach().cpu().numpy(), "J")
 
+    def _solve_conditions_z(self, conditions: np.ndarray, z: np.ndarray):
+        conditions_torch = self.normalize_input_data(
+            conditions, "C", return_torch=True)
+        z_torch = torch.from_numpy(z.astype(np.float32)).to(self._device)
+        with torch.inference_mode():
+            J = self._solver(conditions_torch).zsample(z_torch)
+        return self.denormalize_output_data(J.detach().cpu().numpy(), "J")
+
     def _get_divisible_conditions(
         self, C: np.ndarray, batch_size: int
     ) -> tuple[np.ndarray, int]:
@@ -630,6 +638,9 @@ class Solver:
 
     def generate_ik_solutions(self, *args, **kwargs):
         raise NotImplementedError("generate_ik_solutions not implemented.")
+    
+    def generate_ik_solutions_z(self, *args, **kwargs):
+        raise NotImplementedError("generate_ik_solutions_z not implemented.")
 
     def random_ikp(
         self,
@@ -817,3 +828,30 @@ class NSF(Solver):
         C, complementary = self._get_conditions_batch(
             P=P, num_sols=num_sols, batch_size=batch_size)
         return self._solve_conditions_batch(C, num_sols, complementary, verbose)
+
+    def generate_ik_solutions_z(
+        self,
+        P: np.ndarray,
+        z: np.ndarray,
+    ):
+        """
+        Generate inverse kinematics solutions given the conditions and latent variable
+
+        example:
+        num_poses = 10
+        num_sols = 1000
+        Q, P = nsf.robot.sample_joint_angles_and_poses(n=num_poses)
+        conditions_torch = c.to('cuda')
+        conditions_torch = conditions_torch.to(torch.float32)
+        z = np.random.randn(num_sols, num_poses, nsf.n) * 0.25
+        J_hat = nsf.generate_ik_solutions_z(P, z)
+        
+        Args:
+            P (np.ndarray): conditions of EE poses with shape (num_poses, m)
+            z (np.ndarray): latent variable with shape (num_sols, n)
+
+        Returns:
+            np.ndarray: joint angles with shape (num_sols, num_poses, num_dofs)
+        """
+        C = self._get_conditions(P)
+        return self._solve_conditions_z(C, z)

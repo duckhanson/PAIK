@@ -17,8 +17,8 @@ from .settings import get_config, SolverConfig, PANDA_PAIK
 from .model import get_flow_model, get_robot
 from .file import load_numpy, save_numpy, save_pickle, load_pickle
 from .evaluate import evaluate_pose_error_P2d_P2d
-from zuko.distributions import DiagNormal
-from zuko.flows import Flow, Unconditional
+from zuko.distributions import DiagNormal, BoxUniform
+from zuko.flows import Unconditional
 
 
 def get_solver(arch_name: str, robot_name: str, load: bool = False, work_dir: str = os.path.abspath(os.getcwd())) -> Solver:
@@ -118,6 +118,10 @@ class Solver:
     @property
     def latent(self):
         return self._latent
+    
+    @property
+    def base_name(self):
+        return self._base_name
 
     @param.setter
     def param(self, value: SolverConfig):
@@ -130,6 +134,7 @@ class Solver:
             value)  # type: ignore
         self._base_std = value.base_std
         self._latent = torch.zeros((self.n,), device=self._device)
+        self._base_name = "diag_normal"
         # load inference data
         assert (
             self.n == self.robot.n_dofs
@@ -139,14 +144,20 @@ class Solver:
     def base_std(self, value: float):
         assert value >= 0, "base_std should be greater than or equal to 0."
         self._base_std = value
-        self._change_solver_base()
+        self._update_base_distribution()
 
     @latent.setter
     def latent(self, value: np.ndarray):
         assert len(value) == self.n, f"latent should have length {self.n}."
         self._latent = torch.from_numpy(
             value.astype(np.float32)).to(self._device)
-        self._change_solver_base()
+        self._update_base_distribution()
+        
+    @base_name.setter
+    def base_name(self, value: str):
+        assert value in ["diag_normal", "box_uniform"], "base_name should be in ['diag_normal', 'box_uniform']."
+        self._base_name = value
+        self._update_base_distribution()
 
     # a dictionary in weight_dir to store the information of best date, their l2, and their model by save_by_date, save the date if the current model is better, and remove the worst date
     def save_if_best(self, date: str, l2: float):
@@ -410,7 +421,7 @@ class Solver:
             )
         print(f"[SUCCESS] J_knn load from {path_J_knn}.")
 
-    def _change_solver_base(self):
+    def _update_diagNormal_base(self):
         """
         Change the base distribution of the solver to the new base distribution.
         """
@@ -425,7 +436,37 @@ class Solver:
                 buffer=True,
             ),  # type: ignore
         )
-
+    
+    def _update_boxUniform_base(self):
+        """
+        Change the base distribution of the solver to the new base distribution.
+        """
+        bound = torch.ones((self.robot.n_dofs,),
+                           device=self._device) * self._base_std
+                
+        self._solver = Flow(
+            transforms=self._solver.transforms,  # type: ignore
+            base=Unconditional(
+                BoxUniform,
+                -1 * bound,
+                bound,
+                buffer=True,
+            ),  # type: ignore
+        )
+    
+    def _update_base_distribution(self):
+        """
+        Change the base distribution of the solver to the new base distribution.
+        
+        Args:
+            base_name (str): name of the new base distribution, only support "diag_normal" and "box_uniform"
+            std (float): standard deviation of the new base distribution
+        """
+        if self.base_name == "diag_normal":
+            self._update_diagNormal_base()
+        else:
+            self._update_boxUniform_base()
+        
     # public methods
     def normalize_input_data(self, data: np.ndarray, name: str, return_torch: bool = False):
         """

@@ -242,6 +242,7 @@ def _test_1_random_pose_ikp_w_mmd(solvers, pose, num_sols, std, verbose=False):
         key: random_ikp(solver, pose.reshape(1, -1), num_sols, solver_batch, std=std, verbose=verbose, return_dict=True)
         for key, solver in solvers.items()
     }
+    
     results["num"] = random_ikp(solvers["nsf"], pose.reshape(1, -1), num_sols, numerical_inverse_kinematics_batch, verbose=verbose, return_dict=True)
     
     num_ik_solutions = results["num"]["J_hat"].reshape(-1, results["num"]["J_hat"].shape[-1])
@@ -253,7 +254,7 @@ def _test_1_random_pose_ikp_w_mmd(solvers, pose, num_sols, std, verbose=False):
     return results
 
 
-def test_random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, stds: list, record_dir: str, verbose: bool = False):
+def test_random_ikp_with_mmd(robot_name: str, base_distribution: str, num_poses: int, num_sols: int, stds: list, record_dir: str, verbose: bool = False):
     """
     Test the random IKP with MMD evaluation
 
@@ -271,8 +272,14 @@ def test_random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std
         "nsf": get_solver(arch_name="nsf", robot_name=robot_name, load=True),
         "paik": get_solver(arch_name="paik", robot_name=robot_name, load=True),
     }
-
-    _, P = solvers["nsf"].robot.sample_joint_angles_and_poses(n=num_poses)
+    
+    solvers["nsf"].base_name = base_distribution
+    solvers["paik"].base_name = base_distribution
+    print(f"Using Base distribution: {base_distribution} for both NSF and PAIK")
+    
+    # get the first solver from the dictionary
+    first_solver = list(solvers.values())[0]
+    _, P = first_solver.robot.sample_joint_angles_and_poses(n=num_poses)
 
     # dummy run to load the model
     # random_ikp(solvers["nsf"], P, num_sols,
@@ -297,18 +304,30 @@ def test_random_ikp_with_mmd(robot_name: str, num_poses: int, num_sols: int, std
 
         for key, df_dict in df_dicts.items():
             df = pd.DataFrame(df_dict)
+            if key == "paik" or key == "nsf":
+                key = f"{key}_{base_distribution}"
             print(f"Solver: {key}, std: {std}, num_poses: {num_poses}, num_sols: {num_sols}")
-            print(df.describe())
+            print(df.mean(numeric_only=True))
+            
             df_file_path = f"{record_dir}/ikp_{robot_name}_{num_poses}_{num_sols}_{std}_{key}.csv"
             df.to_csv(df_file_path, index=False)
             print(f"Results are saved to {df_file_path}")
-
+            
 
 if __name__ == "__main__":
-    robot_names = ["panda"] # , "fetch", "fetch_arm", "atlas_arm", "atlas_waist_arm", "baxter_arm"
-    config = Config_IKP()
+    # robot_names = ["panda", "fetch", "fetch_arm", "atlas_arm", "atlas_waist_arm", "baxter_arm"] # "panda", "fetch", "fetch_arm", "atlas_arm", "atlas_waist_arm", "baxter_arm"
+    # config = Config_IKP()
     
-    stds = [0.01, 0.1, 0.25]
-    for robot_name in robot_names:
-        test_random_ikp_with_mmd(robot_name, config.num_poses,
-                                config.num_sols, stds, config.record_dir, verbose=False)
+    # stds = [0.01, 0.05, 0.1, 0.2, 0.25, 0.4] # 0.01, 0.05, 0.1, 0.2, 0.25, 0.4
+    # for robot_name in robot_names:
+    #     for base_distribution in ["box_uniform", "diag_normal"]:
+    #         test_random_ikp_with_mmd(robot_name, base_distribution, config.num_poses,
+    #                                 config.num_sols, stds, config.record_dir, verbose=False)
+    
+    robot_name = 'panda'
+    nsf = get_solver(arch_name="nsf", robot_name=robot_name, load=True, work_dir='/home/luca/paik')
+    
+    init_seeds = nsf.robot.sample_joint_angles(n=1000)
+    print(init_seeds.shape)
+    
+    ik_sols = nsf._solver.transforms(init_seeds)

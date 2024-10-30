@@ -19,6 +19,8 @@ torch.manual_seed(0)
 import OpenGL.GLUT as glut
 glut.glutInit()
 
+BASE_DISTRIBUTION = "box_uniform" # "diag_normal" or "box_uniform"
+
 def plot_random_3d_joints_scatter(ax, keys, J: dict, c: dict, marker: dict, label: dict, joint_nums=None):
     if joint_nums is None:
         joint_nums = np.random.choice(J[0].shape[-1], 3, replace=False)
@@ -70,10 +72,17 @@ def get_solvers(robot_name: str, work_dir: str) -> dict[str, Solver]:
     Returns:
         dict: solvers for the robot
     """
-    return {
+    
+    solvers = {
         'nsf': get_solver(arch_name="nsf", robot_name=robot_name, load=True, work_dir=work_dir),
         'paik': get_solver(arch_name="paik", robot_name=robot_name, load=True, work_dir=work_dir),
     }
+    
+    for key, solver in solvers.items():
+        solver.base_name = BASE_DISTRIBUTION
+    print(f"Using Base distribution: {BASE_DISTRIBUTION}")
+    
+    return solvers
 
 def get_J_map(solvers: dict, num_poses: int, num_sols: int, std: float, record_dir: str, load: bool=True):
     """
@@ -140,9 +149,11 @@ def visualize_3d_joints_scatter(J_map: dict, num_x_sub_plots: int, num_y_sub_plo
             color_map[key] = solver_color[key]
         # if key with _0.25, use lighter color
         elif key.endswith('_0.25'):
-            color_map[key] = _lighter_color(solver_color[key[:-5]])
+            solver_name = key.split('_')[0]
+            color_map[key] = _lighter_color(solver_color[solver_name])
         else:
-            color_map[key] = solver_color[key[:-5]]
+            solver_name = key.split('_')[0]
+            color_map[key] = solver_color[solver_name]
 
     marker_map = {}
     for key in color_map.keys():
@@ -219,7 +230,7 @@ def visualize_3d_joints_scatter(J_map: dict, num_x_sub_plots: int, num_y_sub_plo
     plt.savefig(record_dir + f"/scatter.png")
     plt.show()
     
-def _visualize_3d_scatter_w_highlight_distinct_clusters(ax, J_map, key, record_dir: str):
+def _visualize_3d_scatter_w_highlight_distinct_clusters(ax, J_map, key, eps: float):
     """
     Visualize 3D scatter plot with highlighting distinct clusters
 
@@ -232,7 +243,7 @@ def _visualize_3d_scatter_w_highlight_distinct_clusters(ax, J_map, key, record_d
     if len(ik_solutions.shape) == 3:
         ik_solutions = ik_solutions.reshape(-1, ik_solutions.shape[-1])
     
-    num_clusters, labels = get_number_of_distinct_solutions(ik_solutions[:, 4:], eps=0.1, min_samples=1)
+    num_clusters, labels = get_number_of_distinct_solutions(ik_solutions[:, 4:], eps=eps, min_samples=1)
     
     # plot the 3D scatter plot with highlighting distinct clusters
     scatter = ax.scatter(ik_solutions[:, 4], ik_solutions[:, 5], ik_solutions[:, 6], c=labels, cmap='viridis')
@@ -242,7 +253,7 @@ def _visualize_3d_scatter_w_highlight_distinct_clusters(ax, J_map, key, record_d
     ax.set_title(f"{key.upper()}/'s Plot w/ {num_clusters} clusters")
     return scatter
 
-def visualize_3d_scatter_w_highlight_distinct_clusters(J_map: dict, record_dir: str):
+def visualize_3d_scatter_w_highlight_distinct_clusters(J_map: dict, record_dir: str, eps: float):
     """
     Visualize 3D scatter plot with highlighting distinct clusters
 
@@ -270,7 +281,7 @@ def visualize_3d_scatter_w_highlight_distinct_clusters(J_map: dict, record_dir: 
     # visualize 3d scatter plot with highlighting distinct clusters for each solver
     for i, key in enumerate(J_map.keys()):
         ax = fig.add_subplot(2, (num_solvers + 1) // 2, i + 1, projection='3d')
-        scatter = _visualize_3d_scatter_w_highlight_distinct_clusters(ax, J_map, key, record_dir)
+        scatter = _visualize_3d_scatter_w_highlight_distinct_clusters(ax, J_map, key, eps)
         
         # Set consistent axis limits and ticks
         ax.set_xlim(x_min, x_max)
@@ -284,35 +295,42 @@ def visualize_3d_scatter_w_highlight_distinct_clusters(J_map: dict, record_dir: 
     cbar = fig.colorbar(scatter, ax=ax, pad=0.1, shrink=0.5, aspect=5)
     cbar.set_label('Cluster Labels')
     plt.tight_layout()
-    plt.savefig(record_dir + "/scatter_subplots.png")
+    file_path = record_dir + f"/scatter_subplots_eps{eps}.png"
+    plt.savefig(file_path)
     plt.show()
-    print(f"3D Scatter Plot with {num_solvers} solvers and highlighting distinct clusters is saved at {record_dir}/scatter_subplots.png")
+    print(f"3D Scatter Plot with {num_solvers} solvers and highlighting distinct clusters is saved at {file_path}")
 
 
 if __name__ == "__main__":
+    
     config = Config_Diversity()
-    config.num_poses = 2
-    config.num_sols = 80
+    config.num_poses = 1
+    config.num_sols = 100
     std = 0.1
     robot_name = "panda"
     num_x_sub_plots = 2
     num_y_sub_plots = 2
     pick_up_solver = f'paik_{std}'
-    pick_up_idxs = [39] # 83, 74, 67, 63, 39
+    pick_up_idxs = [83, 74, 67, 63, 39] # 83, 74, 67, 63, 39
     
     solvers = get_solvers(robot_name, config.workdir)
     
     J_map = get_J_map(solvers, config.num_poses, config.num_sols, std, config.record_dir, load=False)
+    
+    for key, ik_solutions in J_map.items():
+        print(f"{key}: {ik_solutions.shape}")
 
-    visualize_3d_scatter_w_highlight_distinct_clusters(J_map, config.record_dir)
+    # epss = [0.01, 0.05, 0.1, 0.15]
+    # for eps in epss:
+    #     visualize_3d_scatter_w_highlight_distinct_clusters(J_map, config.record_dir, eps=eps)
 
-    # random_joint_list = np.array([[2, 4, 6]]) # [[1, 3, 5], [2, 4, 6]]
-    # for random_joint_nums in random_joint_list:
-    #     print(f"Pick up index: {pick_up_idxs}, Random joint numbers: {random_joint_nums}")
-    #     J_map['pick_up'] = J_map[pick_up_solver][pick_up_idxs]
-    #     J_map['not_pick_up'] = np.delete(J_map[pick_up_solver], pick_up_idxs, axis=0)
-    #     visualize_3d_joints_scatter(J_map, num_x_sub_plots, num_y_sub_plots, random_joint_nums, config.record_dir)    
-    #     visualize_ik_solutions(robot=solvers['nsf'].robot, ik_solutions=J_map['pick_up']) # type: ignore
+    random_joint_list = np.array([[4, 5, 6]]) # [[1, 3, 5], [2, 4, 6]]
+    for random_joint_nums in random_joint_list:
+        print(f"Pick up index: {pick_up_idxs}, Random joint numbers: {random_joint_nums}")
+        J_map['pick_up'] = J_map[pick_up_solver][pick_up_idxs]
+        J_map['not_pick_up'] = np.delete(J_map[pick_up_solver], pick_up_idxs, axis=0)
+        visualize_3d_joints_scatter(J_map, num_x_sub_plots, num_y_sub_plots, random_joint_nums, config.record_dir)
+        visualize_ik_solutions(robot=solvers['nsf'].robot, ik_solutions=J_map['pick_up']) # type: ignore
     
     
     # random pick up 

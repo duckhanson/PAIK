@@ -327,7 +327,4 @@ if __name__ == "__main__":
     robot_name = 'panda'
     nsf = get_solver(arch_name="nsf", robot_name=robot_name, load=True, work_dir='/home/luca/paik')
     
-    init_seeds = nsf.robot.sample_joint_angles(n=1000)
-    print(init_seeds.shape)
-    
-    ik_sols = nsf._solver.transforms(init_seeds)
+    test_random_ikp_with_mmd(robot_name, "diag_normal", 300, 300, [0.01], '/home/luca/paik/record', verbose=False)

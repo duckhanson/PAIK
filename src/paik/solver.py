@@ -516,7 +516,7 @@ class Solver:
             conditions, "C", return_torch=True)
         z_torch = torch.from_numpy(z.astype(np.float32)).to(self._device)
         with torch.inference_mode():
-            J = self._solver(conditions_torch).zsample(z_torch)
+            J = self._solver(conditions_torch).sample_x_from_z(z_torch)
         return self.denormalize_output_data(J.detach().cpu().numpy(), "J")
 
     def _get_divisible_conditions(
@@ -597,6 +597,34 @@ class Solver:
         return self.denormalize_output_data(
             J.reshape(num_sols, -1, self._robot.n_dofs), "J"
         )
+        
+    def _solve_conditions_batch_z(self, C: torch.Tensor, Z: torch.Tensor, num_sols: int, complementary: int, verbose: bool = False) -> np.ndarray:
+        """
+        Solve inverse kinematics problem in batch.
+
+        Args:
+            C (torch.Tensor): conditions with shape (num_poses, m + x + 1), x = 1 for paik, x = 0 for nsf
+            Z (torch.Tensor): latent variables with shape (num_sols, num_poses, z)
+
+        Returns:
+            np.ndarray: J with shape (num_poses, num_dofs)
+        """
+        batch_size = C.shape[1]
+        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
+                        device=self._device)
+
+        iterator = trange(len(C)) if verbose else range(len(C))
+        with torch.inference_mode():
+            for i in iterator:
+                J[i] = self._solver(C[i]).sample_x_from_z(Z[i])
+
+        J = J.detach().cpu().numpy()
+        J = self._remove_complementary_ik_solutions(
+            J.reshape(-1, self._robot.n_dofs), complementary
+        )
+        return self.denormalize_output_data(
+            J.reshape(num_sols, -1, self._robot.n_dofs), "J"
+        )
 
     def evaluate_pose_error_J3d_P2d(
         self,
@@ -641,6 +669,12 @@ class Solver:
     
     def generate_ik_solutions_z(self, *args, **kwargs):
         raise NotImplementedError("generate_ik_solutions_z not implemented.")
+    
+    def generate_z_from_ik_solutions(self, *args, **kwargs):
+        raise NotImplementedError("generate_z_from_ik_solutions not implemented.")
+
+    def generate_z_from_dataset(self, *args, **kwargs):
+        raise NotImplementedError("generate_z_from_dataset not implemented.")
 
     def random_ikp(
         self,
@@ -795,6 +829,16 @@ class NSF(Solver):
         except FileNotFoundError as e:
             print(f"[WARNING] {e}. Load training data instead.")
             self._load_training_data()
+        
+        latent_path = os.path.join(self.param.weight_dir, "Z.npy")
+        if os.path.exists(latent_path):
+            self.Z = load_numpy(latent_path)
+            print(f"[INFO] Load latent variable from {latent_path}.")
+        else:
+            self.Z = self.generate_z_from_dataset()
+            # save the latent variable
+            save_numpy(os.path.join(self.param.weight_dir, "Z.npy"), self.Z)
+            print(f"[SUCCESS] save latent variable in {self.param.weight_dir}/Z.npy.")
 
     def _load_training_data(self):
         """
@@ -807,27 +851,27 @@ class NSF(Solver):
         self._compute_normalizing_elements()
         self._load_knn()
 
-    def generate_ik_solutions(
-        self,
-        P: np.ndarray,
-        num_sols: int = 1,
-        std: Optional[float] = None,
-        latent: Optional[np.ndarray] = None,
-        batch_size: int = 4000,
-        verbose: bool = True,
-    ):
-        if std is not None and std != self.base_std:
-            self.base_std = std
-        if latent is not None:
-            self.latent = latent
+    # def generate_ik_solutions(
+    #     self,
+    #     P: np.ndarray,
+    #     num_sols: int = 1,
+    #     std: Optional[float] = None,
+    #     latent: Optional[np.ndarray] = None,
+    #     batch_size: int = 4000,
+    #     verbose: bool = True,
+    # ):
+    #     if std is not None and std != self.base_std:
+    #         self.base_std = std
+    #     if latent is not None:
+    #         self.latent = latent
 
-        if len(P) * num_sols < batch_size:
-            C = self._get_conditions(P)
-            return self._solve_conditions(C, num_sols)
+    #     if len(P) * num_sols < batch_size:
+    #         C = self._get_conditions(P)
+    #         return self._solve_conditions(C, num_sols)
 
-        C, complementary = self._get_conditions_batch(
-            P=P, num_sols=num_sols, batch_size=batch_size)
-        return self._solve_conditions_batch(C, num_sols, complementary, verbose)
+    #     C, complementary = self._get_conditions_batch(
+    #         P=P, num_sols=num_sols, batch_size=batch_size)
+    #     return self._solve_conditions_batch(C, num_sols, complementary, verbose)
 
     def generate_ik_solutions_z(
         self,
@@ -855,3 +899,135 @@ class NSF(Solver):
         """
         C = self._get_conditions(P)
         return self._solve_conditions_z(C, z)
+    
+    def generate_z_from_ik_solutions(
+        self,
+        P: np.ndarray,
+        J: np.ndarray,
+    ):
+        """
+        Generate latent variable given the conditions and joint angles
+
+        example:
+        num_poses = 10
+        num_sols = 1000
+        Q, P = nsf.robot.sample_joint_angles_and_poses(n=num_poses)
+        conditions_torch = c.to('cuda')
+        conditions_torch = conditions_torch.to(torch.float32)
+        J_hat = nsf.generate_ik_solutions(P, num_sols)
+        z_hat = nsf.generate_z_from_ik_solutions(P, J_hat)
+        
+        Args:
+            P (np.ndarray): conditions of EE poses with shape (num_poses, m)
+            J (np.ndarray): joint angles with shape (num_sols, num_poses, num_dofs)
+
+        Returns:
+            np.ndarray: latent variable with shape (num_sols, num_poses, n)
+        """
+        C = self._get_conditions(P)
+        C = self.normalize_input_data(C, "C", return_torch=True)
+        J = self.normalize_input_data(J, "J", return_torch=True)
+        with torch.inference_mode():
+            z = self._solver(C).sample_z_from_x(J)
+        return z.detach().cpu().numpy()
+    
+    def generate_z_from_dataset(
+        self
+    ):
+        """
+        Generate latent variable from the dataset.
+
+        Returns:
+            np.ndarray: latent variable with shape (num_data, n)
+        """
+        print("[INFO] Generate latent variable from the dataset.")
+        
+        C = self._get_conditions(self.P)
+        
+        batch_size = 4000
+        C_batch, complementary = self._get_divisible_conditions(C, batch_size)
+        J_batch, _ = self._get_divisible_conditions(self.J, batch_size)
+        C_batch = C_batch.reshape(-1, batch_size, C_batch.shape[-1])
+        J_batch = J_batch.reshape(-1, batch_size, J_batch.shape[-1])
+        C_batch = self.normalize_input_data(C_batch, "C", return_torch=True)
+        J_batch = self.normalize_input_data(J_batch, "J", return_torch=True)
+        
+        Z = torch.empty_like(J_batch)
+        
+        with torch.inference_mode():
+            for i in trange(len(C_batch)):
+                Z[i] = self._solver(C_batch[i]).sample_z_from_x(J_batch[i])
+        Z = Z.detach().cpu().numpy()
+        Z = self._remove_complementary_ik_solutions(
+            Z.reshape(-1, self._robot.n_dofs), complementary
+        )
+        return Z
+    
+    def generate_ik_solutions(
+        self,
+        P: np.ndarray,
+        num_sols: int = 1,
+        std: Optional[float] = None,
+        latent: Optional[np.ndarray] = None,
+        random_sample_size: int = 10,
+        batch_size: int = 4000,
+        verbose: bool = True,
+    ):
+        if std is not None and std != self.base_std:
+            self.base_std = std
+
+        if latent is None:
+            # print("[INFO] generate latent variable from retrieval of Random J.")
+            J_random = self.robot.sample_joint_angles(n=len(P)*num_sols)
+            latent = self.retrieve_latent(J=J_random, random_sample_size=random_sample_size)
+            latent = latent.reshape(num_sols, len(P), self.n)
+        
+        if len(P) * num_sols < batch_size:
+            C = self._get_conditions(P)
+            return self._solve_conditions_z(C, latent)
+
+        C_batch, complementary = self._get_divisible_conditions(C, batch_size)
+        latent_batch, _ = self._get_divisible_conditions(self.J, batch_size)
+        C_batch = C_batch.reshape(-1, batch_size, C_batch.shape[-1])
+        latent_batch = latent_batch.reshape(-1, batch_size, latent_batch.shape[-1])
+        C_batch = self.normalize_input_data(C_batch, "C", return_torch=True)
+        latent_batch = torch.from_numpy(latent_batch.astype(np.float32)).to(self._device)
+        return self._solve_conditions_batch_z(C_batch, latent_batch, 1, complementary, verbose)
+    
+    def retrieve_latent(
+        self,
+        P: Optional[np.ndarray] = None,
+        J: Optional[np.ndarray] = None,
+        k: int = 1,
+        random_sample_size: int = 0,
+    ):
+        """
+        Retrieve latent variable from the dataset given the conditions and joint angles.
+
+        Args:
+            P (np.ndarray, optional): conditions of EE poses with shape (num_poses, m). Defaults to None.
+            J (np.ndarray, optional): joint angles with shape (num_sols, num_poses, num_dofs). Defaults to None.
+            k (int, optional): number of nearest neighbors. Defaults to 1.
+        Returns:
+            np.ndarray: latent variable with shape (k, num_poses, n)
+        """
+        if P is not None:
+            num_poses = len(P)
+        elif J is not None:
+            num_poses = len(J)
+        else:
+            raise ValueError("P or J should be provided.")
+        
+        if random_sample_size == 0:
+            if P is not None:
+                ids = self.P_knn.kneighbors(P, n_neighbors=k, return_distance=False)
+            else:
+                ids = self.J_knn.kneighbors(J, n_neighbors=k, return_distance=False)
+            # shape: (num_poses, k) -> shape: (k, num_poses)  -> shape: (k * num_poses)   
+            ids = ids.T.flatten() 
+        elif random_sample_size > 0:
+            ids = np.random.choice(random_sample_size, k * num_poses, replace=True)
+        else:
+            raise ValueError("random_sample_size should be greater than or equal to 0.")
+        print(f"[INFO] Retrieve latent ids: {ids}")
+        return self.Z[ids].reshape(k, -1, self.n)

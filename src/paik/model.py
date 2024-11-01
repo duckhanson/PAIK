@@ -26,9 +26,12 @@ class ExtendNormalizingFlow(NormalizingFlow):
     def __init__(self, transform: Transform, base: Distribution):
         super().__init__(transform, base)
 
-    def zsample(self, z: Tensor) -> Tensor:
-        print(f"[INFO] zsample: {z.shape}")
+    def sample_x_from_z(self, z: Tensor) -> Tensor:
+        # print(f"[INFO] zsample: {z.shape}")
         return self.transform.inv(z)
+    
+    def sample_z_from_x(self, x: Tensor) -> Tensor:
+        return self.transform(x)
 
 class Flow(LazyDistribution):
     r"""Creates a lazy normalizing flow.

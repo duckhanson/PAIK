@@ -982,8 +982,8 @@ class NSF(Solver):
             latent = self.retrieve_latent(J=J_random, random_sample_size=random_sample_size)
             latent = latent.reshape(num_sols, len(P), self.n)
         
+        C = self._get_conditions(P)
         if len(P) * num_sols < batch_size:
-            C = self._get_conditions(P)
             return self._solve_conditions_z(C, latent)
 
         C_batch, complementary = self._get_divisible_conditions(C, batch_size)
@@ -1029,5 +1029,5 @@ class NSF(Solver):
             ids = np.random.choice(random_sample_size, k * num_poses, replace=True)
         else:
             raise ValueError("random_sample_size should be greater than or equal to 0.")
-        print(f"[INFO] Retrieve latent ids: {ids}")
+        # print(f"[INFO] Retrieve latent ids: {ids}")
         return self.Z[ids].reshape(k, -1, self.n)

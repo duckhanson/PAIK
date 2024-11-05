@@ -13,7 +13,7 @@ class Config_File:
     batch_size: int = 5000
 
     # paik
-    workdir: str = "/home/luca/paik"
+    _workdir: str = "/home/luca/paik"
 
     # nodeik
     _nodeik_workdir: str = "/home/luca/nodeik"
@@ -32,6 +32,10 @@ class Config_File:
     @property
     def date(self):
         return self._date
+    
+    @property
+    def workdir(self):
+        return self._workdir
 
     @property
     def nodeik_workdir(self):
@@ -40,6 +44,11 @@ class Config_File:
     @date.setter
     def date(self, value):
         self._date = value
+        self.update_record_dir()
+    
+    @workdir.setter
+    def workdir(self, value):
+        self._workdir = value
         self.update_record_dir()
 
     @nodeik_workdir.setter

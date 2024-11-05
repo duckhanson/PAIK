@@ -570,7 +570,7 @@ class Solver:
             C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])
         ).to(self._device)
         return C, complementary
-
+    
     def _solve_conditions_batch(self, C: np.ndarray, num_sols: int, complementary: int, verbose: bool = False) -> np.ndarray:
         """
         Solve inverse kinematics problem in batch.
@@ -963,6 +963,13 @@ class NSF(Solver):
         )
         return Z
     
+    def _get_latent_batch(self, Z: np.ndarray, batch_size: int):
+        Z, complementary = self._get_divisible_conditions(Z, batch_size)
+        Z = torch.from_numpy(
+            Z.astype(np.float32).reshape(-1, batch_size, Z.shape[-1])
+        ).to(self._device)
+        return Z, complementary
+    
     def generate_ik_solutions(
         self,
         P: np.ndarray,
@@ -980,25 +987,26 @@ class NSF(Solver):
             # print("[INFO] generate latent variable from retrieval of Random J.")
             J_random = self.robot.sample_joint_angles(n=len(P)*num_sols)
             latent = self.retrieve_latent(J=J_random, random_sample_size=random_sample_size)
-            latent = latent.reshape(num_sols, len(P), self.n)
+            latent = latent.reshape(-1, self.n)
         
         C = self._get_conditions(P)
+        
         if len(P) * num_sols < batch_size:
             return self._solve_conditions_z(C, latent)
+        else:
+            C_batch, complementary = self._get_conditions_batch(
+                P=P, num_sols=num_sols, batch_size=batch_size)
+            
+            Z_batch, _ = self._get_latent_batch(latent, batch_size)
+            
+            return self._solve_conditions_batch_z(C_batch, Z_batch, num_sols, complementary, verbose)
 
-        C_batch, complementary = self._get_divisible_conditions(C, batch_size)
-        latent_batch, _ = self._get_divisible_conditions(self.J, batch_size)
-        C_batch = C_batch.reshape(-1, batch_size, C_batch.shape[-1])
-        latent_batch = latent_batch.reshape(-1, batch_size, latent_batch.shape[-1])
-        C_batch = self.normalize_input_data(C_batch, "C", return_torch=True)
-        latent_batch = torch.from_numpy(latent_batch.astype(np.float32)).to(self._device)
         return self._solve_conditions_batch_z(C_batch, latent_batch, 1, complementary, verbose)
     
     def retrieve_latent(
         self,
         P: Optional[np.ndarray] = None,
         J: Optional[np.ndarray] = None,
-        k: int = 1,
         random_sample_size: int = 0,
     ):
         """
@@ -1020,14 +1028,14 @@ class NSF(Solver):
         
         if random_sample_size == 0:
             if P is not None:
-                ids = self.P_knn.kneighbors(P, n_neighbors=k, return_distance=False)
+                ids = self.P_knn.kneighbors(P, return_distance=False)
             else:
-                ids = self.J_knn.kneighbors(J, n_neighbors=k, return_distance=False)
+                ids = self.J_knn.kneighbors(J, return_distance=False)
             # shape: (num_poses, k) -> shape: (k, num_poses)  -> shape: (k * num_poses)   
             ids = ids.T.flatten() 
         elif random_sample_size > 0:
-            ids = np.random.choice(random_sample_size, k * num_poses, replace=True)
+            ids = np.random.choice(random_sample_size, num_poses, replace=True)
         else:
             raise ValueError("random_sample_size should be greater than or equal to 0.")
         # print(f"[INFO] Retrieve latent ids: {ids}")
-        return self.Z[ids].reshape(k, -1, self.n)
+        return self.Z[ids].reshape(num_poses, self.n)

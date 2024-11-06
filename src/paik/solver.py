@@ -851,27 +851,27 @@ class NSF(Solver):
         self._compute_normalizing_elements()
         self._load_knn()
 
-    # def generate_ik_solutions(
-    #     self,
-    #     P: np.ndarray,
-    #     num_sols: int = 1,
-    #     std: Optional[float] = None,
-    #     latent: Optional[np.ndarray] = None,
-    #     batch_size: int = 4000,
-    #     verbose: bool = True,
-    # ):
-    #     if std is not None and std != self.base_std:
-    #         self.base_std = std
-    #     if latent is not None:
-    #         self.latent = latent
+    def generate_ik_solutions_guassian(
+        self,
+        P: np.ndarray,
+        num_sols: int = 1,
+        std: Optional[float] = None,
+        latent: Optional[np.ndarray] = None,
+        batch_size: int = 4000,
+        verbose: bool = True,
+    ):
+        if std is not None and std != self.base_std:
+            self.base_std = std
+        if latent is not None:
+            self.latent = latent
 
-    #     if len(P) * num_sols < batch_size:
-    #         C = self._get_conditions(P)
-    #         return self._solve_conditions(C, num_sols)
+        if len(P) * num_sols < batch_size:
+            C = self._get_conditions(P)
+            return self._solve_conditions(C, num_sols)
 
-    #     C, complementary = self._get_conditions_batch(
-    #         P=P, num_sols=num_sols, batch_size=batch_size)
-    #     return self._solve_conditions_batch(C, num_sols, complementary, verbose)
+        C, complementary = self._get_conditions_batch(
+            P=P, num_sols=num_sols, batch_size=batch_size)
+        return self._solve_conditions_batch(C, num_sols, complementary, verbose)
 
     def generate_ik_solutions_z(
         self,

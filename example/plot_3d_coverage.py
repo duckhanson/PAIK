@@ -72,10 +72,10 @@ def get_solvers(robot_name: str, work_dir: str) -> dict[str, Solver]:
     Returns:
         dict: solvers for the robot
     """
-    
+    robot = get_robot(robot_name)
     solvers = {
-        'nsf': get_solver(arch_name="nsf", robot_name=robot_name, load=True, work_dir=work_dir),
-        'paik': get_solver(arch_name="paik", robot_name=robot_name, load=True, work_dir=work_dir),
+        'nsf': get_solver(arch_name="nsf", robot=robot, load=True, work_dir=work_dir),
+        'paik': get_solver(arch_name="paik", robot=robot, load=True, work_dir=work_dir),
     }
     
     for key, solver in solvers.items():

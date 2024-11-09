@@ -254,10 +254,11 @@ def test_random_ikp_with_mmd(robot_name: str, base_distribution: str, num_poses:
         verbose (bool, optional): print the statistics of the generated solutions. Defaults to False.
     """
 
+    robot = get_robot(robot_name)
     solvers = {
         "ikflow": load_ikflow_solver_from_lightning_checkpoint(robot_name=robot_name),
-        "nsf": get_solver(arch_name="nsf", robot_name=robot_name, load=True),
-        "paik": get_solver(arch_name="paik", robot_name=robot_name, load=True),
+        "nsf": get_solver(arch_name="nsf", robot=robot, load=True),
+        "paik": get_solver(arch_name="paik", robot=robot, load=True),
     }
     
     solvers["nsf"].base_name = base_distribution
@@ -312,6 +313,6 @@ if __name__ == "__main__":
     #                                 config.num_sols, stds, config.record_dir, verbose=False)
     
     robot_name = 'panda'
-    nsf = get_solver(arch_name="nsf", robot_name=robot_name, load=True, work_dir='/home/luca/paik')
+    nsf = get_solver(arch_name="nsf", robot=robot_name, load=True, work_dir='/home/luca/paik')
     
     test_random_ikp_with_mmd(robot_name, "diag_normal", 300, 300, [0.01], '/home/luca/paik/record', verbose=False)

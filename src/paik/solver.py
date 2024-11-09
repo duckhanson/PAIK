@@ -21,30 +21,34 @@ from zuko.distributions import DiagNormal, BoxUniform
 from zuko.flows import Unconditional
 
 
-def get_solver(arch_name: str, robot_name: str, load: bool = False, work_dir: str = os.path.abspath(os.getcwd())) -> Solver:
+def get_solver(arch_name: str, robot, load: bool = False, work_dir: str = os.path.abspath(os.getcwd())) -> Solver:
     """
     Get the solver with the given architecture and robot.
 
     Args:
         arch_name (str): architecture name
-        robot_name (str): robot name
+        robot (str or Robot): robot name or robot instance
         load (bool, optional): load the solver or not. Defaults to False.
 
     Returns:
         Solver: solver instance
     """
+    
+    robot_name = robot if isinstance(robot, str) else robot.name
     solver_param = get_config(arch_name, robot_name)
 
     if arch_name == "paik":
         solver = PAIK(
             solver_param=solver_param,  # type: ignore
             load_date="best" if load else "",
+            robot=robot,
             work_dir=work_dir,
         )
     elif arch_name == "nsf":
         solver = NSF(
             solver_param=solver_param,  # type: ignore
             load_date="best" if load else "",
+            robot=robot,
             work_dir=work_dir,
         )
     else:
@@ -88,12 +92,17 @@ class Solver:
         self,
         solver_param: SolverConfig = PANDA_PAIK,
         load_date: str = "",
+        robot = None,
         work_dir: str = os.path.abspath(os.getcwd()),
     ) -> None:
         solver_param.workdir = work_dir
-        self._robot = get_robot(
-            solver_param.robot_name, robot_dirs=solver_param.dir_paths
-        )
+        
+        if robot is None or isinstance(robot, str):
+            self._robot = get_robot(
+                solver_param.robot_name, robot_dirs=solver_param.dir_paths
+            )
+        else:
+            self._robot = robot
 
         self.param = solver_param
 
@@ -722,11 +731,11 @@ class Solver:
 class PAIK(Solver):
     def __init__(
         self,
-        solver_param: SolverConfig = PANDA_PAIK,
         load_date: str = "",
-        work_dir: str = os.path.abspath(os.getcwd()),
+        *arg,
+        **kwargs,
     ) -> None:
-        super().__init__(solver_param, load_date, work_dir)
+        super().__init__(*arg, **kwargs, load_date=load_date)
 
         try:
             if load_date == "best":
@@ -796,11 +805,11 @@ class PAIK(Solver):
 class NSF(Solver):
     def __init__(
         self,
-        solver_param: SolverConfig = PANDA_PAIK,
         load_date: str = "",
-        work_dir: str = os.path.abspath(os.getcwd()),
+        *arg,
+        **kwargs,
     ) -> None:
-        super().__init__(solver_param, load_date, work_dir)
+        super().__init__(*arg, **kwargs, load_date=load_date)
 
         try:
             if load_date == "best":

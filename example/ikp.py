@@ -6,7 +6,7 @@ import pandas as pd
 import scipy
 from tqdm import tqdm
 
-from common.evaluate import evaluate_pose_error_J3d_P2d, mmd_J3d_J3d
+from common.evaluate import evaluate_pose_error_J3d_P2d
 from paik.solver import NSF, PAIK, Solver, get_solver
 from sklearn.cluster import DBSCAN
 from common.config import Config_IKP
@@ -18,8 +18,7 @@ import os
 
 from ikflow.model import IkflowModelParameters
 from ikflow.ikflow_solver import IKFlowSolver
-import jrl.robots as jrlib
-import paik.klampt_robot as chlib
+from paik.klampt_robot import get_robot
 
 import torch
 from ikflow.training.lt_model import IkfLitModel
@@ -34,18 +33,6 @@ DEFAULT_WEIGHTS_PATH = {
     'atlas_waist_arm': '/home/luca/ikflow/training_logs/atlas_waist_arm--Sep.10.2024_11:3:PM/ikflow-checkpoint-step=270000.ckpt',
     'baxter_arm': '/home/luca/ikflow/training_logs/baxter--Sep.12.2024_09:27:AM/ikflow-checkpoint-step=960000.ckpt',
 }
-
-def get_robot(robot_name: str):
-    try:
-        robot = jrlib.get_robot(robot_name)
-    except ValueError:
-        try:
-            robot = chlib.get_robot(robot_name)
-        except ValueError:
-            raise ValueError(
-                f"Error: Robot '{robot_name}' not found in either jrlib or chlib")
-
-    return robot
 
 def _load_ikflow_local_pretrain(robot_name: str):
     

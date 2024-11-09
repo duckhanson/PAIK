@@ -1,3 +1,5 @@
+from torch import Tensor
+import torch
 from typing import Optional
 from attr import dataclass
 from klampt import WorldModel, IKSolver
@@ -6,8 +8,7 @@ import math
 import numpy as np
 from klampt.model import ik
 from klampt.math import so3
-from torch import Tensor
-import torch
+import jrl.robots as jrlib
 
 
 class Robot:
@@ -245,34 +246,18 @@ class BaxterArm(Robot):
     def __init__(self):
         super().__init__("baxter", [15, 16, 17, 18, 19, 21, 22])
 
-
-def get_robot_names():
-    return ["atlas_arm", "atlas_waist_arm", "baxter_arm"]
-
-
-def get_robot(name: str) -> Robot:
-    assert name in get_robot_names(), f"Unknown robot name: {name}"
-    if name == "atlas_arm":
-        return AtlasArm()
-    elif name == "atlas_waist_arm":
-        return AtlasWaistArm()
-    elif name == "baxter_arm":
-        return BaxterArm()
-    else:
-        raise ValueError(f"Unknown robot name: {name}")
-
-
-# class Robonaut2WaistArm(Robot):
-#     def __init__(self):
-#         super().__init__("robonaut2", [4])
-#         raise NotImplementedError("Robonaut2WaistArm is not implemented yet.")
-
-
-# class Robonaut2Arm(Robot):
-#     def __init__(self):
-#         super().__init__("robonaut2", [4])
-#         raise NotImplementedError("Robonaut2Arm is not implemented yet.")
-
+def get_robot(name: str):
+    try:
+        return jrlib.get_robot(name)
+    except ValueError:
+        if name == "atlas_arm":
+            return AtlasArm()
+        elif name == "atlas_waist_arm":
+            return AtlasWaistArm()
+        elif name == "baxter_arm":
+            return BaxterArm()
+        else:
+            raise ValueError(f"Unknown robot name: {name}")
 
 class PR2(Robot):
     def __init__(self):
@@ -283,10 +268,5 @@ class PR2(Robot):
 if __name__ == "__main__":
     # Test the Robot class
     robot = AtlasWaistArm()
-    
-    # dim_latent_space = 9
-    
-    # for i in range(dim_latent_space):    
-    #     k = 1.0 / max(abs(robot.actuated_joints_limits[i][0]), abs(robot.actuated_joints_limits[i][1]))
-    #     print(f"dim {i}: {k}")
+ 
     

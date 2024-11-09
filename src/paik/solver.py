@@ -538,25 +538,38 @@ class Solver:
                     latents_torch)
         return self.denormalize_output_data(J.detach().cpu().numpy(), "J").reshape(num_sols, -1, self.robot.n_dofs)
 
-    def _get_divisible_conditions(
-        self, C: np.ndarray, batch_size: int
-    ) -> tuple[np.ndarray, int]:
+    def _make_divisible(self, arr: np.ndarray, batch_size: int) -> tuple[np.ndarray, int]:
         """
-        Make the number of conditions divisible by batch_size. Reapeat the last few conditions to make it divisible.
+        Make the number of elements divisible by batch_size. Reapeat the last few elements to make it divisible.
 
         Args:
-            C (np.ndarray): conditions
+            arr (np.ndarray): input array
             batch_size (int): batch size
 
         Returns:
-            Tuple[np.ndarray, int]: divisible conditions and the number of complementary conditions
+            np.ndarray: divisible array
         """
-        assert C.ndim == 2
-        complementary = batch_size - len(C) % batch_size
+        assert arr.ndim == 2
+        complementary = batch_size - len(arr) % batch_size
         complementary = 0 if complementary == batch_size else complementary
-        C = np.concatenate((C, C[:complementary]),
-                           axis=0) if complementary > 0 else C
-        return C, complementary
+        divisibles = np.concatenate((arr, arr[:complementary]), axis=0) if complementary > 0 else arr
+        return divisibles, complementary
+    
+    def _make_batch(self, arr: np.ndarray, batch_size: int) -> Tuple[torch.Tensor, int]:
+        """
+        Make batch from array.
+
+        Args:
+            arr (np.ndarray): input array
+            batch_size (int): batch size
+
+        Returns:
+            torch.Tensor: batched array with shape (num_batches, batch_size, -1)
+        """
+        divisibles, complementary = self._make_divisible(arr, batch_size)
+        return torch.from_numpy(
+            divisibles.astype(np.float32).reshape(-1, batch_size, divisibles.shape[-1])
+        ).to(self._device), complementary
 
     def _remove_complementary_ik_solutions(self, J: np.ndarray, complementary: int) -> np.ndarray:
         """
@@ -584,11 +597,8 @@ class Solver:
         C = self.normalize_input_data(C, "C")
         # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
         C = np.tile(C, (num_sols, 1))
-        C, complementary = self._get_divisible_conditions(C, batch_size)
-        C = torch.from_numpy(
-            C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])
-        ).to(self._device)
-        return C, complementary
+        C_batch, complementary = self._make_batch(C, batch_size)
+        return C_batch, complementary
 
     def _solve_conditions_batch(self, C: torch.Tensor, num_sols: int, complementary: int, latents: Optional[torch.Tensor] = None, verbose: bool = False) -> np.ndarray:
         """
@@ -906,10 +916,8 @@ class NSF(Solver):
         C = self._get_conditions(self.P)
 
         batch_size = 4000
-        C_batch, complementary = self._get_divisible_conditions(C, batch_size)
-        J_batch, _ = self._get_divisible_conditions(self.J, batch_size)
-        C_batch = C_batch.reshape(-1, batch_size, C_batch.shape[-1])
-        J_batch = J_batch.reshape(-1, batch_size, J_batch.shape[-1])
+        C_batch, complementary = self._make_batch(C, batch_size)
+        J_batch, _ = self._make_batch(self.J, batch_size)
         C_batch = self.normalize_input_data(C_batch, "C", return_torch=True)
         J_batch = self.normalize_input_data(J_batch, "J", return_torch=True)
 
@@ -923,13 +931,6 @@ class NSF(Solver):
             Z.reshape(-1, self._robot.n_dofs), complementary
         )
         return Z
-
-    def _get_latent_batch(self, Z: np.ndarray, batch_size: int) -> tuple[torch.Tensor, int]:
-        Z, complementary = self._get_divisible_conditions(Z, batch_size)
-        Z = torch.from_numpy(
-            Z.astype(np.float32).reshape(-1, batch_size, Z.shape[-1])
-        ).to(self._device)
-        return Z, complementary
 
     def generate_ik_solutions(
         self,
@@ -959,8 +960,7 @@ class NSF(Solver):
         else:
             C_batch, complementary = self._get_conditions_batch(
                 P=P, num_sols=num_sols, batch_size=batch_size)
-
-            Z_batch, _ = self._get_latent_batch(latents, batch_size)
+            Z_batch, _ = self._make_batch(latents, batch_size)
             return self._solve_conditions_batch(C=C_batch, latents=Z_batch, num_sols=num_sols, complementary=complementary, verbose=verbose)
 
     def retrieve_latent(

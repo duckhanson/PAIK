@@ -75,8 +75,8 @@ def evaluate_iterations(robot, poses: np.ndarray, seeds: np.ndarray):
 def main(robot_name: str = "panda"):
     # get solver
     robot = get_robot(robot_name)
-    nsf_solver = get_solver(arch_name="nsf", robot_name=robot_name, load=True)
-    paik_solver = get_solver(arch_name="paik", robot_name=robot_name, load=True)
+    nsf_solver = get_solver(arch_name="nsf", robot=robot, load=True)
+    paik_solver = get_solver(arch_name="paik", robot=robot, load=True)
     
     num_poses = 50
     num_sols = 250

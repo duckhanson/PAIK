@@ -4,6 +4,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from paik.klampt_robot import get_robot
 from paik.solver import Solver, NSF, PAIK, get_solver
 
 from common.config import Config_Diversity
@@ -279,8 +280,9 @@ if __name__ == "__main__":
     config = Config_Diversity()
     
     robot_name = "panda"
-    nsf_solver = get_solver(arch_name="nsf", robot_name=robot_name, load=True, work_dir=config.workdir)
-    paik_solver = get_solver(arch_name="paik", robot_name=robot_name, load=True, work_dir=config.workdir)
+    robot = get_robot(robot_name)
+    nsf_solver = get_solver(arch_name="nsf", robot=robot, load=True, work_dir=config.workdir)
+    paik_solver = get_solver(arch_name="paik", robot=robot, load=True, work_dir=config.workdir)
 
     plot_iterate_over_num_sols_array(config, nsf_solver, paik_solver, verbose=False)    
     plot_iterate_over_stds(config, nsf_solver, paik_solver, verbose=False)

@@ -21,30 +21,34 @@ from zuko.distributions import DiagNormal, BoxUniform
 from zuko.flows import Unconditional
 
 
-def get_solver(arch_name: str, robot_name: str, load: bool = False, work_dir: str = os.path.abspath(os.getcwd())) -> Solver:
+def get_solver(arch_name: str, robot, load: bool = False, work_dir: str = os.path.abspath(os.getcwd())) -> Solver:
     """
     Get the solver with the given architecture and robot.
 
     Args:
         arch_name (str): architecture name
-        robot_name (str): robot name
+        robot (str or Robot): robot name or robot instance
         load (bool, optional): load the solver or not. Defaults to False.
 
     Returns:
         Solver: solver instance
     """
+    
+    robot_name = robot if isinstance(robot, str) else robot.name
     solver_param = get_config(arch_name, robot_name)
 
     if arch_name == "paik":
         solver = PAIK(
             solver_param=solver_param,  # type: ignore
             load_date="best" if load else "",
+            robot=robot,
             work_dir=work_dir,
         )
     elif arch_name == "nsf":
         solver = NSF(
             solver_param=solver_param,  # type: ignore
             load_date="best" if load else "",
+            robot=robot,
             work_dir=work_dir,
         )
     else:
@@ -88,20 +92,19 @@ class Solver:
         self,
         solver_param: SolverConfig = PANDA_PAIK,
         load_date: str = "",
+        robot = None,
         work_dir: str = os.path.abspath(os.getcwd()),
     ) -> None:
         solver_param.workdir = work_dir
-        self._robot = get_robot(
-            solver_param.robot_name, robot_dirs=solver_param.dir_paths
-        )
+        
+        if robot is None or isinstance(robot, str):
+            self._robot = get_robot(
+                solver_param.robot_name, robot_dirs=solver_param.dir_paths
+            )
+        else:
+            self._robot = robot
 
         self.param = solver_param
-
-        # if solver_param.use_dimension_reduction:
-        #     print(f"[INFO] use_dimension_reduction is True, use HNNE.")
-        #     raise NotImplementedError("Not support HNNE.")
-        # else:
-        #     print(f"[INFO] use_dimension_reduction is False, use clustering.")
 
     @property
     def base_std(self):
@@ -118,7 +121,7 @@ class Solver:
     @property
     def latent(self):
         return self._latent
-    
+
     @property
     def base_name(self):
         return self._base_name
@@ -152,10 +155,11 @@ class Solver:
         self._latent = torch.from_numpy(
             value.astype(np.float32)).to(self._device)
         self._update_base_distribution()
-        
+
     @base_name.setter
     def base_name(self, value: str):
-        assert value in ["diag_normal", "box_uniform"], "base_name should be in ['diag_normal', 'box_uniform']."
+        assert value in [
+            "diag_normal", "box_uniform"], "base_name should be in ['diag_normal', 'box_uniform']."
         self._base_name = value
         self._update_base_distribution()
 
@@ -167,11 +171,11 @@ class Solver:
             df = pd.DataFrame({"date": ["first_init"], "l2": [1000]})
             df.to_csv(best_date_path, index=False)
             print(f"[INFO] create {best_date_path} with first_init.")
-            
+
         df = pd.read_csv(best_date_path)
         best_date = df["date"].values[0]
         best_l2 = df["l2"].values[0]
-        
+
         if l2 < best_l2:
             self._remove_by_date(best_date)
             best_date = date
@@ -186,7 +190,7 @@ class Solver:
             print(
                 f"[INFO] current model is not better than the best model in {best_date_path}"
             )
-            
+
         print(
             f"[INFO] best date: {best_date}, best l2: {best_l2}")
 
@@ -195,7 +199,7 @@ class Solver:
         if date == "":
             print(f"[WARNING] date is empty. Remove failed.")
             return
-        
+
         if isdir(os.path.join(self.param.weight_dir, date)):
             shutil.rmtree(os.path.join(
                 self.param.weight_dir, date), ignore_errors=True)
@@ -271,12 +275,12 @@ class Solver:
 
     def _load_best_date(self):
         best_date_path = self._best_date_path()
-        
+
         if not os.path.exists(best_date_path):
             raise FileNotFoundError(
                 f"{best_date_path} not found. Please save the model first."
             )
-            
+
         # read the best date from the csv file
         df = pd.read_csv(best_date_path)
         best_date = df["date"].values[0]
@@ -298,27 +302,29 @@ class Solver:
             },
         }
 
-    def _load_J_P(self):
+    def _load_joint_angles_and_poses(self):
         """
         Load J and P from the given path, if not found, generate and save it.
         """
-        J, P = [load_numpy(file_path=self._load_JPF_path(name))
+        J, P = [load_numpy(file_path=self._path_joint_angles_poses_features(name))
                 for name in ["J", "P"]]
 
         if J is None or P is None:
             print(
-                f"[WARNING] J or P not found, generate and save in {self._load_JPF_path('J')}.")
+                f"[WARNING] J or P not found, generate and save in {self._path_joint_angles_poses_features('J')}.")
             J, P = self.robot.sample_joint_angles_and_poses(
                 n=self.param.N
             )
-            save_numpy(file_path=self._load_JPF_path("J"), arr=J)
-            save_numpy(file_path=self._load_JPF_path("P"), arr=P)
+            save_numpy(
+                file_path=self._path_joint_angles_poses_features("J"), arr=J)
+            save_numpy(
+                file_path=self._path_joint_angles_poses_features("P"), arr=P)
             print(
-                f"[SUCCESS] J and P saved in {self._load_JPF_path('J')} and {self._load_JPF_path('P')}.")
+                f"[SUCCESS] J and P saved in {self._path_joint_angles_poses_features('J')} and {self._path_joint_angles_poses_features('P')}.")
 
         self.J, self.P = J, P
 
-    def _load_JPF_path(self, name: str):
+    def _path_joint_angles_poses_features(self, name: str):
         """
         JPF path for saving and loading J, P, F.
         """
@@ -327,15 +333,16 @@ class Solver:
         ), f"{self.param.train_dir} not found, please change workdir to the project root!"
         return f"{self.param.train_dir}/{name}-{self.param.N}-{self.n}-{self.m}-{self.r}.npy"
 
-    def _load_F(self):
+    def _load_features(self):
         """
         Load F from the given path, if not found, generate and save it.
         """
-        F = load_numpy(file_path=self._load_JPF_path("F"))
+        F = load_numpy(
+            file_path=self._path_joint_angles_poses_features("F"))
 
         if F is None:
             print(
-                f"[WARNING] F not found, generate and save in {self._load_JPF_path('F')}.")
+                f"[WARNING] F not found, generate and save in {self._path_joint_angles_poses_features('F')}.")
             assert self.r > 0, "r should be greater than 0."
             # maximum number of data for hnne (11M), we use max_num_data_hnne to test
             num_data = min(self.param.max_num_data_hnne, len(J))
@@ -368,8 +375,10 @@ class Solver:
                     )
                 )
 
-            save_numpy(file_path=self._load_JPF_path("F"), arr=F)
-            print(f"[SUCCESS] F saved in {self._load_JPF_path('F')}.")
+            save_numpy(
+                file_path=self._path_joint_angles_poses_features("F"), arr=F)
+            print(
+                f"[SUCCESS] F saved in {self._path_joint_angles_poses_features('F')}.")
 
         self.F = F
 
@@ -382,8 +391,8 @@ class Solver:
         """
         Load training data from the given path, if not found, generate and save it.
         """
-        self._load_J_P()
-        self._load_F()
+        self._load_joint_angles_and_poses()
+        self._load_features()
 
         self.C = np.column_stack((self.P, self.F))
 
@@ -436,14 +445,14 @@ class Solver:
                 buffer=True,
             ),  # type: ignore
         )
-    
+
     def _update_boxUniform_base(self):
         """
         Change the base distribution of the solver to the new base distribution.
         """
         bound = torch.ones((self.robot.n_dofs,),
                            device=self._device) * self._base_std
-                
+
         self._solver = Flow(
             transforms=self._solver.transforms,  # type: ignore
             base=Unconditional(
@@ -453,11 +462,11 @@ class Solver:
                 buffer=True,
             ),  # type: ignore
         )
-    
+
     def _update_base_distribution(self):
         """
         Change the base distribution of the solver to the new base distribution.
-        
+
         Args:
             base_name (str): name of the new base distribution, only support "diag_normal" and "box_uniform"
             std (float): standard deviation of the new base distribution
@@ -466,7 +475,7 @@ class Solver:
             self._update_diagNormal_base()
         else:
             self._update_boxUniform_base()
-        
+
     # public methods
     def normalize_input_data(self, data: np.ndarray, name: str, return_torch: bool = False):
         """
@@ -504,40 +513,43 @@ class Solver:
             + self._normalization_elements[name]["mean"]
         )
 
-    def _solve_conditions(self, conditions: np.ndarray, num_sols: int):
-        conditions_torch = self.normalize_input_data(
-            conditions, "C", return_torch=True)
-        with torch.inference_mode():
-            J = self._solver(conditions_torch).sample((num_sols,))
-        return self.denormalize_output_data(J.detach().cpu().numpy(), "J")
-
-    def _solve_conditions_z(self, conditions: np.ndarray, z: np.ndarray):
-        conditions_torch = self.normalize_input_data(
-            conditions, "C", return_torch=True)
-        z_torch = torch.from_numpy(z.astype(np.float32)).to(self._device)
-        with torch.inference_mode():
-            J = self._solver(conditions_torch).sample_x_from_z(z_torch)
-        return self.denormalize_output_data(J.detach().cpu().numpy(), "J")
-
-    def _get_divisible_conditions(
-        self, C: np.ndarray, batch_size: int
-    ) -> tuple[np.ndarray, int]:
+    def _make_divisible(self, arr: np.ndarray, batch_size: int) -> tuple[np.ndarray, int]:
         """
-        Make the number of conditions divisible by batch_size. Reapeat the last few conditions to make it divisible.
+        Make the number of elements divisible by batch_size. Reapeat the last few elements to make it divisible.
 
         Args:
-            C (np.ndarray): conditions
+            arr (np.ndarray): input array
             batch_size (int): batch size
 
         Returns:
-            Tuple[np.ndarray, int]: divisible conditions and the number of complementary conditions
+            np.ndarray: divisible array
         """
-        assert C.ndim == 2
-        complementary = batch_size - len(C) % batch_size
-        complementary = 0 if complementary == batch_size else complementary
-        C = np.concatenate((C, C[:complementary]),
-                           axis=0) if complementary > 0 else C
-        return C, complementary
+        assert arr.ndim == 2
+        
+        min_multiple = int(np.ceil(len(arr) / batch_size) * batch_size)
+        
+        if len(arr) == min_multiple:
+            return arr, 0
+        else:
+            divisibles = np.zeros((min_multiple, arr.shape[-1]))
+            divisibles[:len(arr)] = arr
+            return divisibles, min_multiple - len(arr)
+    
+    def _make_batch(self, arr: np.ndarray, batch_size: int) -> Tuple[torch.Tensor, int]:
+        """
+        Make batch from array.
+
+        Args:
+            arr (np.ndarray): input array
+            batch_size (int): batch size
+
+        Returns:
+            torch.Tensor: batched array with shape (num_batches, batch_size, -1)
+        """
+        divisibles, complementary = self._make_divisible(arr, batch_size)
+        return torch.from_numpy(
+            divisibles.astype(np.float32).reshape(-1, batch_size, divisibles.shape[-1])
+        ).to(self._device), complementary
 
     def _remove_complementary_ik_solutions(self, J: np.ndarray, complementary: int) -> np.ndarray:
         """
@@ -565,58 +577,38 @@ class Solver:
         C = self.normalize_input_data(C, "C")
         # C: (num_poses, m + r + 1) -> C: (num_sols * num_poses, m + r + 1)
         C = np.tile(C, (num_sols, 1))
-        C, complementary = self._get_divisible_conditions(C, batch_size)
-        C = torch.from_numpy(
-            C.astype(np.float32).reshape(-1, batch_size, C.shape[-1])
-        ).to(self._device)
-        return C, complementary
-    
-    def _solve_conditions_batch(self, C: np.ndarray, num_sols: int, complementary: int, verbose: bool = False) -> np.ndarray:
+        C_batch, complementary = self._make_batch(C, batch_size)
+        return C_batch, complementary
+
+    def _solve_by_conditions_batch(self, C: torch.Tensor, num_sols: int, complementary: int, latents: Optional[torch.Tensor] = None, verbose: bool = False) -> np.ndarray:
         """
         Solve inverse kinematics problem in batch.
-
+        
         Args:
             C (np.ndarray): conditions with shape (num_poses, m + x + 1), x = 1 for paik, x = 0 for nsf
-
+            num_sols (int): number of solutions
+            complementary (int): number of complementary conditions
+            latents (Optional[torch.Tensor], optional): latent variables. Defaults to None.
+            verbose (bool, optional): show progress bar or not. Defaults to False.
+            
         Returns:
             np.ndarray: J with shape (num_poses, num_dofs)
         """
+
         batch_size = C.shape[1]
         J = torch.empty((len(C), batch_size, self._robot.n_dofs),
                         device=self._device)
 
         iterator = trange(len(C)) if verbose else range(len(C))
-        with torch.inference_mode():
-            for i in iterator:
-                J[i] = self._solver(C[i]).sample()
-
-        J = J.detach().cpu().numpy()
-        J = self._remove_complementary_ik_solutions(
-            J.reshape(-1, self._robot.n_dofs), complementary
-        )
-        return self.denormalize_output_data(
-            J.reshape(num_sols, -1, self._robot.n_dofs), "J"
-        )
         
-    def _solve_conditions_batch_z(self, C: torch.Tensor, Z: torch.Tensor, num_sols: int, complementary: int, verbose: bool = False) -> np.ndarray:
-        """
-        Solve inverse kinematics problem in batch.
-
-        Args:
-            C (torch.Tensor): conditions with shape (num_poses, m + x + 1), x = 1 for paik, x = 0 for nsf
-            Z (torch.Tensor): latent variables with shape (num_sols, num_poses, z)
-
-        Returns:
-            np.ndarray: J with shape (num_poses, num_dofs)
-        """
-        batch_size = C.shape[1]
-        J = torch.empty((len(C), batch_size, self._robot.n_dofs),
-                        device=self._device)
-
-        iterator = trange(len(C)) if verbose else range(len(C))
-        with torch.inference_mode():
-            for i in iterator:
-                J[i] = self._solver(C[i]).sample_x_from_z(Z[i])
+        if latents is None:
+            with torch.inference_mode():
+                for i in iterator:
+                    J[i] = self._solver(C[i]).sample()
+        else:
+            with torch.inference_mode():
+                for i in iterator:
+                    J[i] = self._solver(C[i]).sample_x_from_z(latents[i]) # type: ignore
 
         J = J.detach().cpu().numpy()
         J = self._remove_complementary_ik_solutions(
@@ -645,6 +637,7 @@ class Solver:
         Returns:
             tuple[Any, Any]: l2 and ang, default shape (1), posewise evaluation with shape (num_poses,), or all evaluation with shape (num_sols * num_poses)
         """
+        P = np.atleast_2d(P)
         num_poses, num_sols = len(P), len(J)
         assert len(J.shape) == 3 and len(
             P.shape) == 2 and J.shape[1] == num_poses, f"J: {J.shape}, P: {P.shape}"
@@ -666,12 +659,10 @@ class Solver:
 
     def generate_ik_solutions(self, *args, **kwargs):
         raise NotImplementedError("generate_ik_solutions not implemented.")
-    
-    def generate_ik_solutions_z(self, *args, **kwargs):
-        raise NotImplementedError("generate_ik_solutions_z not implemented.")
-    
+
     def generate_z_from_ik_solutions(self, *args, **kwargs):
-        raise NotImplementedError("generate_z_from_ik_solutions not implemented.")
+        raise NotImplementedError(
+            "generate_z_from_ik_solutions not implemented.")
 
     def generate_z_from_dataset(self, *args, **kwargs):
         raise NotImplementedError("generate_z_from_dataset not implemented.")
@@ -682,8 +673,6 @@ class Solver:
         num_sols: int,
         batch_size: int = 5000,
         std: float = 0.25,
-        # success_threshold: Tuple[float, float] = (1e-4, 1e-4),
-        select_reference: str = "knn",
         verbose: bool = True,
     ):  # -> tuple[Any, Any, float] | tuple[Any, Any]:# -> tuple[Any, Any, float] | tuple[Any, Any]:
         self.base_std = std
@@ -697,7 +686,9 @@ class Solver:
         l2, ang = self.evaluate_pose_error_J3d_P2d(J_hat, P, return_all=True)
         avg_inference_time = round((time() - time_begin) / num_poses, 3)
 
-        df = pd.DataFrame({"l2": l2, "ang": np.rad2deg(ang)})
+        l2_mm, ang_deg, time_ms = l2 * 1e3, np.rad2deg(ang), avg_inference_time * 1e3
+        df = pd.DataFrame({"l2_mm": l2_mm, "ang_deg": ang_deg})
+        df = df.round(3)
 
         if verbose:
             print(df.describe())
@@ -706,8 +697,8 @@ class Solver:
                 tabulate(
                     [
                         [
-                            np.round(l2.mean() * 1e3, decimals=2),
-                            np.round(np.rad2deg(ang.mean()), decimals=2),
+                            df.l2_mm.mean(),
+                            ang_deg.mean(),
                             np.round(avg_inference_time * 1e3, decimals=0),
                         ]
                     ],
@@ -721,30 +712,20 @@ class Solver:
 
         return tuple(
             [
-                l2.mean(),
-                ang.mean(),
-                avg_inference_time,
-                # round(
-                #     len(
-                #         df.query(
-                #             f"l2 < {success_threshold[0]} & ang < {success_threshold[1]}"
-                #         )
-                #     )
-                #     / (num_poses * num_sols),
-                #     3,
-                # ),
+                l2_mm.mean(),
+                ang_deg.mean(),
+                time_ms,
             ]
         )
-
 
 class PAIK(Solver):
     def __init__(
         self,
-        solver_param: SolverConfig = PANDA_PAIK,
         load_date: str = "",
-        work_dir: str = os.path.abspath(os.getcwd()),
+        *arg,
+        **kwargs,
     ) -> None:
-        super().__init__(solver_param, load_date, work_dir)
+        super().__init__(*arg, **kwargs, load_date=load_date)
 
         try:
             if load_date == "best":
@@ -756,16 +737,23 @@ class PAIK(Solver):
             self._load_training_data()
 
     def get_reference_partition_label(
-        self, P: np.ndarray, select_reference: str = "knn", num_sols: int = 1
+        self, P: np.ndarray, select_reference: str = "knn", num_sols: int = 1, J: Optional[np.ndarray] = None
     ):
         if select_reference == "knn":
             # type: ignore
             n_neighbors = min(num_sols, 30)
-            F = self.F[
-                self.P_knn.kneighbors(
-                    np.atleast_2d(P), n_neighbors=n_neighbors, return_distance=False
-                )
-            ].reshape(-1, n_neighbors)
+            if J is None:
+                F = self.F[
+                    self.P_knn.kneighbors(
+                        np.atleast_2d(P), n_neighbors=n_neighbors, return_distance=False
+                    )
+                ].reshape(-1, n_neighbors)
+            else:
+                F = self.F[
+                    self.J_knn.kneighbors(
+                        np.atleast_2d(J), n_neighbors=n_neighbors, return_distance=False
+                    )
+                ].reshape(-1, n_neighbors)
             # expand F to match the number of solutions by random sampling for each pose
             return np.asarray([np.random.choice(f, num_sols, replace=True) for f in np.atleast_2d(F)]).flatten()
         elif select_reference == "random":
@@ -784,7 +772,6 @@ class PAIK(Solver):
         num_sols: int = 1,
         F: Optional[np.ndarray] = None,
         std: Optional[float] = None,
-        latent: Optional[np.ndarray] = None,
         select_reference: str = "knn",
         batch_size: int = 4000,
         verbose: bool = True,
@@ -793,33 +780,28 @@ class PAIK(Solver):
         P_num_sols = np.expand_dims(P, axis=0).repeat(num_sols, axis=0)
         # shape: (num_sols*num_poses, n)
         P_num_sols = P_num_sols.reshape(-1, P.shape[-1])
-        
-        if F is None:
-            F = self.get_reference_partition_label(P, select_reference, num_sols)
 
-        assert len(P_num_sols) == len(F), "P and F should have the same length."
+        if F is None:
+            F = self.get_reference_partition_label(
+                P, select_reference, num_sols)
+
+        assert len(P_num_sols) == len(
+            F), "P and F should have the same length."
         if std is not None and std != self.base_std:
             self.base_std = std
-        if latent is not None:
-            self.latent = latent
-
-        if len(P_num_sols) < batch_size:
-            conditions = self._get_conditions(P_num_sols, F)
-            return self._solve_conditions(conditions, 1)
 
         C, complementary = self._get_conditions_batch(
             P=P_num_sols, num_sols=1, batch_size=batch_size, F=F)
-        return self._solve_conditions_batch(C, 1, complementary, verbose)
-
+        return self._solve_by_conditions_batch(C=C, num_sols=num_sols, complementary=complementary, verbose=verbose)
 
 class NSF(Solver):
     def __init__(
         self,
-        solver_param: SolverConfig = PANDA_PAIK,
         load_date: str = "",
-        work_dir: str = os.path.abspath(os.getcwd()),
+        *arg,
+        **kwargs,
     ) -> None:
-        super().__init__(solver_param, load_date, work_dir)
+        super().__init__(*arg, **kwargs, load_date=load_date)
 
         try:
             if load_date == "best":
@@ -829,84 +811,37 @@ class NSF(Solver):
         except FileNotFoundError as e:
             print(f"[WARNING] {e}. Load training data instead.")
             self._load_training_data()
-        
+
         latent_path = os.path.join(self.param.weight_dir, "Z.npy")
         if os.path.exists(latent_path):
             self.Z = load_numpy(latent_path)
             print(f"[INFO] Load latent variable from {latent_path}.")
         else:
-            self.Z = self.generate_z_from_dataset()
+            self.Z = self.generate_z_from_ik_solutions(self.P, self.J, batch_size=4000)
             # save the latent variable
             save_numpy(os.path.join(self.param.weight_dir, "Z.npy"), self.Z)
-            print(f"[SUCCESS] save latent variable in {self.param.weight_dir}/Z.npy.")
+            print(
+                f"[SUCCESS] save latent variable in {self.param.weight_dir}/Z.npy.")
 
     def _load_training_data(self):
         """
         Load training data from the given path, if not found, generate and save it.
         """
-        self._load_J_P()
+        self._load_joint_angles_and_poses()
 
         self.C = self.P
 
         self._compute_normalizing_elements()
         self._load_knn()
 
-    def generate_ik_solutions_guassian(
-        self,
-        P: np.ndarray,
-        num_sols: int = 1,
-        std: Optional[float] = None,
-        latent: Optional[np.ndarray] = None,
-        batch_size: int = 4000,
-        verbose: bool = True,
-    ):
-        if std is not None and std != self.base_std:
-            self.base_std = std
-        if latent is not None:
-            self.latent = latent
-
-        if len(P) * num_sols < batch_size:
-            C = self._get_conditions(P)
-            return self._solve_conditions(C, num_sols)
-
-        C, complementary = self._get_conditions_batch(
-            P=P, num_sols=num_sols, batch_size=batch_size)
-        return self._solve_conditions_batch(C, num_sols, complementary, verbose)
-
-    def generate_ik_solutions_z(
-        self,
-        P: np.ndarray,
-        z: np.ndarray,
-    ):
-        """
-        Generate inverse kinematics solutions given the conditions and latent variable
-
-        example:
-        num_poses = 10
-        num_sols = 1000
-        Q, P = nsf.robot.sample_joint_angles_and_poses(n=num_poses)
-        conditions_torch = c.to('cuda')
-        conditions_torch = conditions_torch.to(torch.float32)
-        z = np.random.randn(num_sols, num_poses, nsf.n) * 0.25
-        J_hat = nsf.generate_ik_solutions_z(P, z)
-        
-        Args:
-            P (np.ndarray): conditions of EE poses with shape (num_poses, m)
-            z (np.ndarray): latent variable with shape (num_sols, n)
-
-        Returns:
-            np.ndarray: joint angles with shape (num_sols, num_poses, num_dofs)
-        """
-        C = self._get_conditions(P)
-        return self._solve_conditions_z(C, z)
-    
     def generate_z_from_ik_solutions(
         self,
         P: np.ndarray,
         J: np.ndarray,
+        batch_size: int = 4000,
     ):
         """
-        Generate latent variable given the conditions and joint angles
+        Generate latents variable given the conditions and joint angles
 
         example:
         num_poses = 10
@@ -916,126 +851,53 @@ class NSF(Solver):
         conditions_torch = conditions_torch.to(torch.float32)
         J_hat = nsf.generate_ik_solutions(P, num_sols)
         z_hat = nsf.generate_z_from_ik_solutions(P, J_hat)
-        
+
         Args:
             P (np.ndarray): conditions of EE poses with shape (num_poses, m)
             J (np.ndarray): joint angles with shape (num_sols, num_poses, num_dofs)
 
         Returns:
-            np.ndarray: latent variable with shape (num_sols, num_poses, n)
+            np.ndarray: latents variable with shape (num_sols, num_poses, n)
         """
-        C = self._get_conditions(P)
-        C = self.normalize_input_data(C, "C", return_torch=True)
-        J = self.normalize_input_data(J, "J", return_torch=True)
-        with torch.inference_mode():
-            z = self._solver(C).sample_z_from_x(J)
-        return z.detach().cpu().numpy()
-    
-    def generate_z_from_dataset(
-        self
-    ):
-        """
-        Generate latent variable from the dataset.
-
-        Returns:
-            np.ndarray: latent variable with shape (num_data, n)
-        """
-        print("[INFO] Generate latent variable from the dataset.")
-        
-        C = self._get_conditions(self.P)
-        
-        batch_size = 4000
-        C_batch, complementary = self._get_divisible_conditions(C, batch_size)
-        J_batch, _ = self._get_divisible_conditions(self.J, batch_size)
-        C_batch = C_batch.reshape(-1, batch_size, C_batch.shape[-1])
-        J_batch = J_batch.reshape(-1, batch_size, J_batch.shape[-1])
-        C_batch = self.normalize_input_data(C_batch, "C", return_torch=True)
-        J_batch = self.normalize_input_data(J_batch, "J", return_torch=True)
+        C = self._get_conditions(np.atleast_2d(P))
+        C = self.normalize_input_data(C, "C", return_torch=False)
+        J = self.normalize_input_data(J, "J", return_torch=False)
+        C_batch, complementary = self._make_batch(C, batch_size)
+        J_batch, _ = self._make_batch(J, batch_size)
         
         Z = torch.empty_like(J_batch)
         
         with torch.inference_mode():
-            for i in trange(len(C_batch)):
+            for i in range(len(C_batch)):
                 Z[i] = self._solver(C_batch[i]).sample_z_from_x(J_batch[i])
         Z = Z.detach().cpu().numpy()
         Z = self._remove_complementary_ik_solutions(
             Z.reshape(-1, self._robot.n_dofs), complementary
         )
         return Z
-    
-    def _get_latent_batch(self, Z: np.ndarray, batch_size: int):
-        Z, complementary = self._get_divisible_conditions(Z, batch_size)
-        Z = torch.from_numpy(
-            Z.astype(np.float32).reshape(-1, batch_size, Z.shape[-1])
-        ).to(self._device)
-        return Z, complementary
-    
+
     def generate_ik_solutions(
         self,
         P: np.ndarray,
         num_sols: int = 1,
         std: Optional[float] = None,
-        latent: Optional[np.ndarray] = None,
-        random_sample_size: int = 10,
+        latents: Optional[np.ndarray] = None,
         batch_size: int = 4000,
         verbose: bool = True,
     ):
+        P = np.atleast_2d(P)
+        
         if std is not None and std != self.base_std:
             self.base_std = std
-
-        if latent is None:
-            # print("[INFO] generate latent variable from retrieval of Random J.")
-            J_random = self.robot.sample_joint_angles(n=len(P)*num_sols)
-            latent = self.retrieve_latent(J=J_random, random_sample_size=random_sample_size)
-            latent = latent.reshape(-1, self.n)
         
-        C = self._get_conditions(P)
-        
-        if len(P) * num_sols < batch_size:
-            return self._solve_conditions_z(C, latent)
-        else:
-            C_batch, complementary = self._get_conditions_batch(
-                P=P, num_sols=num_sols, batch_size=batch_size)
-            
-            Z_batch, _ = self._get_latent_batch(latent, batch_size)
-            
-            return self._solve_conditions_batch_z(C_batch, Z_batch, num_sols, complementary, verbose)
+        C_batch, complementary = self._get_conditions_batch(
+            P=P, num_sols=num_sols, batch_size=batch_size)
 
-        return self._solve_conditions_batch_z(C_batch, latent_batch, 1, complementary, verbose)
-    
-    def retrieve_latent(
-        self,
-        P: Optional[np.ndarray] = None,
-        J: Optional[np.ndarray] = None,
-        random_sample_size: int = 0,
-    ):
-        """
-        Retrieve latent variable from the dataset given the conditions and joint angles.
-
-        Args:
-            P (np.ndarray, optional): conditions of EE poses with shape (num_poses, m). Defaults to None.
-            J (np.ndarray, optional): joint angles with shape (num_sols, num_poses, num_dofs). Defaults to None.
-            k (int, optional): number of nearest neighbors. Defaults to 1.
-        Returns:
-            np.ndarray: latent variable with shape (k, num_poses, n)
-        """
-        if P is not None:
-            num_poses = len(P)
-        elif J is not None:
-            num_poses = len(J)
-        else:
-            raise ValueError("P or J should be provided.")
+        if latents is None:
+            return self._solve_by_conditions_batch(C=C_batch, num_sols=num_sols, complementary=complementary, verbose=verbose)
         
-        if random_sample_size == 0:
-            if P is not None:
-                ids = self.P_knn.kneighbors(P, return_distance=False)
-            else:
-                ids = self.J_knn.kneighbors(J, return_distance=False)
-            # shape: (num_poses, k) -> shape: (k, num_poses)  -> shape: (k * num_poses)   
-            ids = ids.T.flatten() 
-        elif random_sample_size > 0:
-            ids = np.random.choice(random_sample_size, num_poses, replace=True)
-        else:
-            raise ValueError("random_sample_size should be greater than or equal to 0.")
-        # print(f"[INFO] Retrieve latent ids: {ids}")
-        return self.Z[ids].reshape(num_poses, self.n)
+        latents = np.atleast_2d(latents)
+        assert len(P) == len(latents), "P and latents should have the same length."
+                
+        latents_batch, _ = self._make_batch(latents, batch_size)
+        return self._solve_by_conditions_batch(C=C_batch, latents=latents_batch, num_sols=num_sols, complementary=complementary, verbose=verbose)

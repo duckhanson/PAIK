@@ -637,6 +637,7 @@ class Solver:
         Returns:
             tuple[Any, Any]: l2 and ang, default shape (1), posewise evaluation with shape (num_poses,), or all evaluation with shape (num_sols * num_poses)
         """
+        P = np.atleast_2d(P)
         num_poses, num_sols = len(P), len(J)
         assert len(J.shape) == 3 and len(
             P.shape) == 2 and J.shape[1] == num_poses, f"J: {J.shape}, P: {P.shape}"
@@ -736,16 +737,23 @@ class PAIK(Solver):
             self._load_training_data()
 
     def get_reference_partition_label(
-        self, P: np.ndarray, select_reference: str = "knn", num_sols: int = 1
+        self, P: np.ndarray, select_reference: str = "knn", num_sols: int = 1, J: Optional[np.ndarray] = None
     ):
         if select_reference == "knn":
             # type: ignore
             n_neighbors = min(num_sols, 30)
-            F = self.F[
-                self.P_knn.kneighbors(
-                    np.atleast_2d(P), n_neighbors=n_neighbors, return_distance=False
-                )
-            ].reshape(-1, n_neighbors)
+            if J is None:
+                F = self.F[
+                    self.P_knn.kneighbors(
+                        np.atleast_2d(P), n_neighbors=n_neighbors, return_distance=False
+                    )
+                ].reshape(-1, n_neighbors)
+            else:
+                F = self.F[
+                    self.J_knn.kneighbors(
+                        np.atleast_2d(J), n_neighbors=n_neighbors, return_distance=False
+                    )
+                ].reshape(-1, n_neighbors)
             # expand F to match the number of solutions by random sampling for each pose
             return np.asarray([np.random.choice(f, num_sols, replace=True) for f in np.atleast_2d(F)]).flatten()
         elif select_reference == "random":
@@ -851,16 +859,16 @@ class NSF(Solver):
         Returns:
             np.ndarray: latents variable with shape (num_sols, num_poses, n)
         """
-        C = self._get_conditions(P)
+        C = self._get_conditions(np.atleast_2d(P))
+        C = self.normalize_input_data(C, "C", return_torch=False)
+        J = self.normalize_input_data(J, "J", return_torch=False)
         C_batch, complementary = self._make_batch(C, batch_size)
         J_batch, _ = self._make_batch(J, batch_size)
-        C_batch = self.normalize_input_data(C_batch, "C", return_torch=True)
-        J_batch = self.normalize_input_data(J_batch, "J", return_torch=True)
         
         Z = torch.empty_like(J_batch)
         
         with torch.inference_mode():
-            for i in trange(len(C_batch)):
+            for i in range(len(C_batch)):
                 Z[i] = self._solver(C_batch[i]).sample_z_from_x(J_batch[i])
         Z = Z.detach().cpu().numpy()
         Z = self._remove_complementary_ik_solutions(
@@ -877,14 +885,19 @@ class NSF(Solver):
         batch_size: int = 4000,
         verbose: bool = True,
     ):
+        P = np.atleast_2d(P)
+        
         if std is not None and std != self.base_std:
             self.base_std = std
-
+        
         C_batch, complementary = self._get_conditions_batch(
             P=P, num_sols=num_sols, batch_size=batch_size)
 
         if latents is None:
             return self._solve_by_conditions_batch(C=C_batch, num_sols=num_sols, complementary=complementary, verbose=verbose)
+        
+        latents = np.atleast_2d(latents)
+        assert len(P) == len(latents), "P and latents should have the same length."
                 
         latents_batch, _ = self._make_batch(latents, batch_size)
         return self._solve_by_conditions_batch(C=C_batch, latents=latents_batch, num_sols=num_sols, complementary=complementary, verbose=verbose)
